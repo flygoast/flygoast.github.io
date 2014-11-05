@@ -1,0 +1,182 @@
+---
+layout: post
+title: "SASL与身份验证"
+date: 2014-11-06 01:40:44 +0800
+comments: true
+categories: Network
+---
+
+身份验证是很多C/S模式应用协议的通用需求，为了避免每个协议都单独实现一套验证逻辑，SASL(Simple Authentication and Secure Layer)被提出了, 它定位成为基于可靠连接的应用协议提供身份验证和数据安全服务的通用框架。SASL定义了通用的身份验证信息交换的流程, 并且包含一系列验证机制。这些验证机制完成具体的身份验证逻辑。这样，SASL就成为了一个将应用协议和验证机制相连接的抽象层，如下图所示。
+```
+      +----+   +----+    +----+   +-------------------+
+      |SMTP|   |LDAP|    |XMPP|   |Other protocols ...|
+      +--+-+   +--+-+    +--+-+   +--+----------------+
+         |        |         |        |
+         |        |         |        |
+   ------+--------+---------+--------+------------------
+                 SASL abstraction layer
+   ------+--------+---------+--------+------------------
+         |        |         |        |
+         |        |         |        |
+   +-----+--+  +--+---+  +--+--+  +--+-----------------+
+   |EXTERNAL|  |GSSAPI|  |PLAIN|  |Other machanisms ...|
+   +--------+  +------+  +-----+  +--------------------+
+```
+任何应用协议都可以使用任何验证机制，而具体使用哪个机制则由应用协议的客户端和服务器进行协商。
+
+分别以”C:”和”S:”代表客户端和服务端，SASL规定的验证信息交换的基本流程为:
+```
+C: 请求验证交换
+S: 最初的挑战码
+C: 最初的响应消息
+<额外的挑战码/响应消息>
+S: 身份验证结果
+```
+根据机制不同，流程略有差异。
+
+具体应用哪个机制进行身份验证由使用SASL的应用协议来协商。服务器向客户端通告服务器所支持的机制, 客户端从中选择一个它支持且最合适的机制并通知服务器，请求开始身份验证。接下来便是上述的一系列Chalenges/Responses信息交换。这些信息载体的形式由应用协议指定。最终服务器发送回身份验证的结果。
+
+SASL机制注册由IANA维护:
+http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml
+
+
+下面说明几个具体的SASL机制：
+
+* EXTERNAL:
+
+EXTERNAL机制允许客户端请求服务器使用其他途径获取的验证信息来验证该客户端。如通过TLS获取的验证信息。以ACAP(Application Configuration Access Protocol)协议来举例:
+```
+S: * ACAP (SASL "DIGEST-MD5")
+C: a001 STARTTLS
+S: a001 OK "Begin TLS negotiation now"
+<TLS negotiation, further commands are under TLS layer>
+S: * ACAP (SASL "DIGEST-MD5" "EXTERNAL")
+C: a002 AUTHENTICATE "EXTERNAL"
+S: + ""
+C: + ""
+S: a002 OK "Authenticated"
+```
+
+在TLS安全层建立后，服务端通告它支持DIGEST-MD5和EXTERNAL机制，客户端选择使用EXTERNAL机制，并且不使用其他授权实体。服务器使用外部信息验证通过后，返回成功的响应。
+
+* PLAIN
+
+PLAIN机制只需要传递一条消息，这个消息由授权实体，验证实体和密码三部分组成。如下图所示:
+```
+authzid<NUL>authcid<NUL>passwd
+```
+授权实体authzid为可选的。如果提供了它，身份验证通过后，如果权限允许，将以authzid身份进行操作。如果权限不允许，则服务器返回授权失败。由于PLAIN机制直接传递密码本身，因而不应该在没有私密性保护的连接上使用。
+同样以ACAP协议举例:
+```
+S: * ACAP (SASL "CRAM-MD5") (STARTTLS)
+C: a001 STARTTLS
+S: a001 OK "Begin TLS negotiation now"
+<TLS negotiation, further commands are under TLS layer>
+S: * ACAP (SASL "CRAM-MD5" "PLAIN")
+C: a002 AUTHENTICATE "PLAIN" {20+}
+C: Ursel<NUL>Kurt<NUL>xipj3plmq
+S: a002 NO "Not authorized to requested authorization identity"
+```
+TLS安全层建立后，服务器通告它支持CRAM-MD5和PLAIN机制，客户端选择PLAIN机制，并发送身份验证消息，服务器返回授权失败，即Kurt身份验证通过，但不能以Ursel的身份进行操作。
+
+* SCRAM-SHA-1
+
+SCRAM是一系统机制的统称，具体机制名称后缀上算法所使用的HASH函数。我们以SCRAM-SHA-1举例，它使用SHA-1哈希函数。PLAIN机制在网络上传输的是密码本身，因而只应该用在TLS等安全层之上。SCRAM机制则没有这个限制。
+
+下面的例子略去机制协商的过程, 用户名为"user", 密码为"pencil":
+
+```
+C: n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL
+S: r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92, i=4096
+C: c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts=
+S: v=rmF9pqV8S7suAoZWja4dJRkFsKQ=
+```
+
+SCRAM机制的消息由多个属性构成，每个属性为"a=xxx"的形式，而且属性有顺序要求。
+
+客户端发送的首条消息包括了以下内容：
+
+1. 一个GS2头，它包括一个字符，只能为"n", "y", "p"，是通道绑定的标识，和一个授权实体（例子中没有提供，因而为",,",当需要指定时使用属性a, 如"a=dummy"）。
+2. 属性n, 表示身份验证的用户名。
+3. 属性r, 表示客户端nonce, 一个随机的可打印字符串(不能包括",")。
+
+我们把后两部分称为client_first_message_bare, 后面算法中要使用它。
+
+然后服务器回应首条消息。属性r为客户端NONCE拼接上服务器的随机NONCE值，属性s为使用BASE64编码后的用户密码的salt值，属性i为迭代次数。在后面介绍的算法中可以看到具体用途。这条消息我们称为server_first_message, 后面算法需要使用它。
+
+接着，客户端发送末条消息。属性c为使用BASE64编码的GS2头及通道绑定数据。例子中的"biws"解码后为"n,,", 即客户端首条消息的第一部分，属性r与服务器回应的属性r必须相同。属性p为使用BASE64编码的客户端证明信息(ClientProof)。它由客户端使用后面介绍的算法计算得到。我们把前两个属性称为client_final_message_without_proof, 后面算法要使用它。
+
+服务端验证客户端发送的NONCE值和证明信息(ClientProof)，如果提供了授权实体，则也需要验证是否可以授权给该实体，然后发送服务端末条消息。属性v为服务器签名(ServerSignature)。客户端通过比较计算得到的和从服务端所收到的签名是否相同来对服务器进行身份验证。如果服务器验证失败，将回应属性e, 它可以用来诊断错误原因。
+
+下面介绍客户端和服务器签名的具体算法：
+```
+SaltedPassword := Hi(Normalize(password), salt, i)
+ClientKey := HMAC(SaltedPassword, "Client Key")
+StoredKey := H(ClientKey)
+AuthMessage := client-first-message-bare + "," + server-first-message + "," + client-final-message-without-proof
+ClientSignature := HMAC(StoredKey, AuthMessage)
+ClientProof := ClientKey XOR ClientSignature
+ServerKey := HMAC(SaltedPassword, "Server Key")
+ServerSignature := HMAC(ServerKey, AuthMessage)
+```
+
+其中HMAC原型为HMAC(key, str), Hi函数算法为:
+```
+Hi(str, salt, i):
+
+U1 := HMAC(str, salt + INT(1))
+U2 := HMAC(str, U1)
+...
+Ui-1 := HMAC(str, Ui-2)
+Ui := HMAC(str, Ui-1)
+Hi := U1 XOR U2 XOR ... XOR Ui
+```
+
+用PHP实现该算法来验证上述例子:
+```php
+<?php
+function hi($str, $salt, $i) {
+    $int1 = "\0\0\0\1";
+    $ui = hash_hmac("sha1", $salt . $int1, $str, true);
+    $result = $ui;
+
+    for ($k = 1; $k < $i; $k++) {
+        $ui = hash_hmac("sha1", $ui, $str, true);
+        $result = $result ^ $ui;
+    }
+
+    return $result;
+}
+
+$password = "pencil";
+$salt = base64_decode('QSXCR+Q6sek8bf92');
+$i = 4096;
+$client_first_message_bare = 'n=user,r=fyko+d2lbbFgONRv9qkxdawL';
+$server_first_message = 'r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096';
+$client_final_message_without_proof = 'c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j';
+
+$salted_password = hi($password, $salt, $i);
+$client_key = hash_hmac("sha1", "Client Key", $salted_password, true);
+$stored_key = sha1($client_key, true);
+$auth_message = $client_first_message_bare . ","
+                . $server_first_message . ","
+                . $client_final_message_without_proof;
+$client_signature = hash_hmac("sha1", $auth_message, $stored_key, true);
+$client_proof = $client_key ^ $client_signature;
+
+$server_key = hash_hmac("sha1", "Server Key", $salted_password, true);
+$server_signature = hash_hmac("sha1", $auth_message, $server_key, true);
+
+echo "p=" . base64_encode($client_proof) . "\n";
+echo "v=" . base64_encode($server_signature) . "\n";
+?>
+```
+输出结果为:
+```
+p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts=
+v=rmF9pqV8S7suAoZWja4dJRkFsKQ=
+```
+
+与上述例子中值相符。
+
+在实际项目中，一般不需要自己来实现这些验证算法。C语言可直接使用CyrusSASL库或GNU的libgsasl。
