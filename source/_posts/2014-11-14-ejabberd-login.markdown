@@ -290,3 +290,5 @@ mech_step(State, ClientIn) ->
 SCRAM机制需要多次Chelange/Response交互，需要多次调用它的mech_step。因而它在机制状态内部来分步骤完成，具体可以参考cyrsasl_scram.erl，本文不详述。
 
 当机制mech_step返回ok或error时，ejabberd_c2s进程返回给客户端相应的回应，登录验证的流程结束。
+
+注: ejabberd代码版本为2.1.13。
