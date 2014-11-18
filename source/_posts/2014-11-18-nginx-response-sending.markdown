@@ -127,15 +127,14 @@ header filter链表顺序如图:
 
 `ngx_http_write_filter()`的简化流程如下:
 
-1. 检查之前是否有错误发生(c->error被置位)。如果有错误发生，则没有必要再进行网络I/O操作，直接返回NGX_ERROR。
+* 检查之前是否有错误发生(c->error被置位)。如果有错误发生，则没有必要再进行网络I/O操作，直接返回NGX_ERROR。
 ```c
     if (c->error) {
         return NGX_ERROR;
     }
 ```
-2. 计算之前没有发送完成的内容大小并检查是否存在特殊标志。为了优化性能，当没有必要立即发送响应且响应内容大小没有达到设置的阀值时，NGINX可以暂时推迟发送该部分响应。参看:`postpone_output`指令。`flush`标志表示需要立即发送响应。`recycled`表示该buffer需要循环使用，因而需要立即发送以释放该buffer被重新使用。`last`标志表示该buffer是响应的最后一部分内容，因而也需要立即发送。
+* 计算之前没有发送完成的内容大小并检查是否存在特殊标志。为了优化性能，当没有必要立即发送响应且响应内容大小没有达到设置的阀值时，NGINX可以暂时推迟发送该部分响应。参看:`postpone_output`指令。`flush`标志表示需要立即发送响应。`recycled`表示该buffer需要循环使用，因而需要立即发送以释放该buffer被重新使用。`last`标志表示该buffer是响应的最后一部分内容，因而也需要立即发送。
 
-3.
 ```c
     for (cl = r->out; cl; cl = cl->next) {
         ll = &cl->next;
@@ -153,8 +152,7 @@ header filter链表顺序如图:
         }
     }
 ```
-4. 计算本次将发送的内容大小，检查是否存在特殊标志，并将内容链接到r->out上。
-5.
+* 计算本次将发送的内容大小，检查是否存在特殊标志，并将内容链接到r->out上。
 ```c
     for (ln = in; ln; ln = ln->next) {
         cl = ngx_alloc_chain_link(r->pool);
@@ -179,18 +177,17 @@ header filter链表顺序如图:
         }
     }
 ```
-6. 根据情况决定是需要真正进行网络I/O操作, 还是直接返回。
+* 根据情况决定是需要真正进行网络I/O操作, 还是直接返回。
 ```c
     if (!last && !flush && in && size < (off_t) clcf->postpone_output) {
         return NGX_OK;
     }
 ```
-7. 真正进行网络I/O操作，发送内容。
+* 真正进行网络I/O操作，发送内容。
 ```c
-chain = c->send_chain(c, r->out, limit);
+    chain = c->send_chain(c, r->out, limit);
 ```
-8. 回收发送完成内容的buffer和chain结构, 将没有发送完成的内容存入`r->out`
-
+* 回收发送完成内容的buffer和chain结构, 将没有发送完成的内容存入`r->out`
 ```c
     for (cl = r->out; cl && cl != chain; /* void */) {
         ln = cl;
@@ -200,7 +197,7 @@ chain = c->send_chain(c, r->out, limit);
 
     r->out = chain;
 ```
-9. 根据发送是否完成，返回`NGX_OK`或`NGX_AGAIN`。
+* 根据发送是否完成，返回`NGX_OK`或`NGX_AGAIN`。
 ```c
     if (chain) {
         c->buffered |= NGX_HTTP_WRITE_BUFFERED;
