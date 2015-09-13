@@ -1,0 +1,286 @@
+---
+layout: post
+title: "Keepalived libipvs分析"
+date: 2015-09-13 13:25:24 +0800
+comments: true
+categories: Keepalived
+---
+LVS包转发功能由内核模块IPVS实现。Keepalived的Check进程周期性地对后端RealServer进行健康检测，根据检测结果摘除或恢复。摘除和恢复RealServer等操作本质上为Keepalived这个用户态进程与IPVS内核模块的通信操作。
+
+libipvs封装了用户态程序对内核模块IPVS可以进行的操作，如:
+
+* 创建LVS服务
+* 删除LVS服务
+* 添加RealServer
+* 删除RealServer
+* 获取相关信息
+
+我们以2.6版本内核的libipvs为例来简单分析，源码文件位于keepalived/libipvs-2.6下。
+
+IPVS内核模块实现了两种方式供用户态程序来进行上述操作:
+
+* Generic Netlink
+* sockopt
+
+首先看ipvs_init函数，在使用libipvs前应该先调用这个函数。
+```c
+int ipvs_init(void)
+{
+    socklen_t len;
+
+    ipvs_func = ipvs_init;
+
+#ifdef LIBIPVS_USE_NL
+    try_nl = 1;
+
+    if (ipvs_nl_send_message(NULL, NULL, NULL) == 0) {
+        try_nl = 1;
+        return ipvs_getinfo();
+    }
+
+    try_nl = 0;
+#endif
+
+    len = sizeof(ipvs_info);
+    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) == -1)
+        return -1;
+
+    if (getsockopt(sockfd, IPPROTO_IP, IP_VS_SO_GET_INFO,
+               (char *)&ipvs_info, &len))
+        return -1;
+
+    return 0;
+}
+```
+当编译keepalived时使用了libnl库时，宏LIBIPVS_USE_NL会被定义, 则首先尝试使用NETLINK方式进行操作。若没有使用libnl或者尝试NETLINK失败，则使用sockopt方式。该方式需要一个socket, ipvs_init函数将创建的socket存储在全局变量sockfd中。
+
+sockopt方式就是根据相应操作确定sockopt的值，指定好相应的参数信息需要存储或已经存储的位置，简单的调用getsockopt或setsockopt来完成操作。我们重点分析NETLINK方式。
+
+来看ipvs_init调用的ipvs_nl_send_message, 简单逻辑如下:
+```c
+int ipvs_nl_send_message(struct nl_msg *msg, nl_recvmsg_msg_cb_t func, void *arg)
+{
+    sock = nl_socket_alloc();
+    ...
+
+    if (genl_connect(sock) < 0)
+        goto fail_genl;
+
+    family = genl_ctrl_resolve(sock, IPVS_GENL_NAME);
+    ...
+
+    /* To test connections and set the family */
+    if (msg == NULL) {
+        nl_socket_free(sock);
+        sock = NULL;
+        return 0;
+    }
+   
+    if (nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, func, arg) != 0)
+        goto fail_genl;
+
+    if (nl_send_auto_complete(sock, msg) < 0)
+        goto fail_genl;
+
+    if ((err = -nl_recvmsgs_default(sock)) > 0)
+        goto fail_genl;
+
+    nlmsg_free(msg);
+
+    nl_socket_free(sock);
+
+    return 0;
+    ...
+}
+```
+若传入的msg参数为NULL，ipvs_nl_send_message函数只是测试下NETLINK是否可用。否则，设置NETLINK响应消息的处理回调函数，发送该消息，NETLINK响应消息到达后，回调函数被调用来处理该消息。
+
+libipvs的基本所有的NETLINK操作流程为:
+
+* 构造NETLINK消息
+* 调用ipvs_nl_send_message处理
+
+以添加LVS服务为例说明:
+```c
+int ipvs_add_service(ipvs_service_t *svc)
+{
+    ipvs_func = ipvs_add_service;
+#ifdef LIBIPVS_USE_NL
+    if (try_nl) {
+        struct nl_msg *msg = ipvs_nl_message(IPVS_CMD_NEW_SERVICE, 0);
+        if (!msg) return -1;
+        if (ipvs_nl_fill_service_attr(msg, svc)) {
+            nlmsg_free(msg);
+            return -1;
+        }
+        return ipvs_nl_send_message(msg, ipvs_nl_noop_cb, NULL);
+    }
+#endif
+
+    CHECK_COMPAT_SVC(svc, -1);
+    return setsockopt(sockfd, IPPROTO_IP, IP_VS_SO_SET_ADD, (char *)svc,
+              sizeof(struct ip_vs_service_kern));
+out_err:
+    return -1;
+}
+```
+若使用NETLINK方式操作，首先调用ipvs_nl_message构建一条NETLINK消息:
+```c
+struct nl_msg *ipvs_nl_message(int cmd, int flags)
+{
+    struct nl_msg *msg;
+
+    msg = nlmsg_alloc();
+    if (!msg)
+        return NULL;
+
+    genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, family, 0, flags,
+            cmd, IPVS_GENL_VERSION);
+
+    return msg;
+}
+```
+然后调用ipvs_nl_fill_service_attr将添加LVS服务所需的参数以NETLINK Attributes方式填充到NETLINK消息:
+```c
+static int ipvs_nl_fill_service_attr(struct nl_msg *msg, ipvs_service_t *svc)
+{
+    struct nlattr *nl_service;
+    struct ip_vs_flags flags = { .flags = svc->flags,
+                     .mask = ~0 };
+
+    nl_service = nla_nest_start(msg, IPVS_CMD_ATTR_SERVICE);
+    if (!nl_service)
+        return -1;
+
+    NLA_PUT_U16(msg, IPVS_SVC_ATTR_AF, svc->af);
+
+    if (svc->fwmark) {
+        NLA_PUT_U32(msg, IPVS_SVC_ATTR_FWMARK, svc->fwmark);
+    } else {
+        NLA_PUT_U16(msg, IPVS_SVC_ATTR_PROTOCOL, svc->protocol);
+        NLA_PUT(msg, IPVS_SVC_ATTR_ADDR, sizeof(svc->addr), &(svc->addr));
+        NLA_PUT_U16(msg, IPVS_SVC_ATTR_PORT, svc->port);
+    }
+
+    NLA_PUT_STRING(msg, IPVS_SVC_ATTR_SCHED_NAME, svc->sched_name);
+    if (svc->pe_name[0])
+        NLA_PUT_STRING(msg, IPVS_SVC_ATTR_PE_NAME, svc->pe_name);
+    NLA_PUT(msg, IPVS_SVC_ATTR_FLAGS, sizeof(flags), &flags);
+    NLA_PUT_U32(msg, IPVS_SVC_ATTR_TIMEOUT, svc->timeout);
+    NLA_PUT_U32(msg, IPVS_SVC_ATTR_NETMASK, svc->netmask);
+
+    nla_nest_end(msg, nl_service);
+    return 0;
+
+nla_put_failure:
+    return -1;
+}
+```
+最后调用ipvs_nl_send_message发送消息，因为添加LVS服务没有响应需要处理，回调函数设为ipvs_nl_noop_cb:
+```c
+static int ipvs_nl_noop_cb(struct nl_msg *msg, void *arg)
+{
+    return NL_OK;
+}
+```
+
+以获取所有LVS服务说明读取LVS相关信息的过程。ipvs_get_services用于获取所有的LVS服务，简单的逻辑如下:
+```c
+struct ip_vs_get_services *ipvs_get_services(void)
+{
+    struct ip_vs_get_services *get;
+    struct ip_vs_get_services_kern *getk;
+    socklen_t len;
+    int i;
+
+#ifdef LIBIPVS_USE_NL
+    if (try_nl) {
+        struct nl_msg *msg;
+        len = sizeof(*get) + sizeof(ipvs_service_entry_t);
+        if (!(get = malloc(len)))
+            return NULL;
+        get->num_services = 0;
+
+        msg = ipvs_nl_message(IPVS_CMD_GET_SERVICE, NLM_F_DUMP);
+        if (msg && (ipvs_nl_send_message(msg, ipvs_services_parse_cb, &get) == 0))
+            return get;
+
+        free(get);
+        return NULL;
+    }
+#endif
+
+    ...
+    return get;
+}
+```
+首先，分配好存储一个LVS服务所需要的内存空间。
+然后，创建一个IPVS_CMD_GET_SERVICE的NETLINK消息。
+最后，指定回调函数为ipvs_services_parse_cb来处理响应消息:
+```c
+static int ipvs_services_parse_cb(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *nlh = nlmsg_hdr(msg);
+    struct nlattr *attrs[IPVS_CMD_ATTR_MAX + 1];
+    struct nlattr *svc_attrs[IPVS_SVC_ATTR_MAX + 1];
+    struct ip_vs_get_services **getp = (struct ip_vs_get_services **)arg;
+    struct ip_vs_get_services *get = (struct ip_vs_get_services *)*getp;
+    struct ip_vs_flags flags;
+    int i = get->num_services;
+
+    if (genlmsg_parse(nlh, 0, attrs, IPVS_CMD_ATTR_MAX, ipvs_cmd_policy) != 0)
+        return -1;
+
+    if (!attrs[IPVS_CMD_ATTR_SERVICE])
+        return -1;
+
+    if (nla_parse_nested(svc_attrs, IPVS_SVC_ATTR_MAX, attrs[IPVS_CMD_ATTR_SERVICE], ipvs_service_policy))
+        return -1;
+
+    memset(&(get->entrytable[i]), 0, sizeof(get->entrytable[i]));
+
+    ...
+       
+    get->entrytable[i].af = nla_get_u16(svc_attrs[IPVS_SVC_ATTR_AF]);
+
+    if (svc_attrs[IPVS_SVC_ATTR_FWMARK])
+        get->entrytable[i].fwmark = nla_get_u32(svc_attrs[IPVS_SVC_ATTR_FWMARK]);
+    else {
+        get->entrytable[i].protocol = nla_get_u16(svc_attrs[IPVS_SVC_ATTR_PROTOCOL]);
+        memcpy(&(get->entrytable[i].addr), nla_data(svc_attrs[IPVS_SVC_ATTR_ADDR]),
+               sizeof(get->entrytable[i].addr));
+        get->entrytable[i].port = nla_get_u16(svc_attrs[IPVS_SVC_ATTR_PORT]);
+    }
+
+    strncpy(get->entrytable[i].sched_name,
+        nla_get_string(svc_attrs[IPVS_SVC_ATTR_SCHED_NAME]),
+        IP_VS_SCHEDNAME_MAXLEN);
+
+    if (svc_attrs[IPVS_SVC_ATTR_PE_NAME])
+        strncpy(get->entrytable[i].pe_name,
+            nla_get_string(svc_attrs[IPVS_SVC_ATTR_PE_NAME]),
+            IP_VS_PENAME_MAXLEN);
+
+    get->entrytable[i].netmask = nla_get_u32(svc_attrs[IPVS_SVC_ATTR_NETMASK]);
+    get->entrytable[i].timeout = nla_get_u32(svc_attrs[IPVS_SVC_ATTR_TIMEOUT]);
+    nla_memcpy(&flags, svc_attrs[IPVS_SVC_ATTR_FLAGS], sizeof(flags));
+    get->entrytable[i].flags = flags.flags & flags.mask;
+
+    if (ipvs_parse_stats(&(get->entrytable[i].stats),
+                 svc_attrs[IPVS_SVC_ATTR_STATS]) != 0)
+        return -1;
+
+    get->entrytable[i].num_dests = 0;
+
+    i++;
+   
+    get->num_services = i;
+    get = realloc(get, sizeof(*get)
+          + sizeof(ipvs_service_entry_t) * (get->num_services + 1));
+    *getp = get;
+    return 0;
+}
+```
+ipvs_services_parse_cb首先调用genlmsg_parse和nla_parse_nested函数从响应消息中解析出LVS服务的相应信息并保存到分配的内存中。对于每一个LVS服务，ipvs_services_parse_cb会被调用一次，因而函数中递增服务数量并在内存中添加一个LVS服务结构，为下次调用ipvs_services_parse_cb提供存储空间。
+
+NETLINK及libnl的API参考:http://www.infradead.org/~tgr/libnl/
