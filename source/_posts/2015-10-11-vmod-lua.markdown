@@ -1,0 +1,67 @@
+---
+layout: post
+title: "使用Lua定制Varnish处理逻辑"
+date: 2015-10-11 22:31:21 +0800
+comments: true
+categories: VARNISH
+---
+Varnish使用状态机机制处理请求，在各个状态中，用户通过使用Varnish自己实现的VCL(Varnish Configuration Language)定制处理逻辑。
+
+比如，Varnish接收并解析完请求就进入vcl_recv状态。在这个阶段，我们可以使用VCL来决定是否要服务该请求，怎么服务，以及使用哪个Backend来服务等。
+
+VCL实现了状态的流程控制，请求信息的读取和修改等，但很多业务层面需要的逻辑没办法由VCL简单完成。比如，对某些信息进行BASE64编码等等。由于Varnish支持外部模块，用户可以使用C语言开发自己的模块，由VCL来调用这些模块来完成这些处理。但每种功能都由C模块来开发成本较大。
+
+Lua是一种优秀的脚本语言，可以非常轻松地嵌入C语言中，而Lua语言本身有大量的库来实现各种各样的功能。因而我开发了VMOD_LUA这个Varnish模块，使用它来执行Lua脚本，由Lua代码来定制各种处理逻辑。
+
+比如，我们要使用VMOD_LUA实现一个请求的黑名单过滤功能。我们可以将URL的黑名单存储在REDIS中，KEY为URL，VALUE为任意值。Varnish在vcl_recv阶段中由Lua代码从REDIS中查询是否命中该URL，若命中则拒绝该请求，否则放行。
+
+VCL代码如下:
+```plain
+import lua;
+sub vcl_recv {
+    lua.init("/usr/local/varnish/etc/lua/?.lua",
+             "/usr/local/varnish/etc/lua/?.so",
+             "/usr/local/varnish/etc/varnish/foo.lua");
+}
+
+sub vcl_recv {
+    if (lua.call(“is_allow”) == “no”) {
+        return 403;
+    }
+}
+
+sub vcl_fini {
+    lua.cleanup();
+}
+```
+
+Lua脚本代码如下:
+```lua
+local redis = require(“redis”)
+function is_allow()
+    local client = redis.connect(‘127.0.0.1’, 6379)
+    if client.get(varnish.req.url) then
+        return “no"
+    end
+    return “yes"
+end
+```
+
+Varnish外部模块实现一些可以在VCL中调用的函数，VMOD_LUA主要实现了两个函数init和call.
+
+* init: 指定Lua库的搜索路径PATH和CPATH，以及Lua脚本本身路径。Lua脚本中需要将各功能实现在全局函数中，并且脚本本身没有返回值。
+* call: 调用上述Lua脚本中定义的函数来完成相应功能。
+
+init函数被调用时会加载Lua脚本并执行，创建全局的lua_State结构。因为Varnish是多线程并发处理请求，为了避免多线程操作全局lua_State结构，每个线程会使用lua_newthread从全局lua_State结构创建自己的lua_State结构。新的lua_State与原lua_State结构共享全局表，因而需要给新lua_State结构创建新的全局表。Varnish的worker线程会处理多个请求，若这些请求都使用同一个lua_State，则所有请求都将使用同一套全局变量，若某个请求修改了全局变量，后续的请求再使用该全局变量时则已不再是期望的初始值。因而VMOD_LUA会为每一个请求从线程独享的lua_State中创建一个lua_State来执行Lua函数。
+
+为了能在Lua脚本中获取请求的信息，VMOD_LUA将VCL变量以全局表的方式导出到Lua中, 如:
+VCL中的req.url变量在Lua脚本中可用varnish.req.url来获取，HTTP请求的User-Agent可由varnish.req.http[“User-Agent”]获取。在Lua脚本中不允许对varnish表进行写操作。修改请求需要将信息返回到VCL中，由VCL进行修改，如:
+```plain
+set resp.http.x-dummy = lua.call(“set_dummy”);
+```
+Varnish模块为SO文件，Varnish使用dlopen进行加载时使用的参数为RTLD_LOCAL, 导致SO文件重定位的符号不能用于后续加载的SO文件。由于liblua.so是由VMOD_LUA模块的SO来链接的，因而Lua脚本中调用require加载由C写的SO文件时，会提示找不到符号的错误。可以有两种方式解决这个问题:
+
+* 编译Varnish时链接上liblua.so
+* 编译C编写的Lua库时链接上liblua.so
+
+VMOD_LUA的代码地址: https://github.com/flygoast/libvmod-lua
