@@ -1,0 +1,191 @@
+---
+layout: post
+title: "LVS FULLNAT模式下客户端真实地址的传递"
+date: 2015-11-16 18:01:03 +0800
+comments: true
+categories: LVS
+---
+在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。
+
+这种方式存在一个问题: RealServer中接收到数据包中源IP和源端口为LVS机器的IP和端口，这样应用层程序获取到的TCP连接的客户端地址为LVS的IP地址，很多依赖客户端地址的功能就不能正常工作了。
+
+为了解决这问题，FULLNAT模式在转发包的时候，在TCP包中添加一个OPTION，来传递客户端的真实地址。RealServer中通过内核模块toa令应用层程序获取真实的客户端地址。
+
+TOA OPTION的OPCODE为254(0xfe), 长度为8字节，结构为:
+```c
+struct toa_data
+{
+    __u8   opcode;
+    __u8   opsize;
+    __u16  port;
+    __u32  ip;
+}
+```
+
+比如，TOA的OPTION为:
+```plain
+fe 08 91 cd 0a 05 0c 46
+```
+
+0xfe为opcode, 08为option长度，8字节，Port和IP都为网络字节序，端口号为0x91cd(37325), IP为: 0x0a050c46, “10.5.12.70”。
+
+来看toa模块具体实现:
+
+模块的初始化函数为toa_init:
+```c
+/* module init */
+static int __init
+toa_init(void)
+{
+    ...
+
+    /* hook funcs for parse and get toa */
+    hook_toa_functions();
+
+    TOA_INFO("toa loaded\n");
+    return 0;
+
+err:
+    ...
+
+    return 1;
+}
+```
+
+函数调用hook_toa_functions函数HOOK两个函数:
+
+* inet_getname
+* tcp_v4_syn_recv_sock
+
+```c
+/* replace the functions with our functions */
+static inline int
+hook_toa_functions(void)
+{
+    /* hook inet_getname for ipv4 */
+    struct proto_ops *inet_stream_ops_p =
+            (struct proto_ops *)&inet_stream_ops;
+    /* hook tcp_v4_syn_recv_sock for ipv4 */
+    struct inet_connection_sock_af_ops *ipv4_specific_p =
+            (struct inet_connection_sock_af_ops *)&ipv4_specific;
+    ...
+
+    inet_stream_ops_p->getname = inet_getname_toa;
+    ...
+    ipv4_specific_p->syn_recv_sock = tcp_v4_syn_recv_sock_toa;
+
+    ...
+
+    return 0;
+}
+```
+Linux内核在监听套接字收到三次握手的ACK包之后，会从SYN_REVC状态进入到TCP_ESTABLISHED状态。这时内核会调用tcp_v4_syn_recv_sock函数。Hook函数tcp_v4_syn_recv_sock_toa首先调用原有的tcp_v4_syn_recv_sock函数，然后调用get_toa_data函数从TCP OPTION中提取出TOA OPTION，并存储在sk_user_data字段中。
+```c
+static struct sock *
+tcp_v4_syn_recv_sock_toa(struct sock *sk, struct sk_buff *skb, struct request_sock *req, struct dst_entry *dst)
+{
+    struct sock *newsock = NULL;
+
+    /* call orginal one */
+    newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst);
+
+    /* set our value if need */
+    if (NULL != newsock && NULL == newsock->sk_user_data) {
+        newsock->sk_user_data = get_toa_data(skb);
+        if(NULL != newsock->sk_user_data){
+            TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_TOA_CNT);
+        } else {
+            TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_NO_TOA_CNT);
+        }
+    }
+    return newsock;
+}
+```
+
+get_toa_data函数的返回值处理比较特殊，并没有给返回结果分配内存空间，而是直接将TOA OPTION做为指针值返回并保存在sk_user_data这一指针变量中。这在64位服务器上没有问题，因为指针变量的大小为8字节，返回的TOA结构大小也为8字节。
+
+```c
+static void * get_toa_data(struct sk_buff *skb)
+{
+    struct tcphdr *th;
+    int length;
+    unsigned char *ptr;
+
+    struct toa_data tdata;
+
+    void *ret_ptr = NULL;
+
+    if (NULL != skb) {
+        th = tcp_hdr(skb);
+        length = (th->doff * 4) - sizeof (struct tcphdr);
+        ptr = (unsigned char *) (th + 1);
+
+        while (length > 0) {
+            int opcode = *ptr++;
+            int opsize;
+            switch (opcode) {
+            case TCPOPT_EOL:
+                return NULL;
+            case TCPOPT_NOP:    /* Ref: RFC 793 section 3.1 */
+                length--;
+                continue;
+            default:
+                opsize = *ptr++;
+                if (opsize < 2)    /* "silly options" */
+                    return NULL;
+                if (opsize > length)
+                    return NULL;    /* don't parse partial options */
+                if (TCPOPT_TOA == opcode && TCPOLEN_TOA == opsize) {
+                    memcpy(&tdata, ptr - 2, sizeof (tdata));
+                    memcpy(&ret_ptr, &tdata, sizeof (ret_ptr));
+                    return ret_ptr;
+                }
+                ptr += opsize - 2;
+                length -= opsize;
+            }
+        }
+    }
+    return NULL;
+}
+```
+
+用户在使用套接字中的accept函数时, 会调用inet_getname将sock结构体中存储的源IP地址和端口返回。Hook函数inet_getname_toa首先调用原有函数inet_getname, 然后用tcp_v4_syn_recv_sock_toa函数保存在sk_user_data中数据提取真实IP和Port，对返回结果进行替换。
+```c
+static int
+inet_getname_toa(struct socket *sock, struct sockaddr *uaddr,
+        int *uaddr_len, int peer)
+{
+    int retval = 0;
+    struct sock *sk = sock->sk;
+    struct sockaddr_in *sin = (struct sockaddr_in *) uaddr;
+    struct toa_data tdata;
+
+    ...
+
+    /* call orginal one */
+    retval = inet_getname(sock, uaddr, uaddr_len, peer);
+
+    /* set our value if need */
+    if (retval == 0 && NULL != sk->sk_user_data && peer) {
+        if (sk_data_ready_addr == (unsigned long) sk->sk_data_ready) {
+            memcpy(&tdata, &sk->sk_user_data, sizeof(tdata));
+            if (TCPOPT_TOA == tdata.opcode &&
+                TCPOLEN_TOA == tdata.opsize) {
+                ...
+                sin->sin_port = tdata.port;
+                sin->sin_addr.s_addr = tdata.ip;
+            } else { /* sk_user_data doesn't belong to us */
+                ...
+            }
+        } else {
+            TOA_INC_STATS(ext_stats, GETNAME_TOA_BYPASS_CNT);
+        }
+    } else { /* no need to get client ip */
+        TOA_INC_STATS(ext_stats, GETNAME_TOA_EMPTY_CNT);
+    }
+
+    return retval;
+}
+```
+
+后续应用层程序调用getpeername()时就可以获取到真实的客户端地址了。
