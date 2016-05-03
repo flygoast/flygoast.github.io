@@ -1,0 +1,105 @@
+---
+layout: post
+title: "Thrift介绍"
+date: 2016-05-03 12:32:01 +0800
+comments: true
+categories: Thrift
+---
+Thrift(https://thrift.apache.org/)是一个轻量级、语言无关的RPC框架。它定义了一套简单直观的IDL(Interface Definition Language)用于描述服务接口规范。 通过代码生成引擎将IDL描述的接口规范生成各种目标语言(如C++
+，JAVA等)的源码文件。应用开发者基于这些源码构建服务端和客户端。通过这种方式，Thrift屏蔽了不同语言间的数据序列化/反序列化、数据传输、网络通信等与业务逻辑不相关的部分，使开发者只需关心业务逻辑实现。
+
+Thrift架构:
+
+```plain
+Client                                          Server
+
++----------------------+                        +----------------------+
+| Your Code            |                        | Your Code            |
++----------------------+                        +----------------------+
+| ServiceClient        | <- Generated Code  ->  | Processor            |
+|                      |                        +----------------------+
+|                      |                        | TServer              |
++----------------------+                        +----------------------+
+| TProtocol            | <- Data Stream     ->  | TPrococol            |
++----------------------+                        +----------------------+
+| TTransport           | <- Byte Stream     ->  | TTransport           |
++----------------------+                        +----------------------+
+| Undelying I/O        | <- Socket/File/Zip ->  | Underlying I/O       |
++----------------------+                        +----------------------+
+```
+
+Thrift IDL介绍:
+
+Thrift支持的基本类型有:
+
+- bool: 布尔类型
+- byte: 一字节有符号整形
+- i16: 两字节有符号整形
+- i32: 四字节有符号整形
+- i64: 八字节有符号整形
+- double: 八字节浮点数
+- string: 字符串类型
+
+可以基于基本类型创建结构体，如:
+```C
+struct Example {
+    1:i32 number=10,
+    2:i64 bigNumber,
+    3:double decimals,
+    4:string name="thrifty"
+}
+```
+
+另外，还支持三种容器来构建复杂类型：list, set, map
+
+service是Thrift IDL的核心，它描述了该服务的功能、用法等，它的格式如下:
+```C
+service <name> {
+    <returntype> <name>(<arguments>) [throws (<exceptions>)]
+    ...
+}
+```
+
+例子:
+```C
+service StringCache {
+    void set(1:i32 key, 2:string value),
+    string get(1:i32 key) throws (1:KeyNotFound knf),
+    void delete(1:i32 key)
+}
+```
+
+service中指定了函数名称、参数列表、返回值类型等。应用开发者在目标语言的 Server 端实现中来实现这些接口。一个IDL描述中只能有一个service，但是可以通过service继承的方式来实现多个接口服务。
+
+一个Thrift IDL示例:
+```plain
+namespace cpp tutorial
+namespace php tutorial
+
+typedef i32 int
+service MultiplicationService
+{
+    int multiply(1:int n1, 2:int n2),
+}
+```
+具体语法参考: https://diwakergupta.github.io/thrift-missing-guide/
+
+IDL确定后，通过调用 thrift 编译器来生成目标语言代码文件:
+如:
+```bash
+thrift --gen cpp multiplication.thrift
+thrift --gen php multiplication.thrift
+```
+
+应用开发者在生成文件的基础上开发客户端和服务器。 具体可参考:http://wiki.apache.org/thrift/ThriftUsage
+
+Thrift的Server实现了以下几种方式:
+
+- TSimpleServer: 阻塞IO方式的单线程服务器，用于测试
+- TThreadedServer: 阻塞IO方式的多线程服务器，连接到来时，创建一个线程处理该请求，请求结束后销毁该线程。
+- TThreadPoolServer: 阻塞IO方式的多线程服务器，这种方式与TThreadedServer的区别是不实时创建和销毁线程，而是放在线程池中复用，但线程池中的线程数据不会自动增加。当不再有可用线程时，请求将HANG住。若需要动态增加线程，需要应用开发者自己处理。
+- TNonblockingServer: 非阻塞IO方式的多线程服务器。
+
+应用开发者可根据业务需求来选择合适的方式。
+
+由于Thrift的RuntimeLibrary的文档不完善，很多用法需要参考源码。
