@@ -14,6 +14,8 @@ typedef struct {
     u_char                     data[1];
 } ngx_http_limit_conn_node_t;
 ```
+
+<!--more-->
 handler也注册在PREACCESS阶段。因为连接只有被NGINX处理并且读取完HTTP请求的Header后，才开始进行阶段处理，所以只有达到这个阶段的连接才会被计数。
 
 handler的整体逻辑简化如下:

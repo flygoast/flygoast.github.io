@@ -9,6 +9,7 @@ categories: Redis
 
 Redis本身支持Lua脚本的执行，可以由Lua来实现相应逻辑。不过Lua语言本身不支持位运算(5.2之后支持)，需要第三方库支持。所以，我们直接通过修改Redis代码扩展Redis命令来实现该功能。
 
+<!--more-->
 Redis中所有命令的相关信息存储在redisCommandTable结构中。我们在其中添加上我们自己的命令，如”setcidr”, “checkcidr”等。
 ```c
 struct redisCommand redisCommandTable[] = {

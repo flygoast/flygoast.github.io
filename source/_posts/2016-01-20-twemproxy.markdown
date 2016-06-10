@@ -9,6 +9,7 @@ twemproxy(https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcac
 
 twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而主线程进入事件循环处理访问所有ServerPool的Redis或Memcached请求。
 
+<!--more-->
 下面分析一下请求的处理过程:
 
 客户端建立到ServerPool的TCP连接后，该ServerPool的监听fd的读事件被触发，回调函数proxy_recv()调用proxy_accept()来处理请求。

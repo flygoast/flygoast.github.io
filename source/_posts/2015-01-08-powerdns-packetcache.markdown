@@ -9,6 +9,7 @@ PowerDNS中DNS解析由各类Backend模块处理。如果解析相关的数据�
 
 PacketCache实现主要位于packetcache.hh和packetcache.cc中。
 
+<!--more-->
 common_startup.cc中定义了一些全局对象，其中包括一个PacketCache对象PC，PowerDNS中所有线程会共享这个对象。
 ```cpp
 PacketCache PC; //!< This is the main PacketCache, shared accross all threads

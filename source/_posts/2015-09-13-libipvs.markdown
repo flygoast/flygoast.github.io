@@ -15,6 +15,7 @@ libipvs封装了用户态程序对内核模块IPVS可以进行的操作，如:
 * 删除RealServer
 * 获取相关信息
 
+<!--more-->
 我们以2.6版本内核的libipvs为例来简单分析，源码文件位于keepalived/libipvs-2.6下。
 
 IPVS内核模块实现了两种方式供用户态程序来进行上述操作:

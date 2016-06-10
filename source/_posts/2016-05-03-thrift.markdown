@@ -8,6 +8,7 @@ categories: Thrift
 Thrift(https://thrift.apache.org/)是一个轻量级、语言无关的RPC框架。它定义了一套简单直观的IDL(Interface Definition Language)用于描述服务接口规范。 通过代码生成引擎将IDL描述的接口规范生成各种目标语言(如C++
 ，JAVA等)的源码文件。应用开发者基于这些源码构建服务端和客户端。通过这种方式，Thrift屏蔽了不同语言间的数据序列化/反序列化、数据传输、网络通信等与业务逻辑不相关的部分，使开发者只需关心业务逻辑实现。
 
+<!--more-->
 Thrift架构:
 
 ```plain

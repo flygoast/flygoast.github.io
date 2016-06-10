@@ -11,6 +11,7 @@ categories: LVS
 
 为了解决这问题，FULLNAT模式在转发包的时候，在TCP包中添加一个OPTION，来传递客户端的真实地址。RealServer中通过内核模块toa令应用层程序获取真实的客户端地址。
 
+<!--more-->
 TOA OPTION的OPCODE为254(0xfe), 长度为8字节，结构为:
 ```c
 struct toa_data
