@@ -1,0 +1,100 @@
+---
+layout: post
+title: "Lua源码分析: 2. math标准库实现"
+date: 2016-06-10 23:09:33 +0800
+comments: true
+categories: Lua
+---
+Lua通过标准库实现了核心之外的功能，如math库，I/O库等。本文来分析math标准库的实现, 代码位于`lmathlib.c`。
+
+math库提供了一组标准的数学函数，如绝对值函数, 三角函数，随机数函数等。调用方式为:
+```lua
+a = math.abs(-1)
+```
+标准库由C语言函数实现，提供给Lua程序使用。Lua程序与C函数通过虚拟栈交互。Lua将参数压入栈中，C函数从栈中获取参数，并将结果压入栈中，C函数返回入栈的结果数量。C函数无需在压入结果前清空栈，Lua会在函数执行完成后从栈中获取结果并自动清空结果下的内容。
+
+Lua调用的C函数的格式是固定的，定义在lua.h中:
+```c
+typedef int (*lua_CFunction) (lua_State *L);
+```
+<!--more-->
+下面分析math库具体代码:
+标准库加载时，会调用相应的初始化函数，格式为`luaopen_xxx`, math库的初始化函数为luaopen_math:
+```c
+/*
+** Open math library
+*/
+LUAMOD_API int luaopen_math (lua_State *L) {
+  luaL_newlib(L, mathlib);
+  lua_pushnumber(L, PI);
+  lua_setfield(L, -2, "pi");
+  lua_pushnumber(L, (lua_Number)HUGE_VAL);
+  lua_setfield(L, -2, "huge");
+  lua_pushinteger(L, LUA_MAXINTEGER);
+  lua_setfield(L, -2, "maxinteger");
+  lua_pushinteger(L, LUA_MININTEGER);
+  lua_setfield(L, -2, "mininteger");
+  return 1;
+}
+```
+luaopen_math()首先调用luaL_newlib()创建一个table压入栈中, 然后将mathlib数组中的函数注册到table中。
+mathlib定义:
+```c
+static const luaL_Reg mathlib[] = {
+  {"abs",   math_abs},
+  {"acos",  math_acos},
+  {"asin",  math_asin},
+  {"atan",  math_atan},
+  {"ceil",  math_ceil},
+  {"cos",   math_cos},
+  {"deg",   math_deg},
+  {"exp",   math_exp},
+  ...
+}
+```
+luaL_Reg的第一个成员表示Lua函数名称，第二个成员表示相应的C函数指针。如:`{“abs”, math_abs}`表示Lua中调用”math.abs”时，会执行C函数math_abs()。
+
+此时，创建table后，栈结构为:
+
+{% img /images/2016-06-10/6.png %}
+
+接着，luaopen_math()调用lua_pushnumber()将常量PI入栈，PI定义如下:
+```c
+#define l_mathop(op)        op##f
+
+#define PI  (l_mathop(3.141592653589793238462643383279502884))
+```
+此时栈结构为:
+
+{% img /images/2016-06-10/7.png %}
+
+然后调用lua_setfield()在table中添加"pi"变量，赋值为常量`PI`, 相当于:
+```lua
+
+math["pi"] = PI
+
+```
+此时，栈结构恢复为之前的只有math table的状态。
+
+接下来同样方式注册`huge`, `mininteger`, `maxinteger`三个变量，完成math库的初始化工作。
+
+当相应的Lua函数被调用时，对应的C函数被执行，下面以`math_abs()`为例分析相应C函数的实现:
+
+```c
+
+static int math_abs (lua_State *L) {
+  if (lua_isinteger(L, 1)) {
+    lua_Integer n = lua_tointeger(L, 1);
+    if (n < 0) n = (lua_Integer)(0u - (lua_Unsigned)n);
+    lua_pushinteger(L, n);
+  }
+  else
+    lua_pushnumber(L, l_mathop(fabs)(luaL_checknumber(L, 1)));
+  return 1;
+}
+
+```
+
+math_abs()函数从栈中获取参数，然后根据参数为浮点数还是整数分别计算绝对值，最终将结果压入栈中，并返回压入栈中结果的个数。
+
+标准库与Lua的C动态扩展代码实现是一致的，只是编译和加载方式不同。标准库与核心编译在同一个库，动态扩展编译成 SO 文件，标准库通过调用luaL_openlibs()进行加载，动态扩展通过”require”语句加载。后续我们再分析luaL_openlibs()和”require”的处理流程。
