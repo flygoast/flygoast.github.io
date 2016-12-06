@@ -32,16 +32,6 @@ ip tuntap add dev tun0 mode tun
     link/none
 ```
 
-设备创建完成后可以和物理设备一样对TAP进行配置IP地址等操作，如:
-```bash
-[root@compute1 ~]# ip addr add 192.168.1.2/24 dev tap0
-[root@compute1 ~]# ip link set dev tap0 up
-[root@compute1 ~]# ip addr list dev tap0
-23: tap0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN qlen 500
-    link/ether 36:f2:68:6a:fd:6d brd ff:ff:ff:ff:ff:ff
-    inet 192.168.1.2/24 scope global tap0
-       valid_lft forever preferred_lft forever
-```
 删除已创建的设备:
 ```bash
 ip tuntap del dev tap0 mode tap
@@ -124,9 +114,20 @@ ip link delete br0 type bridge
 
 官网: http://openvswitch.org
 
-OVS是一个产品级别的开源虚拟交换机。相较于Linux bridge, 它提供了各多的功能特性和自动化的编程支持。OVS使用OPENFLOW协议的流表来控制转发逻辑。
+OVS是一个产品级别的开源虚拟交换机。相较于Linux bridge, 它提供了各多的功能特性和自动化的编程支持。OVS中涉及如下虚拟网络设备:
 
-一些简单的操作:
+* bridge: 相较与Linux bridge，它基于OPENFLOW协议的流表来控制二层转发逻辑。
+* port: 网络设备在OVS bridge上的挂接点。
+* interface: 挂接到OVS端口的网络接口，可能是OVS创建的类型为internal的虚拟网卡,也可能是操作系统上的物理网卡或TUN/TAP等虚拟网络设备
+
+其中, Port有几种类型:
+
+* normal: 表示Port上挂接的是操作系统的网络接口(物理网卡或者TUN/TAP设备)
+* internal: Port被设置成internal类型时，OVS会自动创建一个虚拟网卡挂接到该Port
+* patch: patch类型的Port用于连接两个OVS bridge, 从而在两个bridge之间转发数据, 它总是成对出现，可以理解为一根虚拟电缆
+* tunnel: 支持使用GRE和VXLAN等隧道技术与远程端口通信
+
+简单的操作示例:
 
 创建bridge
 ```bash
@@ -139,6 +140,15 @@ ovs-vsctl show
 添加Port, 并设置VLAN ID为2:
 ```bash
 ovs-vsctl add-port ovsbr0 tap1 tag=2
+```
+添加Port，并设置类型为internal
+```bash
+ovs-vsctl add-port ovsbr0 p0 -- set interface p0 type=internal
+```
+创建patch类型的port:
+```bash
+ovs-vsctl add-port ovsbr0 p1 -- set interface p1 type=patch -- set interface p1 options:peer=p2
+ovs-vsctl add-port ovsbr1 p2 -- set interface p2 type=patch -- set interface p2 options:peer=p1
 ```
 删除Port
 ```bash
