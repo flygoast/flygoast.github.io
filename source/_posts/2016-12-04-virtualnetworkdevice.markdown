@@ -222,3 +222,64 @@ ip link set veth1 netns ns2
 ip netns exec ns1 ip link set dev veth0 up
 ip netns exec ns2 ip likn set dev veth1 up
 ```
+
+## MACVLAN
+
+一般情况下，网卡只有一个MAC地址。然而，有些场景下需要给一个网卡设置多个MAC地址。Linux通过MACVLAN技术在一个物理网卡上创建多个MACVLAN虚拟设备，每个设备有着不同的MAC地址。当物理网卡收到数据包时，MACVLAN driver根据数据包MAC地址将数据包交由匹配的虚拟网卡处理。使用MACVLAN可以替代使用bridge来连接物理网卡和虚拟网络设备。
+
+创建MACVLAN设备并自动分配MAC地址:
+```bash
+ip link add link ens160 name mac0 type macvlan
+```
+查看生成的设备信息:
+```bash
+[root@localhost ~]# ip link show mac0
+60: mac0@ens160: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT
+    link/ether 4e:d0:8f:d3:e1:1e brd ff:ff:ff:ff:ff:ff
+```
+也可以指定MAC地址创建设备:
+```bash
+ip link add link ens160 name mac1 address 52:22:33:44:55:66 type macvlan
+```
+指定MAC地址需要注意:第一字节的第0位应为0，表示单播MAC地址，1表示多播MAC地址。第1位应为”1”, 这表示，这个MAC地址是本地地址。
+
+删除MACVLAN设备
+```bash
+ip link del mac0
+```
+
+## MACVTAP
+
+虚拟化中一般使用TAP和bridge来组建虚拟网络，但这样组网结构会稍显复杂。Linux上的MACTAP设备可以简化这种结构。MACVTAP设备集成了MACVLAN和TAP设备二者的特性。它也可以基于一个物理网卡创建多个MAC地址不同的虚拟网卡，同时虚拟网卡收到的包不再交给内核协议栈，而是通过TAP设备的文件描述符传递到用户态进程。
+
+MACVTAP和MACVLAN类型的设备有4种工作模式:
+
+* VEPA(Virtual Ethernet Port Aggregator): 同一物理网卡下的虚拟网卡之间的流量要先发送到外部交换机，再由交换机发送回物理网卡。但是外部交换机应支持并配置成hairpin模式
+* Bridge: 与Linux bridge类似，同一物理网卡下的虚拟网卡之间可以直接交换数据包，无需外部交换机
+* Private: 同一物理网卡下的虚拟网卡之间无法连通，无论外部交换机是否支持hairpin模式
+* Passthru: MACVALN和MACVTAP的数据处理逻辑被跳过，相当于虚拟网卡直接连接物理网卡。这种模式的好处是虚拟网卡可以修改MAC地址或其他接口参数
+
+一个MACVTAP设备被创建后，会生成一个字符设备文件在/dev/下，一般为”/dev/tapNN”， NN是MACVTAP设备的接口索引值。
+创建MACVTAP设备并设置mode为bridge:
+```bash
+ip link add link ens160 macvtap0 type macvtap mode bridge
+```
+启动设备:
+```bash
+ip link set dev macvtap0 up
+```
+查看MACVTAP设备:
+```bash
+[root@localhost ~]# ip link show macvtap0
+61: macvtap0@ens160: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UNKNOWN mode DEFAULT qlen 500
+    link/ether da:fc:86:c8:b7:52 brd ff:ff:ff:ff:ff:ff
+```
+在/dev下可以看到生成的字符设备文件:
+```bash
+[root@localhost ~]# ls -l /dev/tap61
+crw-------. 1 root root 248, 1 Dec  8 10:57 /dev/tap61
+```
+删除设备:
+```bash
+ip link del macvtap0
+```
