@@ -1,0 +1,73 @@
+---
+layout: post
+title: "iptables机制分析"
+date: 2016-12-11 19:05:47 +0800
+comments: true
+categories: OpenStack
+---
+iptables是Linux系统上的包过滤防火墙。它基于netfilter框架实现，分为内核模块和用户态程序。内核模块负责根据规则过滤数据包，用户态程序负责将规则写入内核模块。
+
+iptables将过滤规则组织成表和链, 每个表中含有多个链，每个链中包含一组规则。每条规则由数据包的匹配条件和匹配之后要执行的目标构成。iptables内核模块依次检查规则过滤数据包。
+
+<!--more-->
+
+iptables内置了4个表:
+
+* filter: 表filter是iptables命令没有指定表时默认使用的表，它主要用于对数据包进行过滤，内置了3个链:
+    * INPUT: 过滤发送给目的地址是本机IP的数据包
+    * FORWARD: 过滤通过本机进行路由转发的数据包
+    * OUTPUT: 过滤本机生成的数据包
+* nat: 表nat主要用于对数据包进行NAT操作，内置了3个链:
+    * PREROUTING: 在数据包刚进入本机时对数据包修改目的地址
+    * OUTPUT: 在路由前对本机生成的数据包修改目的地址
+    * POSTROUTING: 在路由后即将离开本机前对数据包修改源地址
+* mangle: 主要用来修改数据包的TOS，TTL等信息，以及为数据包设置MARK标记，内置了5个链:
+    * PREROUTING: 在数据包刚到达本机时路由前修改数据包
+    * INPUT: 对目的地址是本机IP的数据进行修改
+    * FORWARD: 对通过本机进行路由转发的数据包进行修改
+    * OUTPUT: 对路由前对本机生成的数据包进行修改
+    * POSTROUTING: 对路由后即前离开本机前进行修改
+* raw: 它主要用于决定是否被连接跟踪机制处理，内置了2个链: PREROUTING, OUTPUT。iptables中连接有4种状态:
+    * NEW: 该包想开始一个新的连接
+    * RELATED: 该包属于一个已建连接的新连接
+    * ESTABLISHED: 该包只要发送并接受应答，一个连接从NEW变为ESTABLISHED
+    * INVALID: 数据包不能识别出属于哪个连接
+
+表的匹配顺序依次为: raw, mangle, nat, filter。链中规则按顺序进行检查，若一个规则没有匹配，则继续检查下一个。若规则匹配，则根据规则目标来完成不同操作。若所有规则都没有匹配，则使用链的默认目标。
+
+规则目标的主要类型有:
+
+* ACCEPT: 允许该数据包通过
+* DROP: 丢弃该数据包
+* QUEUE: 将该数据包传递到用户空间
+* RETURN: 停止处理当前链中的规则
+* REJECT: 拒绝接收该数据包并发送错误响应
+* LOG: 记录匹配的数据包
+还有许多其他的类型，参考: `iptables(8)`
+
+除了内置的链，我们还可以添加自定义链，通过将自定义的链名设为内置链中规则的目标来生效。
+
+iptables支持多种匹配条件, 常见的如:
+* 协议匹配: 检查数据包的协议字段
+如，拒绝ICMP数据包:
+```bash
+iptables -I INPUT -p icmp -j REJECT
+```
+* 地址匹配: 匹配IP目的地址(-p)、源地址(-s)
+如，拒绝转发源IP为`192.168.1.111`的数据包，而对来自`192.168.1.0/24`其他地址的数据包进行转发
+```bash
+iptables -A FORWARD -s 192.168.1.111 -j REJECT
+iptables -A FORWARD -s 192.168.1.0/24 -j ACCEPT
+```
+* 接口匹配: 对接收(-i)和发送(-o)数据的网络接口进行匹配
+如: 丢弃eth0上接收的所有来自`10.0.0.1/24`网段的数据包
+```bash
+iptables -A INPUT -i eth0 -s 10.0.0.1/24 -j DROP
+```
+还有许多其他的匹配方法，参考: `iptables(8)`
+
+当需要保存和恢复iptables规则时,可以使用iptables-save和iptables-restore命令
+```bash
+iptables-save > iptables.rules
+iptables-restore < iptables.rules
+```
