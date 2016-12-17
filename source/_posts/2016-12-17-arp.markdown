@@ -104,7 +104,7 @@ arp_ignore - INTEGER
     The max value from conf/{all,interface}/arp_ignore is used
     when ARP request is received on the {interface}
 ```
-如，禁止eth0响应ARP:
+如，禁止eth0响应目标地址是配置在其他接口上IP的ARP请求:
 ```bash
 echo 1 > /proc/sys/net/ipv4/conf/eth0/arp_ignore
 echo 2 > /proc/sys/net/ipv4/conf/eth0/arp_announce
