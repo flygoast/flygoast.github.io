@@ -1,0 +1,120 @@
+---
+layout: post
+title: "ARP协议介绍"
+date: 2016-12-17 14:25:47 +0800
+comments: true
+categories: OpenStack
+---
+ARP: Address Resolution Protocol, 地址解析协议，主要用于根据IP获取对应的物理地址，它封装在数据链路协议上，如以太网帧封装。
+
+以太网中，交换机根据数据包中源MAC地址与对应的交换机端口建立映射关系。当以太网帧到达交换机，交换机根据包中目的MAC地址在映射表查找对应的交换机端口。若找到，则直接从该端口转发，否则向除接收端口外的所有其他端口广播数据包。
+
+以太网内的主机要发送数据包时首先判断目标IP地址是否是同一子网。若发送给本地网络主机，则根据目的主机IP获取对应的MAC地址。若发送到其他网络，则通过路由获取目的IP(一般为网关IP)，根据该IP获取对应的目的MAC地址。收到ARP响应之后，发送相应的数据包。
+
+<!--more-->
+
+假设主机A向同网主机B发送数据包，ARP过程如下:
+
+* 主机A查找本机ARP缓存中是否有相应映射关系且没有失效。若找到，则直接使用该MAC地址发送数据包。
+* 若没有找到，则广播ARP请求到本地网络所有主机，询问目的IP对应的MAC地址。
+* 收到ARP请求的主机会根据包中的映射关系更新本地ARP缓存表。不同内核可能实现不一致。
+* 与ARP请求中的IP匹配的主机B将对应MAC地址以ARP响应发送回主机A，IP不匹配的其他主机丢弃该ARP请求。
+* 主机A收到主机B的ARP响应，根据响应包的映射关系更新ARP缓存。
+
+ARP缓存项具有有效期，过期后会重复上述过程。
+
+使用Wireshark来观察ARP请求和响应:
+
+* 请求包的以太网帧目标地址为广播地址，ARP请求包中的目标Mac为全0
+* 响应包返回对应IP的MAC地址，以太网帧的目标地址为发送者的MAC，直接发送给请求者
+
+请求包:
+
+{% img /images/2016-12-17/1.png %}
+
+响应包:
+
+{% img /images/2016-12-17/2.png %}
+
+Linux下可以使用”ip”命令对ARP缓存相行操作:
+
+查看缓存表:
+```bash
+ip neighbor
+```
+删除缓存项, 如删除IP "10.0.0.1"的缓存:
+```bash
+ip neighbor del 10.0.0.1 dev eth0
+```
+
+若要清除某设备上的所有ARP缓存，可以使用ip命令，如清除eth0上的所有ARP缓存:
+```bash
+ip neigh flush dev eth0
+```
+
+Linux默认情况下，会对目标IP是本机地址的ARP请求做出响应，即使目标IP并没有配置到收到ARP请求的网络接口上。可以通过修改系统参数`arp_announce`和`arp_ignore`来调整ARP响应逻辑。
+Kernel的文档说明如下:
+```plain
+arp_announce - INTEGER
+    Define different restriction levels for announcing the local
+    source IP address from IP packets in ARP requests sent on
+    interface:
+    0 - (default) Use any local address, configured on any interface
+    1 - Try to avoid local addresses that are not in the target's
+    subnet for this interface. This mode is useful when target
+    hosts reachable via this interface require the source IP
+    address in ARP requests to be part of their logical network
+    configured on the receiving interface. When we generate the
+    request we will check all our subnets that include the
+    target IP and will preserve the source address if it is from
+    such subnet. If there is no such subnet we select source
+    address according to the rules for level 2.
+    2 - Always use the best local address for this target.
+    In this mode we ignore the source address in the IP packet
+    and try to select local address that we prefer for talks with
+    the target host. Such local address is selected by looking
+    for primary IP addresses on all our subnets on the outgoing
+    interface that include the target IP address. If no suitable
+    local address is found we select the first local address
+    we have on the outgoing interface or on all other interfaces,
+    with the hope we will receive reply for our request and
+    even sometimes no matter the source IP address we announce.
+
+    The max value from conf/{all,interface}/arp_announce is used.
+
+    Increasing the restriction level gives more chance for
+    receiving answer from the resolved target while decreasing
+    the level announces more valid sender's information.
+
+arp_ignore - INTEGER
+    Define different modes for sending replies in response to
+    received ARP requests that resolve local target IP addresses:
+    0 - (default): reply for any local target IP address, configured
+    on any interface
+    1 - reply only if the target IP address is local address
+    configured on the incoming interface
+    2 - reply only if the target IP address is local address
+    configured on the incoming interface and both with the
+    sender's IP address are part from same subnet on this interface
+    3 - do not reply for local addresses configured with scope host,
+    only resolutions for global and link addresses are replied
+    4-7 - reserved
+    8 - do not reply for all local addresses
+
+    The max value from conf/{all,interface}/arp_ignore is used
+    when ARP request is received on the {interface}
+```
+如，禁止eth0响应ARP:
+```bash
+echo 1 > /proc/sys/net/ipv4/conf/eth0/arp_ignore
+echo 2 > /proc/sys/net/ipv4/conf/eth0/arp_announce
+```
+或者, 编辑/etc/sysctl.conf添加所下内容:
+```plain
+net.ipv4.conf.eth0.arp_ignore = 1
+net.ipv4.conf.eth0.arp_announce = 2
+```
+再执行:
+```bash
+sysctl -p
+```
