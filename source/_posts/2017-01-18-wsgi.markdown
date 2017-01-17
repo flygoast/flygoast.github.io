@@ -1,0 +1,128 @@
+---
+layout: post
+title: "WSGI介绍"
+date: 2017-01-18 00:55:58 +0800
+comments: true
+categories: OpenStack
+---
+Web应用程序的处理逻辑可以概括为:
+
+* 接收HTTP请求
+* 处理业务逻辑
+* 发送HTTP响应给客户端
+
+其中，接收HTTP请求和发送HTTP响应，主要是解析HTTP请求，构造HTTP协议响应，这些与业务无关，不需要每次开发Web应用程序都重新实现，因而已经存在许多独立可以直接使用的组件，这种组件称为WebServer，而业务逻辑处理部分则称为Application。WebServer和Application之间通过约定好的协议或规范进行通信。
+
+WSGI(Web Server Gateway Interface)是Python社区提出的WebServer与Application之间通信的规范, 当前版本为v1.0.1, 定义在PEP 3333(https://www.python.org/dev/peps/pep-3333/)。
+
+<!--more-->
+
+在PHP Web开发中，一般使用FastCGI通过网络在WebServer和Application之间传递信息，而WSGI规范则要求通过Python函数调用完成信息传递。
+
+WSGI规范定义通信的两端分别为server和application。server端通过调用application端提供的一个`callable`对象，这个对象可以是`function`, 也可以是带有`__call__`成员方法的`class`或`class`实例。application端提供的`callable`对象要接收两个参数: `environ`和`start_response`。`environ`是一个包含请求信息的`dict`结构, `start_response`是server端提供给application端发送响应的回调函数。它的原型是:
+```python
+start_response(status, response_headers)
+```
+
+其中`status`为HTTP的状态码和消息，如”200 OK”, 而`response_headers`为包含多个`(header_name, value)`格式的`list`。
+
+application端的`callable`对象必须返回一个包含HTTP响应Body的`iterable`对象。
+
+如上所述，server负责接收客户端的请求，解析请求，并将请求信息存储在`environ`变量中，通过调用application提供的`callable`，连同回调函数传递给application，application处理请求后，将HTTP状态行和HTTP header通过回调函数传递给server, 并将HTTP响应的Body通过`callable`的返回值传递给server。
+
+除了server和application两种角色，WSGI还定义了middleware角色。它需要同时满足server和application的规范要求。它做为application来接收上游server传递的请求信息，处理业务逻辑，同时又做为server来调用下游的applicaiton。并且middleware可以叠加，整体结构如图:
+
+{% img /images/2017-01-18/1.png %}
+
+下面以简单示例来说明WSGI规范。
+
+gunicorn(Green Unicorn)是一个WSGI的Server实现，安装gunicorn:
+```bash
+yum install -y python-gunicorn
+```
+编辑文件app.py, 添加如下内容:
+```python
+def application(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return ["hello, world\n”]
+```
+执行gunicorn:
+```bash
+[root@compute1 ~]# gunicorn app:application
+2017-01-05 11:16:56 [23918] [INFO] Starting gunicorn 18.0
+2017-01-05 11:16:56 [23918] [INFO] Listening at: http://127.0.0.1:8000 (23918)
+2017-01-05 11:16:56 [23918] [INFO] Using worker: sync
+2017-01-05 11:16:56 [23923] [INFO] Booting worker with pid: 23923
+```
+命令中的`app:application`表示`callable`为app模块中application函数。
+
+gunicorn默认监听8000端口，通过curl来访问, 结果正常返回:
+```bash
+[root@compute1 ~]# curl http://127.0.0.1:8000/
+hello, world
+```
+
+接下来简单实现一个URL路由功能来说明middleware。
+
+编辑文件app_foo.py, 添加如下内容:
+```python
+def foo(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return ["hello, foo\n”]
+```
+编辑文件app_bar.py, 添加如下内容:
+```python
+def bar(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return ["hello, bar\n”]
+```
+编辑文件router.py,添加如下内容:
+```python
+from app_foo import foo
+from app_bar import bar
+
+urls = {
+    'foo': foo,
+    'bar': bar
+}
+
+def application(environ, start_response):
+    path = environ.get('PATH_INFO', '').lstrip('/')
+
+    callback = urls.get(path)
+    if callback is not None:
+        return callback(environ, start_response)
+
+    start_response('404 Not Found', [('Content-Type', 'text/plain')])
+    return ['Not Found']
+```
+执行gunicorn:
+```bash
+[root@compute1 ~]# gunicorn router:application
+2017-01-05 11:41:33 [24276] [INFO] Starting gunicorn 18.0
+2017-01-05 11:41:33 [24276] [INFO] Listening at: http://127.0.0.1:8000 (24276)
+2017-01-05 11:41:33 [24276] [INFO] Using worker: sync
+2017-01-05 11:41:33 [24281] [INFO] Booting worker with pid: 24281
+```
+用curl来访问8000端口:
+```bash
+[root@compute1 ~]# curl http://127.0.0.1:8000/foo
+hello, foo
+[root@compute1 ~]# curl http://127.0.0.1:8000/bar
+hello, bar
+[root@compute1 ~]# curl http://127.0.0.1:8000/xxx
+Not Found[root@compute1 ~]# ^C
+```
+当我们访问`/foo`时，请求被路由至app_foo:foo函数处理，而当访问`/bar`时，请求被路由至app_bar:bar函数处理。
+
+WSGI Server实现有许多，可以参考:http://wsgi.readthedocs.io/en/latest/servers.html
+
+目前使用较广泛的主要有:
+
+* Green Unicorn: http://gunicorn.org/
+* uWSGI: http://uwsgi-docs.readthedocs.org/en/latest/
+* mod_wsgi: https://github.com/GrahamDumpleton/mod_wsgi
+
+本文代码示例主要阐述WSGI的原理和规范，而实际开发中最好还是基于Python Web框架来开发应用程序，如Django，Flask等，这些框架都实现了WSGI规范。
+
+
