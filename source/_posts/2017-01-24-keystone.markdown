@@ -1,0 +1,353 @@
+---
+layout: post
+title: "OpenStack keystone介绍"
+date: 2017-01-24 18:07:16 +0800
+comments: true
+categories: OpenStack
+---
+OpenStack由一系列REST API服务组成，如NOVA提供计算服务，GLANCE提供镜像服务，NEUTRON提供网络服务。Keystone是这些服务之一，它为其他服务提供统一的身份认证和授权服务。它的工作模式如图:
+
+{% img /images/2017-01-24/1.png %}
+
+<!--more-->
+
+一般流程为: 用户携带身份证明信息发送请求给keystone, keystone校验通过后，颁发一个token给用户。用户再携带获取的token去访问其他服务。其他服务将接收到token发送给keystone验证合法性。若验证通过，则给用户提供服务，否则，拒绝相应请求。
+
+除了身份认证和授权服务外，keystone还对外提供服务目录功能。用户可以从keystone获取openstack提供的所有服务的访问地址。
+
+Keystone的API目前有两个版本V2和V3。官方不赞成再使用V2版本，本文基于V3版本来说明。
+
+Keystone V3使用domain概念来界定不同的云服务客户。domain管理员在自己拥有的domain内可以创建多个project和user。不同的domain内的project和user可以重名。Project是云服务资源的集合，如，可以限制project创建虚拟机实例个数，虚拟CPU个数，使用的浮动IP个数等等。User用来表示服务的使用者。OpenStack的多数服务使用RBAC(Role Based Access Control)机制来保护API。要让一个User能够使用服务，需要在project中给其分配role。相应服务通过从keystone获取user的role根据自身的策略来对其使用进行限制。Group是user集合，通过直接给Group分配role可以简化分配role的逻辑。
+
+使用`keystone-manage bootstrap`命令完成keystone初始化之后，系统创建了一个默认domain, ID为”default”, 名称为”Default”,在Default domain中创建了名为”admin”的project和名为”admin”的user。
+```plain
+[root@controller ~]# source admin-openrc
+[root@controller ~]# openstack domain list
++---------+---------+---------+--------------------+
+| ID      | Name    | Enabled | Description        |
++---------+---------+---------+--------------------+
+| default | Default | True    | The default domain |
++---------+---------+---------+--------------------+
+[root@controller ~]# openstack project list
++----------------------------------+-------+
+| ID                               | Name  |
++----------------------------------+-------+
+| 21518631e9fe43c19103ebbe88c1186a | admin |
++----------------------------------+-------+
+[root@controller ~]# openstack user list
++----------------------------------+-------+
+| ID                               | Name  |
++----------------------------------+-------+
+| 1c1fd7b9e4bb4701af5a88d41dc3e07c | admin |
++----------------------------------+-------+
+```
+
+接下来我们使用curl来说明keystone API调用。
+
+使用admin用户进行身份认证:
+
+编辑文件auth_token.json，添加如下内容:
+```json
+{
+    "auth": {
+        "identity": {
+            "methods": [
+                "password" 
+            ],
+            "password": {
+                "user": {
+                    "name": "admin",
+                    "domain": {
+                        "id": "default",
+                        "name": "Default" 
+                    },
+                    "password": "admin" 
+                }
+            }
+        },
+        "scope": {
+            "project": {
+                "name": "admin",
+                "domain": {"id": "default"}
+            }
+        }
+    }
+}
+```
+通过curl命令访问API获取token:
+```json
+[root@controller ~]# curl -i -s -d@auth_token.json -H "Content-Type: application/json" http://127.0.0.1:5000/v3/auth/tokens  |grep 'X-Subject-Token'
+X-Subject-Token: 0081548433af4594a21136544766e3b9
+```
+
+API通过header `X-Subject-Token`返回token。我们以”admin”用户从keystone获取到的token为: “0081548433af4594a21136544766e3b9"
+
+接着，我们创建一个新domain，名称为"dummy":
+
+编辑文件create_domain.json, 添加如下内容:
+```json
+{
+    "domain": {
+        "description": "dummy domain",
+        "enabled": true,
+        "name": "dummy" 
+    }
+}
+```
+执行命令创建domain：
+```plain
+[root@controller ~]# curl -s -d @create_domain.json -H "Content-Type: application/json" -H "X-Auth-Token: 0081548433af4594a21136544766e3b9" http://127.0.0.1:5000/v3/domains | python -m json.tool
+{
+    "domain": {
+        "description": "dummy domain",
+        "enabled": true,
+        "id": "e3953f004c1740a0aee15372d7abe79e",
+        "links": {
+            "self": "http://127.0.0.1:5000/v3/domains/e3953f004c1740a0aee15372d7abe79e" 
+        },
+        "name": "dummy" 
+    }
+}
+```
+domain创建成功，ID为”e3953f004c1740a0aee15372d7abe79e"。
+
+接下来创建新project:
+
+编辑文件create_project.json, 添加如下内容:
+```json
+{
+    "project": {
+        "description": "dummy_p1",
+        "domain_id": "e3953f004c1740a0aee15372d7abe79e",
+        "enabled": true,
+        "is_domain": false,
+        "name": "dummy_p1" 
+    }
+}
+```
+执行命令创建project:
+```plain
+[root@controller ~]# curl -s -d @create_project.json -H "Content-Type: application/json" -H "X-Auth-Token: 0081548433af4594a21136544766e3b9" http://127.0.0.1:5000/v3/projects | python -m json.tool
+{
+    "project": {
+        "description": "dummy_p1",
+        "domain_id": "e3953f004c1740a0aee15372d7abe79e",
+        "enabled": true,
+        "id": "f7152c5cb7f34cc08e49ab88206728a6",
+        "is_domain": false,
+        "links": {
+            "self": "http://127.0.0.1:5000/v3/projects/f7152c5cb7f34cc08e49ab88206728a6" 
+        },
+        "name": "dummy_p1",
+        "parent_id": "e3953f004c1740a0aee15372d7abe79e" 
+    }
+}
+```
+Project创建成功，ID为”f7152c5cb7f34cc08e49ab88206728a6”。
+
+接着在新domain中创建user：
+
+编辑文件create_user.json, 添加如下内容:
+```json
+{
+    "user": {
+        "default_project_id": "f7152c5cb7f34cc08e49ab88206728a6",
+        "domain_id": "e3953f004c1740a0aee15372d7abe79e",
+        "enabled": true,
+        "name": "dummy_u1",
+        "password": "123456" 
+    }
+}
+```
+执行命令:
+```plain
+[root@controller ~]# curl -s -d @create_user.json -H "Content-Type: application/json" -H "X-Auth-Token: 0081548433af4594a21136544766e3b9" http://127.0.0.1:5000/v3/users | python -m json.tool
+{
+    "user": {
+        "default_project_id": "f7152c5cb7f34cc08e49ab88206728a6",
+        "domain_id": "e3953f004c1740a0aee15372d7abe79e",
+        "enabled": true,
+        "id": "a46979d9c53a4a25bc5119ec2a0d0f39",
+        "links": {
+            "self": "http://127.0.0.1:5000/v3/users/a46979d9c53a4a25bc5119ec2a0d0f39" 
+        },
+        "name": "dummy_u1",
+        "password_expires_at": null
+    }
+}
+```
+User创建成功，ID为”a46979d9c53a4a25bc5119ec2a0d0f39”。
+
+OpenStack的服务对User的权限检测基于Project上的Role进行，接下来我们创建名为”developer”的role, 并将dummy_u1在project “dummy_p1”上的role赋与”developer”。
+
+创建新role：
+
+编辑文件create_role.json, 添加如下内容:
+```json
+{
+    "role": {
+        "name": "developer" 
+    }
+}
+```
+执行命令创建role:
+```plain
+[root@controller ~]# curl -s -d @create_role.json -H "Content-Type: application/json" -H "X-Auth-Token: 0081548433af4594a21136544766e3b9" http://127.0.0.1:5000/v3/roles | python -m json.tool
+{
+    "role": {
+        "domain_id": null,
+        "id": "4366cbacbaa14f258141631412acf285",
+        "links": {
+            "self": "http://127.0.0.1:5000/v3/roles/4366cbacbaa14f258141631412acf285" 
+        },
+        "name": "developer" 
+    }
+}
+```
+role创建成功, ID为”4366cbacbaa14f258141631412acf285”。
+
+执行命令赋与role：
+```plain
+[root@controller ~]# curl -X PUT -s -H "Content-Type: application/json" -H "X-Auth-Token: 0081548433af4594a21136544766e3b9" http://127.0.0.1:5000/v3/projects/f7152c5cb7f34cc08e49ab88206728a6/users/a46979d9c53a4a25bc5119ec2a0d0f39/roles/4366cbacbaa14f258141631412acf285  -i
+HTTP/1.1 204 No Content
+Date: Tue, 24 Jan 2017 08:19:30 GMT
+Server: Apache/2.4.6 (CentOS) mod_wsgi/3.4 Python/2.7.5
+Vary: X-Auth-Token
+x-openstack-request-id: req-c0e27626-0ddb-42bb-8cae-7f604b2fefa5
+Content-Length: 0
+```
+接下来，使用新创建的用户来认证身份:
+
+编辑文件user_auth_token.json, 添加如下内容:
+```json
+{
+    "auth": {
+        "identity": {
+            "methods": [
+                "password" 
+            ],
+            "password": {
+                "user": {
+                    "name": "dummy_u1",
+                    "domain": {
+                        "name": "dummy" 
+                    },
+                    "password": "123456" 
+                }
+            }
+        },
+        "scope": {
+            "project": {
+                "name": "dummy_p1",
+                "domain": {"name": "dummy"}
+            }
+
+        }
+    }
+}
+```
+执行命令认证身份:
+```json
+[root@controller ~]# curl -i -s -d@user_auth_token.json -H "Content-Type: application/json" http://127.0.0.1:5000/v3/auth/tokens | tee auth.temp|grep 'X-Subject-Token' && egrep '^{' auth.temp |python -m json.tool && unlink auth.temp
+X-Subject-Token: 64b1d3dc74f34c169f8f1e787fab087a
+{
+    "token": {
+        "audit_ids": [
+            "x1mgA_UPRx6ECrMYG1MD5Q" 
+        ],
+        "catalog": [
+            {
+                "endpoints": [
+                    {
+                        "id": "1ffaaccd19d743678a3e5db10332188c",
+                        "interface": "public",
+                        "region": "RegionOne",
+                        "region_id": "RegionOne",
+                        "url": "http://controller:5000/v3/" 
+                    },
+                    {
+                        "id": "be477ea2662b401ca5bc220b1c07a430",
+                        "interface": "admin",
+                        "region": "RegionOne",
+                        "region_id": "RegionOne",
+                        "url": "http://controller:35357/v3/" 
+                    },
+                    {
+                        "id": "c52c75d0895e4a5f9bef6e6be2ccd7d3",
+                        "interface": "internal",
+                        "region": "RegionOne",
+                        "region_id": "RegionOne",
+                        "url": "http://controller:35357/v3/" 
+                    }
+                ],
+                "id": "bf48c79ef2e446edb75f8483f77b55f8",
+                "name": "keystone",
+                "type": "identity" 
+            }
+        ],
+        "expires_at": "2017-01-24T09:26:49.000000Z",
+        "is_domain": false,
+        "issued_at": "2017-01-24T08:26:49.000000Z",
+        "methods": [
+            "password" 
+        ],
+        "project": {
+            "domain": {
+                "id": "e3953f004c1740a0aee15372d7abe79e",
+                "name": "dummy" 
+            },
+            "id": "f7152c5cb7f34cc08e49ab88206728a6",
+            "name": "dummy_p1" 
+        },
+        "roles": [
+            {
+                "id": "4366cbacbaa14f258141631412acf285",
+                "name": "developer" 
+            }
+        ],
+        "user": {
+            "domain": {
+                "id": "e3953f004c1740a0aee15372d7abe79e",
+                "name": "dummy" 
+            },
+            "id": "a46979d9c53a4a25bc5119ec2a0d0f39",
+            "name": "dummy_u1" 
+        }
+    }
+}
+```
+可以看到，token成功返回，并且从“catalog"字段可以获取服务目录，获得openstack提供的服务和访问地址。
+
+通过openstack命令可以查看当前状态为:
+```plain
+[root@controller ~]# openstack domain list
++----------------------------------+---------+---------+--------------------+
+| ID                               | Name    | Enabled | Description        |
++----------------------------------+---------+---------+--------------------+
+| default                          | Default | True    | The default domain |
+| e3953f004c1740a0aee15372d7abe79e | dummy   | True    | dummy domain       |
++----------------------------------+---------+---------+--------------------+
+[root@controller ~]# openstack project list
++----------------------------------+----------+
+| ID                               | Name     |
++----------------------------------+----------+
+| 21518631e9fe43c19103ebbe88c1186a | admin    |
+| f7152c5cb7f34cc08e49ab88206728a6 | dummy_p1 |
++----------------------------------+----------+
+[root@controller ~]# openstack user list
++----------------------------------+----------+
+| ID                               | Name     |
++----------------------------------+----------+
+| 1c1fd7b9e4bb4701af5a88d41dc3e07c | admin    |
+| a46979d9c53a4a25bc5119ec2a0d0f39 | dummy_u1 |
++----------------------------------+----------+
+[root@controller ~]# openstack role list
++----------------------------------+-----------+
+| ID                               | Name      |
++----------------------------------+-----------+
+| 4366cbacbaa14f258141631412acf285 | developer |
+| 7e6030c80c704fb99bc1a237e620747b | admin     |
++----------------------------------+-----------+
+```
+
+本文简单地说明了keystone V3 API的调用。具体规范参考官方文档: http://developer.openstack.org/api-ref/identity/v3/
