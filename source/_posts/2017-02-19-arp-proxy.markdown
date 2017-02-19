@@ -1,0 +1,194 @@
+---
+layout: post
+title: "ARP代理实例研究"
+date: 2017-02-19 19:29:56 +0800
+comments: true
+categories: OpenStack
+---
+ARP代理指网络接口对要查询的IP不属于本机的ARP请求以自身的MAC地址给予ARP响应。从而发送到该目的IP的数据包被捕获到代理设备，代理设备再从其他网络接口将数据包转发至目的IP。
+
+ARP代理的一个典型应用场景是防火墙部署。通过将防火墙部署在被保护主机前面，开启ARP代理功能，可以不修改被保护主机的网络配置，将流量引导至防火墙对流量进行过滤。部署前后结构如图:
+
+{% img /images/2017-02-19/1.png %}
+
+在默认配置下，只要ARP请求中的目标IP配置在本机，无论其是否配置在收到数据包的接口上，Linux收包接口都会以身MAC地址发送ARP响应。若是不希望接口响应所有本机IP，可以通过修改`arp_ignore`参数来调整，可以参考之前的文章[<<ARP协议介绍>>](http://www.just4coding.com/blog/2016/12/17/arp/)。
+
+<!--more-->
+
+Linux代理ARP需要满足如下条件:
+
+* Linux开启数据包转发和ARP代理功能
+* 目标IP在ARP代理主机上路由可达
+* 代理主机上对目标IP的转发设备与收包设备不同
+
+若是收包设备和转发设备相同，则目标地址自身就可以回应该ARP请求，代理ARP没有意义。
+
+本文通过实例来展示ARP代理过程，实验环境为VirtualBox HostOnly网络，Linux虚拟机环境为CentOS7，宿主机为MacOS。HostOnly网络为`vboxnet0`, 宿主机上网关IP为:`192.168.33.1`，虚拟机上的eth1接入`vboxnet0`, 配置IP为:`192.168.33.12`。
+
+首先，在虚拟机上创建一个OVS bridge:
+```bash
+ovs-vsctl add-br br0
+```
+将OVS网桥同名接口配置IP:`192.168.33.13`, 并开启接口设备:
+```bash
+ip addr add 192.168.33.13/24 dev br0
+ip link set up br0
+```
+查看IP配置:
+```plain
+[root@localhost vagrant]# ip a
+...
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:f5:af:5a brd ff:ff:ff:ff:ff:ff
+    inet 192.168.33.12/24 brd 192.168.33.255 scope global eth1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a00:27ff:fef5:af5a/64 scope link
+       valid_lft forever preferred_lft forever
+4: ovs-system: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN
+    link/ether 0a:95:b4:09:9d:a2 brd ff:ff:ff:ff:ff:ff
+5: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN
+    link/ether a2:fe:04:72:0e:4f brd ff:ff:ff:ff:ff:ff
+    inet 192.168.33.13/24 scope global br0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a0fe:4ff:fe72:e4f/64 scope link
+       valid_lft forever preferred_lft forever
+```
+此时，我们在宿主机上访问`192.168.33.13`，可以成功:
+```plain
+flygoast:~ $ ping 192.168.33.13 -c 1
+PING 192.168.33.13 (192.168.33.13): 56 data bytes
+64 bytes from 192.168.33.13: icmp_seq=0 ttl=64 time=0.682 ms
+
+--- 192.168.33.13 ping statistics ---
+1 packets transmitted, 1 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 0.682/0.682/0.682/0.000 ms
+```
+查看MAC地址表:
+```plain
+flygoast:~ $ arp -an
+? (192.168.0.1) at d0:fa:1d:62:a3:84 on en1 ifscope [ethernet]
+? (192.168.33.12) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (192.168.33.13) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (224.0.0.251) at 1:0:5e:0:0:fb on en1 ifscope permanent [ethernet]
+```
+可以看到`192.168.33.13`和`192.168.33.12`的MAC地址都是虚拟机上`eth1`接口的地址。
+
+接下来，我们在虚拟机中添加一个OVS虚拟接口:
+```bash
+ovs-vsctl add-port br0 p1 -- set interface p1 type=internal
+```
+查看网桥情况:
+```plain
+[root@localhost vagrant]# ovs-vsctl show
+41105de3-e18f-4317-bad6-3996c66c4720
+    Bridge "br0" 
+        Port "br0" 
+            Interface "br0" 
+                type: internal
+        Port "p1" 
+            Interface "p1" 
+                type: internal
+    ovs_version: "2.4.0" 
+```
+若是直接给接口`p1`配置IP，`eth1`会以自身MAC地址回应查询地址为`p1`上的IP的ARP请求。我们将`p1`移入一个network namespace中，这样`eth1`便不会再对`p1`的IP进行响应。
+
+创建namespace:
+```plain
+[root@localhost vagrant]# ip netns add ns1
+[root@localhost vagrant]# ip netns list
+ns1
+```
+将`p1`移入namespace `ns1`中并查看:
+```plain
+[root@localhost vagrant]# ip link set p1 netns ns1
+[root@localhost vagrant]# ip netns exec ns1 ip a
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+6: p1: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN
+    link/ether 42:f6:f2:75:df:60 brd ff:ff:ff:ff:ff:ff
+```
+给接口`p1`配置IP: `192.168.33.14/24`, 并开启接口:
+```plain
+[root@localhost vagrant]# ip netns exec ns1 ip addr add 192.168.33.14/24 dev p1
+[root@localhost vagrant]# ip netns exec ns1 ip link set up p1
+[root@localhost vagrant]# ip netns exec ns1 ip a
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+6: p1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN
+    link/ether 42:f6:f2:75:df:60 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.33.14/24 scope global p1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::40f6:f2ff:fe75:df60/64 scope link
+       valid_lft forever preferred_lft forever
+```
+此时，我们在宿主机上来访问`192.168.33.14`，访问不成功。
+```plain
+flygoast:~ $ ping -c 2 192.168.33.14
+PING 192.168.33.14 (192.168.33.14): 56 data bytes
+Request timeout for icmp_seq 0
+^C
+--- 192.168.33.14 ping statistics ---
+2 packets transmitted, 0 packets received, 100.0% packet loss
+```
+下面，我们开启ARP代理功能，来令宿主机可以访问`192.168.33.14`。
+
+首先开启数据包路由转发:
+```bash
+sysctl -w net.ipv4.ip_forward=1
+```
+开启相应设备的ARP代理功能:
+```bash
+sysctl -w net.ipv4.conf.eth1.proxy_arp=1
+sysctl -w net.ipv4.conf.br0.proxy_arp=1
+```
+上面提到ARP代理的条件包括收包设备与转发设备需要不同。我们查看虚拟机路由信息:
+```plain
+[root@localhost vagrant]# ip route
+default via 10.0.2.2 dev eth0  proto static  metric 100
+10.0.2.0/24 dev eth0  proto kernel  scope link  src 10.0.2.15  metric 100
+169.254.0.0/16 dev eth1  scope link  metric 1003
+192.168.33.0/24 dev eth1  proto kernel  scope link  src 192.168.33.12
+192.168.33.0/24 dev br0  proto kernel  scope link  src 192.168.33.13
+```
+目的IP为`192.168.33.0/24`的路由条目有两条，其中`eth1`上的条目会导致收包设备与转发设备都为`eth1`。
+我们将`eth1`上的`192.168.33.0/24`条目删除，只添加到`192.168.33.1/32`的路由:
+```plain
+[root@localhost vagrant]# ip route del 192.168.33.0/24 dev eth1
+[root@localhost vagrant]# ip route add 192.168.33.1/32 dev eth1
+[root@localhost vagrant]# ip route
+default via 10.0.2.2 dev eth0  proto static  metric 100
+10.0.2.0/24 dev eth0  proto kernel  scope link  src 10.0.2.15  metric 100
+169.254.0.0/16 dev eth1  scope link  metric 1003
+192.168.33.0/24 dev br0  proto kernel  scope link  src 192.168.33.13
+192.168.33.1 dev eth1  scope link
+```
+此时再从宿主机访问`192.168.33.14`, 访问成功:
+```plain
+flygoast:~ $ ping -c 2 192.168.33.14
+PING 192.168.33.14 (192.168.33.14): 56 data bytes
+64 bytes from 192.168.33.14: icmp_seq=0 ttl=63 time=0.612 ms
+64 bytes from 192.168.33.14: icmp_seq=1 ttl=63 time=0.737 ms
+
+--- 192.168.33.14 ping statistics ---
+2 packets transmitted, 2 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 0.612/0.674/0.737/0.062 ms
+```
+再来查看MAC地址:
+```plain
+flygoast:~ $ arp -an
+? (192.168.0.1) at d0:fa:1d:62:a3:84 on en1 ifscope [ethernet]
+? (192.168.33.12) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (192.168.33.13) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (192.168.33.14) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (224.0.0.251) at 1:0:5e:0:0:fb on en1 ifscope permanent [ethernet]
+```
+`192.168.33.14`的MAC地址同样为`eth1`的地址，可以确定`eth1`代理回应了`p1`的ARP请求。
+
+而在虚拟机上查看MAC地址, 可以看到`192.168.33.14`的MAC地址为接口`p1`的地址。
+```plain
+[root@localhost vagrant]# ip neigh
+10.0.2.2 dev eth0 lladdr 52:54:00:12:35:02 DELAY
+192.168.33.1 dev eth1 lladdr 0a:00:27:00:00:00 STALE
+10.0.2.3 dev eth0 lladdr 52:54:00:12:35:03 STALE
+192.168.33.14 dev br0 lladdr 42:f6:f2:75:df:60 STALE
+```
