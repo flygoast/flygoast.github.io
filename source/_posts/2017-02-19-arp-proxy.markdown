@@ -192,3 +192,23 @@ flygoast:~ $ arp -an
 10.0.2.3 dev eth0 lladdr 52:54:00:12:35:03 STALE
 192.168.33.14 dev br0 lladdr 42:f6:f2:75:df:60 STALE
 ```
+接下来，我们再从宿主机上访问`192.168.33.16`, 这个IP并没有配置:
+```plain
+flygoast:~ $ ping -c 1 192.168.33.16
+PING 192.168.33.16 (192.168.33.16): 56 data bytes
+^C
+--- 192.168.33.16 ping statistics ---
+1 packets transmitted, 0 packets received, 100.0% packet loss
+```
+发现访问失败，再来查看MAC地址:
+```plain
+flygoast:~ $ arp -an
+? (192.168.0.1) at d0:fa:1d:62:a3:84 on en1 ifscope [ethernet]
+? (192.168.33.12) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet] 
+? (192.168.33.13) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet] 
+? (192.168.33.14) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet] 
+? (192.168.33.16) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet] 
+? (224.0.0.251) at 1:0:5e:0:0:fb on en1 ifscope permanent [ethernet]
+```
+可以看到，`192.168.33.16`对应的MAC地址同样为`eth1`的地址。`eth1`也正常响应了没有配置IP的ARP请求，是否回应ARP只与路由是否可达有关。
+
