@@ -210,5 +210,39 @@ flygoast:~ $ arp -an
 ? (192.168.33.16) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet] 
 ? (224.0.0.251) at 1:0:5e:0:0:fb on en1 ifscope permanent [ethernet]
 ```
-可以看到，`192.168.33.16`对应的MAC地址同样为`eth1`的地址。`eth1`也正常响应了没有配置IP的ARP请求，是否回应ARP只与路由是否可达有关。
+可以看到，`192.168.33.16`对应的MAC地址同样为`eth1`的地址。`eth1`也正常响应了没有配置IP的ARP请求。
 
+接着，我们删除`br0`上的`192.168.33.0/24`路由条目和`default`路由条目, 并添加`192.168.33.14/32`条目:
+```bash
+ip route del 192.168.33.0/24 dev br0 
+ip route del default 
+ip route add 192.168.33.14/32 dev br0
+```
+清除宿主机上的ARP缓存:
+```bash
+arp -d  -ivboxnet0 -a
+```
+
+再次从宿主机上访问`192.168.33.14`和`192.168.33.16`，`192.168.33.14`访问成功，`192.168.33.16`访问失败:
+```plain
+flygoast:~ $ ping -c 1 192.168.33.16
+PING 192.168.33.16 (192.168.33.16): 56 data bytes
+^C
+--- 192.168.33.16 ping statistics ---
+1 packets transmitted, 0 packets received, 100.0% packet loss
+flygoast:~ $ ping -c 1 192.168.33.14
+PING 192.168.33.14 (192.168.33.14): 56 data bytes
+64 bytes from 192.168.33.14: icmp_seq=0 ttl=63 time=715.517 ms
+
+--- 192.168.33.14 ping statistics ---
+1 packets transmitted, 1 packets received, 0.0% packet loss
+```
+再来查看MAC地址:
+```plain
+flygoast:~ $ arp -an 
+? (192.168.0.1) at d0:fa:1d:62:a3:84 on en1 ifscope [ethernet] 
+? (192.168.33.14) at 8:0:27:f5:af:5a on vboxnet0 ifscope [ethernet]
+? (192.168.33.16) at (incomplete) on vboxnet0 ifscope [ethernet]  
+? (224.0.0.251) at 1:0:5e:0:0:fb on en1 ifscope permanent [ethernet]
+```
+`192.168.33.14`对应的MAC地址为`eth1`的地址，而`192.168.33.16`没有获取到相应的MAC地址。可以确定设备是否代理回应ARP只与路由是否可达有关。
