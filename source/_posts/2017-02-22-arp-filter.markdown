@@ -14,7 +14,9 @@ categories: OpenStack
 我们来实验来看一下。实验环境为VirtualBox HostOnly网络`vboxnet0`, 宿主机网关IP为:`192.168.33.1`, 虚拟机上有两个网卡接入该网络，IP分别为`192.168.33.10`和`192.168.33.11`。
 
 首先在宿主机上清空`vboxnet0`的ARP缓存:
-`arp -d -ivboxnet0 -a`
+```bash
+arp -d -ivboxnet0 -a
+```
 然后启动`tcpdump`抓包，在另一终端来访问`192.168.33.11`。
 ```plain
 bogon:~ fenggu$ ping -c 1 192.168.33.11
