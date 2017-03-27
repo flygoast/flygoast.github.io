@@ -1,0 +1,132 @@
+---
+layout: post
+title: "NFQUEUE和libnetfilter_queue实例分析"
+date: 2017-03-27 23:47:47 +0800
+comments: true
+categories: Network 
+---
+`NFQUEUE`是`iptables`的一种规则目标, 它用于将网络数据包从内核传给用户态进程, 由用户态进程来裁决如何处理该数据包，并将裁决结果返回内核。传输通道为以数字标识的队列。队列由固定长度的链表实现，链表元素为数据包及元数据(kernel skb结构)。在内核中，`Netfilter`框架尝试将符合规则的数据包放入队列中。若队列已满，则丢弃该数据包。因此，若用户态进程处理过慢，则会严重影响网络性能。内核与用户态进程之间基于`NFNETLINK`通信，数据包需要在内核态与用户态之间进行拷贝，因而这种机制的性能比较差。
+
+下面，以实例来说明`NFQUEUE`机制。
+
+下面的命令会将发送给本机`80`端口的TCP数据包送往队列`80`:
+```bash
+iptables -A INPUT -p tcp --dport 80 -j NFQUEUE —-queue-num 80
+```
+
+<!--more-->
+
+`libnetfilter_queue`是一个用户态库，用户态进程可以使用它来处理NFQUEUE机制传入的数据包。
+官方文档地址为: http://www.netfilter.org/projects/libnetfilter_queue/doxygen/
+
+以一个简单示例来说明`libnetfilter_queue`的用法:
+
+```c
+#include <stdio.h>
+#include <assert.h>
+#include <netinet/in.h>
+#include <linux/types.h>
+#include <linux/netfilter.h>
+#include <libnetfilter_queue/libnetfilter_queue.h>
+
+static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
+        struct nfq_data *nfa, void *data)
+{
+    u_int32_t id = 0;
+    struct nfqnl_msg_packet_hdr *ph;
+
+    ph = nfq_get_msg_packet_hdr(nfa);
+    if (ph) {
+        id = ntohl(ph->packet_id);
+    }
+
+    printf("packet: %u\n", id);
+    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+}
+
+int main(int argc, char **argv)
+{
+    struct nfq_handle *h;
+    struct nfq_q_handle *qh;
+    struct nfnl_handle *nh;
+    int    fd;
+    int rv;
+    char buf[4096];
+
+    assert((h = nfq_open()) != NULL);
+    assert(nfq_unbind_pf(h, AF_INET) == 0);
+    assert(nfq_bind_pf(h, AF_INET) == 0);
+
+    assert((qh = nfq_create_queue(h, 80, &cb, NULL)) != NULL);
+    assert(nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) == 0);
+
+    fd = nfq_fd(h);
+
+    while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
+        nfq_handle_packet(h, buf, rv);
+    }
+
+    nfq_destroy_queue(qh);
+
+    nfq_close(h);
+    return 0;
+}
+```
+
+首先`main()`函数调用`nfq_open()`完成库初始化并生成一个`NFQUEUE` handler，接着给handler绑定指定的协议族。细节参考:http://www.netfilter.org/projects/libnetfilter_queue/doxygen/group__LibrarySetup.html
+
+接下来，调用`nfq_create_queue()`将handler绑定到指定的队列，并指定一个回调函数。
+
+接着，循环接收并处理数据包，`nfq_handle_packet()`会调用`nfq_create_queue()`指定的回调函数来处理数据包。
+
+在回调函数中，我们可以解析数据包并根据业务逻辑做出裁决。示例中简单的获取数据包索引ID，直接对数据包返回`NF_ACCEPT`放行。数据包解析函数请参考:http://www.netfilter.org/projects/libnetfilter_queue/doxygen/group__Parsing.html
+
+用户态进程做出裁决后，调用`nfq_set_verdict()`通知内核，内核根据裁决继续处理数据包。
+
+当程序需要退出时，调用`nfq_close()`释放相应资源。
+
+以上为简单的单线程示例。为了提高处理效率，可以将收包线程与处理线程分开，大体逻辑为:
+```c
+PacketPool *ppool;
+
+/* Definition of callback function */
+static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
+              struct nfq_data *nfa, void *data)
+{
+    /* Simply copy packet date and send them to a packet pool */
+    return push_packet_to_pool(ppool, nfa);
+}
+
+static void *read_thread(void *fd)
+{
+    for (;;) {
+        if ((rv = recv(fd, buf, sizeof(buf), 0)) >= 0) {
+            nfq_handle_packet(h, buf, rv); /* send packet to callback */
+            continue;
+        }
+    }
+}
+
+static void *verdict_thread(void *fd)
+{
+    for (;;) {
+        Packet p = fetch_packet_from_pool(ppool);
+        u_int32_t id = treat_pkt(nfa, &verdict); /* Treat packet */
+        nfq_set_verdict(qh, id, verdict, 0, NULL); /* Verdict packet */
+    }
+}
+
+int main() {
+    /* Set callback function */
+    qh = nfq_create_queue(h, 0, &cb, NULL);
+    /* create reading thread */
+    pthread_create(read_thread_id, NULL, read_thread, qh);
+    /* create verdict thread */
+    pthread_create(write_thread_id, NULL, verdict_thread, qh);
+    /* ... */
+}
+```
+收包线程从队列中读取数据包，放入进程内包队列。处理线程从包队列内取出数据包进行处理并通知内核。
+
+可参考Suricata(https://suricata-ids.org/)的文件source-nfq.c(https://doxygen.openinfosecfoundation.org/source-nfq_8c_source.html)。
+
