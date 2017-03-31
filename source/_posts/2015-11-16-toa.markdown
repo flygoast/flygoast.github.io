@@ -3,7 +3,7 @@ layout: post
 title: "LVS FULLNAT模式下客户端真实地址的传递"
 date: 2015-11-16 18:01:03 +0800
 comments: true
-categories: LVS
+categories: kernel
 ---
 在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。
 
@@ -13,6 +13,7 @@ categories: LVS
 
 <!--more-->
 TOA OPTION的OPCODE为254(0xfe), 长度为8字节，结构为:
+
 ```c
 struct toa_data
 {
@@ -33,6 +34,7 @@ fe 08 91 cd 0a 05 0c 46
 来看toa模块具体实现:
 
 模块的初始化函数为toa_init:
+
 ```c
 /* module init */
 static int __init
@@ -81,6 +83,7 @@ hook_toa_functions(void)
 }
 ```
 Linux内核在监听套接字收到三次握手的ACK包之后，会从SYN_REVC状态进入到TCP_ESTABLISHED状态。这时内核会调用tcp_v4_syn_recv_sock函数。Hook函数tcp_v4_syn_recv_sock_toa首先调用原有的tcp_v4_syn_recv_sock函数，然后调用get_toa_data函数从TCP OPTION中提取出TOA OPTION，并存储在sk_user_data字段中。
+
 ```c
 static struct sock *
 tcp_v4_syn_recv_sock_toa(struct sock *sk, struct sk_buff *skb, struct request_sock *req, struct dst_entry *dst)
@@ -151,6 +154,7 @@ static void * get_toa_data(struct sk_buff *skb)
 ```
 
 用户在使用套接字中的accept函数时, 会调用inet_getname将sock结构体中存储的源IP地址和端口返回。Hook函数inet_getname_toa首先调用原有函数inet_getname, 然后用tcp_v4_syn_recv_sock_toa函数保存在sk_user_data中数据提取真实IP和Port，对返回结果进行替换。
+
 ```c
 static int
 inet_getname_toa(struct socket *sock, struct sockaddr *uaddr,
