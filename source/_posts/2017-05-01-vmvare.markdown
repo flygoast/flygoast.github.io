@@ -1,0 +1,204 @@
+---
+layout: post
+title: "VMware vSphere虚拟网络防护"
+date: 2017-05-01 22:38:03 +0800
+comments: true
+categories: Virtualization
+---
+随着数据中心虚拟化和云计算发展，虚拟网络的安全防护需求越来越多。本文通过实例介绍VMware vSphere虚拟网络的安全防护。
+
+首先介绍VMware vSphere虚拟网络的基础知识。
+
+ESXi主机使用虚拟交换机来路由虚拟网络内部流量以及虚拟网络和物理网络之间的网络流量。vSphere有三种虚拟交换机:
+
+* vSS: vNetwork Standard Switch
+* vDS: vNetwork Distributed Switch
+* Cisco Nexus 1000v
+
+vSS工作在单一ESXi主机中，适用于小规模环境，需要在每个ESXi主机上单独配置。vDS和Nexus 1000v具备更多高级网络特性, 但需要额外License。本文介绍在vSS环境下的虚拟网络防护。
+
+vSS有三种类型的端口:
+
+* vNIC: 虚拟机的网络接口
+* VMKernel: 用于ESXi主机与外界物理网络或者VMware其他基础设施交互，如vMotion, vSAN等
+* uplink: 连接虚拟交换机与主机物理网卡，将虚拟网络和物理网络联通
+
+vSS通过端口组(Port Group)将vNIC端口分组，针对端口组，可以设置不同的VLAN ID，安全参数、流量整形参数等。在创建虚拟机时需要指定虚拟网络接口属的端口组。
+
+vSphere虚拟网络的架构示意图如下:
+
+{% img /images/2017-05-01/1.png %}
+
+<!--more-->
+
+vSphere虚拟网络支持802.1Q VLAN。根据VLAN标签在哪里添加和移除，有三种模式:
+
+* EST(External Switch Tagging): 由ESXi主机外部的物理交换机负责添加和移除VLAN标签。虚拟交换机上的数据包不具备VLAN标签。这种模式下，虚拟交换机上的PortGroup的VLAN ID需设置为0，uplink连接的物理交换机端口需设置为Access Port。
+* VST(Virtual Switch Tagging): 由虚拟交换机负责添加和移除VLAN标签。虚拟交换机上的端口组可设置为不同的VLAN ID。不同VLAN的端口组是二层隔离的。这种模式下，uplink连接的物理交换机端口需配置为TRUNK Port。VLAN ID可设置为1-4094。
+* VGT(Virtual Guest Tagging): 由虚拟机负责添加和移除VLAN标签。网络数据在虚拟网络内流转时，进入虚拟机的数据包上可带有VLAN标签。这种模式下，所有其他VLAN的流量都可流经该端口组，uplink连接的物理交换机端口也需要设置为TRUNK Port。端口组的VLAN ID需要设置为4095.
+
+vSS可以设置3个安全选项，如图:
+
+{% img /images/2017-05-01/2.png %}
+
+* 混杂模式: vSS不像传统交换机，它不具备MAC学习功能。因为vSphere知道所有接入vSS的接口MAC地址，不需要根据数据包的源MAC来更新MAC与PORT的映射。在混杂模式未开启情况下，如果目标MAC不属于该vSS，那么vSS将丢弃该数据包。vSS或端口组开启混杂模式后，所属的PORT将收到vSS上VLAN策略所允许的所有流量。这种特性可用来监控虚拟网络流量。
+* MAC地址更改: 设置为拒绝时，若VM的接口MAC地址被更改了，与VM的.vmx配置文件中的地址不一致时，所有进入该接口的数据帧都会被丢弃。
+* 伪传输: 设置为拒绝时，若VM发送的数据包的源MAC地址与当前适配器的地址不一致，该数据包会被丢弃。
+
+ESXi主机上可以创建多个vSS。不过，vSphere没有提供方法直接级联两个vSS。若需要级联两个vSS，可行的方法有两个:
+
+* 每个vSS各连接一个uplink, 通过物理交换机将两个uplink连接。
+* 创建具备两个vNIC的虚拟机，两个vNIC各自连接不同的vSS, 在VM内部完成网络桥接
+
+我们可以利用第二种方式对虚拟网络进行安全防护。部署结构如图:
+
+{% img /images/2017-05-01/3.png %}
+
+将需要防护的业务虚拟机连接到一个没有uplink的vSS上，并通过一个安全设备虚拟机级联该虚拟交换机和连接外网的虚拟交换机。业务虚拟机的进出流量都需要流经虚拟安全设备。这种部署结构下，可以按多种方法进行配置。
+
+首先，介绍透明桥接方式。这种方式下，安全设备虚拟机做为二层网桥，将数据帧在设备的两个接口间转发。安全设备虚拟机对数据帧进行完安全检测，根据结果放行数据包或者直接丢弃，并不对数据帧进行修改。
+
+我们基于实例说明这种方式:
+
+ESXi主机安装后默认创建虚拟交换机`vSwitch0`, 我们创建一个虚拟机连接到`vSwitch0`的默认端口组:`vSwitch0`。接着创建一个没有uplink端口的虚拟交换机`vSwitch1`。分别在`vSwitch0`和`vSwitch1`上创建端口组: `TrunkPG0`和`TrunkPG1`，VLAN ID都设置为4095，保证虚拟交换机上其他VLAN的流量都可以从该端口组的Port通过。将两个端口组的『混杂模式』和『伪传输』选项都设置为接受。安全设备虚拟机的接口`eth0`和`eth1`分别接入端口组`TrunkPG0`和`TrunkPG1`。接下来，创建一个虚拟机`t2`，接口接入`vSwitch1`的默认端口组: `vSwitch1`。
+
+ESXi主机网络配置结果如图:
+
+{% img /images/2017-05-01/4.png %}
+
+整体结构示意图如下:
+
+{% img /images/2017-05-01/5.png %}
+
+下面具体分析一下从虚拟机`t2`通过PING访问`t1`的过程。其中涉及ARP和ICMP两种协议数据包交互，流程都如下图:
+
+{% img /images/2017-05-01/6.png %}
+
+ARP请求过程:
+
+1. 由于`t1`和`t2`在同一子网，`t2`发送ARP广播包查询`t1`的MAC地址。
+2. ARP广播包被`vSwitch1`发送到`vRouter`的`eth1`。
+3. `vRouter`将数据包从另一接口`eth0`发送到`vSwitch0`，此时数据帧的源MAC为`t2`的MAC地址，与`eth0`的MAC地址不一致，若不开启`TrunkPG0`的”伪传输”选项，数据包会被丢弃。
+4. `vSwitch0`收到ARP广播包，将广播数据包发送给`t1`。
+5. `t1`收到ARP请求，发出ARP响应，数据帧目的MAC为`t2`的MAC地址。
+6. `vSwitch0`收到ARP响应包。由于数据帧目的MAC为`t2`的MAC地址，`t2`接入的是`vSwitch1`, `vSwitch0`并不认识这个MAC地址，并没有接口需要转发该数据帧。由于`TrunkPG0`的”混杂模式”开启，`vSwitch0`将数据帧发送到`vRouter`接入端口组`TrunkPG0`的`eth0`。
+7. `vRouter`将数据帧由另一接口`eth1`发送到`vSwitch1`, 此时数据包的源MAC为`t1`的MAC地址。`vSwitch1`不认识这个MAC，若不开启`TrunkPG1`的”伪传输”选项，数据包会被丢弃。
+8. `vSwitch1`收到数据帧，将数据帧转发至`t2`的接口，完成ARP请求与响应过程。
+
+接下来，`t2`开启发送ICMP请求，交互过程如下:
+
+1. `t2`获得了`t1`的MAC地址，发送ICMP请求数据帧至`vSwitch1`。
+2. `vSwitch1`收到数据帧，数据帧目的MAC为`t2`的MAC地址，`vSwitch1`并不认识。但由于`TrunkPG1`开启了”混杂模式”，`vSwitch1`将数据帧发送至`vRouter`接入`TrunkPG1`的接口`eth1`。
+3. `vRouter`将数据帧从`eth0`发送至`vSwitch0`。数据帧源MAC为`t1`的MAC地址，`vSwitch0`不认识。若不开启`TrunkPG0`的”伪传输”选项，该数据帧会被丢弃。
+4. `vSwitch0`收到数据帧，将其转发至`t1`。
+5. `t2`发送ICMP响应至`vSwitch0`。
+6. `vSwitch0`收到响应包，数据帧目的MAC为`t2`的MAC地址,`vSwitch0`不认识。但由于`TrunkPG0`开启了”混杂模式”, `vSwitch0`将数据帧发送给`vRouter`接入`TrunkPG0`的`eth0`.
+7. `vRouter`将数据帧由`eth1`发送至`vSwitch1`，数据帧源MAC为`t1`的MAC地址，与`eth1`的MAC地址不一致，若不开启`TrunkPG1`的”伪传输”选项，数据包会被丢弃。
+8. `vSwitch1`收到数据包，将数据包发至`t2`的接口。
+
+这种方式虚拟安全设备做为虚拟网桥在两个交换机之间转发数据包，并根据安全检测结果对数据包进行处置。
+
+另外一种配置方式是将被保护的业务虚拟机划分到私有的独立网段，虚拟安全设备的一个接口作为该网段的默认网关。在虚拟安全设备通过SNAT方式实现私有网段访问业务网段的需求。若私有网段内的机器需要直接对业务网段提供服务，则可以分配一个业务IP，在虚拟安全设备上完成DNAT，将业务IP转换为私有IP。而且这种方式下，可以配置多个私有网段。虚拟安全设备配置多个接口，每个接口做为一个独立网段的网关。架构如图:
+
+{% img /images/2017-05-01/7.png %}
+
+我们用实例来说明:
+
+业务网段为`10.74.129.0/24`, 我们将私有网段设置为`10.0.0.0/24`。我们将`vRouter`的`eth0`设置为`10.74.129.99`，`eth1`设置为`10.0.0.1`，作为`10.0.0.0/24`网段的网关，将`t2`接口IP设置为`10.0.0.100`。
+
+查看t2虚拟机的IP设置:
+```plain
+[root@localhost ~]# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 00:0c:29:13:58:8a brd ff:ff:ff:ff:ff:ff
+    inet 10.0.0.100/24 scope global eth0
+    inet6 fe80::20c:29ff:fe13:588a/64 scope link
+       valid_lft forever preferred_lft forever
+```
+查看路由，确认默认网关为`10.0.0.1`:
+```plain
+[root@localhost ~]# ip route
+10.0.0.0/24 dev eth0  proto kernel  scope link  src 10.0.0.100
+default via 10.0.0.1 dev eth0
+```
+查看`vRouter`的IP配置:
+```plain
+[root@localhost ~]# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 00:0c:29:14:38:c5 brd ff:ff:ff:ff:ff:ff
+    inet 10.74.129.99/24 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 00:0c:29:14:38:cf brd ff:ff:ff:ff:ff:ff
+    inet 10.0.0.1/24 scope global eth1
+       valid_lft forever preferred_lft forever
+```
+查看路由, 确保默认路由为连接业务网的`eth0`设备:
+```plain
+[root@localhost ~]# ip route
+default via 10.74.129.1 dev eth0
+10.0.0.0/24 dev eth1  proto kernel  scope link  src 10.0.0.1
+10.74.129.0/24 dev eth0  proto kernel  scope link  src 10.74.129.99
+```
+现在我们从`t2`上访问`t1`, 访问失败:
+```plain
+[root@localhost ~]# ping 10.74.129.108
+PING 10.74.129.108 (10.74.129.108) 56(84) bytes of data.
+^C
+--- 10.74.129.108 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1481ms
+```
+下面我们在`vRouter`上添加SNAT功能，对从网段`10.0.0.0/24`进入的流量进行SNAT操作:
+```bash
+iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o eth0 -j MASQUERADE
+```
+此时，我们再次从`t2`访问`t1`，访问成功:
+```plain
+[root@localhost ~]# ping 10.74.129.108
+PING 10.74.129.108 (10.74.129.108) 56(84) bytes of data.
+64 bytes from 10.74.129.108: icmp_seq=1 ttl=63 time=0.199 ms
+64 bytes from 10.74.129.108: icmp_seq=2 ttl=63 time=0.209 ms
+64 bytes from 10.74.129.108: icmp_seq=3 ttl=63 time=0.256 ms
+^C
+--- 10.74.129.108 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2137ms
+rtt min/avg/max/mdev = 0.199/0.221/0.256/0.027 ms
+```
+此时业务网络不能直接访问我们的私有网络。我们需要`t2`对外提供HTTP服务，需要在安全虚拟设备上配置DNAT来实现。我们分配`10.74.129.100`作为外部访问`t2`的业务IP。
+
+首先将`10.74.129.100`配置在`vRouter`的`eth0`上:
+```bash
+ip addr add 10.74.129.100/24 dev eth0
+```
+配置DNAT:
+```bash
+iptables -t nat -A PREROUTING -d 10.74.129.100 -j DNAT --to-destination 10.0.0.100
+```
+我们在`t2`上开启HTTP服务:
+```bash
+yum install -y httpd
+echo “hello from 10.0.0.100” > /var/www/html/t.html
+service httpd start
+```
+从`t1`访问`t2`的HTTP服务, 访问成功:
+```plain
+[root@localhost ~]# curl http://10.74.129.100/t.html
+hello from 10.0.0.100!
+```
+除了上述两种方式，还可以配置ARP代理，具体参考之前的文章<<ARP代理实例研究>>。
+
+上文提到，vSS需要每台ESXi主机单独配置。若虚拟化规模较大，手工配置比较繁琐。我们可以基于vSphere的SDK实现自动化。若使用Python开发，可以参考:
+
+* https://github.com/vmware/pyvmomi-community-samples
+* https://github.com/vmware/pyvmomi
