@@ -5,7 +5,7 @@ date: 2017-06-10 23:24:22 +0800
 comments: true
 categories: Virtualization
 ---
-之前的文章<<[VMware vSphere虚拟网络防护](http://www.just4coding.com/blog/2017/05/01/vmvare/)>>介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。VMware NSX提供了东西向安全防护的能力。不过VMware NSX的License价格很贵。本文介绍在非NSX环境中，单纯依赖vSphere提供的能力实现东西向网络安全防护的思路。
+之前的文章<<[VMware vSphere虚拟网络防护](http://www.just4coding.com/blog/2017/05/01/vmvare/)>>介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vSphere提供的能力将流量引至虚拟安全设备实现东西向网络安全防护的思路。
 
 我们当前一台ESXi上的环境如图:
 
@@ -13,7 +13,7 @@ categories: Virtualization
 
 <!--more-->
 
-我们在`10.187.160.40`上使用PING访问`10.187.160.41`。由于两IP为同一子网，首先通过ARP广播确定`10.187.160.41`对应的MAC地址，然后由虚拟交换机`vswitch0`将ICMP数据包转发给`10.187.160.41`。这种网络内部的流量我们称为东西向流量。为了进行东西向安全防护，我们可以将么流量引至一个虚拟安全设备，由虚拟安全设备执行安全策略。对于虚拟交换机OpenvSwitch, 我们可以使用OpenFlow协议实现引流，但是vSphere的虚拟交换机不具备这种能力，因而不能使用这种方案。<<[VMware vSphere虚拟网络防护](http://www.just4coding.com/blog/2017/05/01/vmvare/)>>中我们介绍了vSphere虚拟交换机的基础知识。它支持端口组粒度的VLAN设置，我们可以基于不同VLAN之间网络的二层网络隔离性来实现引流。
+我们在`10.187.160.40`上使用PING访问`10.187.160.41`。由于两IP为同一子网，首先通过ARP广播确定`10.187.160.41`对应的MAC地址，然后由虚拟交换机`vswitch0`将ICMP数据包转发给`10.187.160.41`。为了进行东西向安全防护，我们可以将流量引至虚拟安全设备，由虚拟安全设备执行安全策略。对于虚拟交换机OpenvSwitch, 我们可以使用OpenFlow协议实现引流，但是vSphere的虚拟交换机不具备这种能力，因而不能使用这种方案。<<[VMware vSphere虚拟网络防护](http://www.just4coding.com/blog/2017/05/01/vmvare/)>>中我们介绍了vSphere虚拟交换机的基础知识。它支持端口组粒度的VLAN设置，我们可以基于不同VLAN之间网络的二层网络隔离性来实现引流。
 
 下面来看具体实现。我们在ESXi主机上新建虚拟交换机`vss_internal`, 在`vss_internal`上创建VLAN TAG分别为`100`和`200`的端口组`vlan100`和`vlan200`。`10.187.160.40`的网卡接入`vlan100`, `10.187.160.41`的网卡接入`vlan200`。我们在新建的虚拟交换机`vss_internal`和原有的虚拟交换机`vswitch0上`各创建一个TAG为`4095`的TRUNK端口组，并开启其`混杂模式`, `MAC地址更改`， `伪传输`等三个安全选项。我们的虚拟安全设备的两个网络接口分别接入其中。在接入`vss_internal`的网络接口上创建两个TAG分别为`100`和`200`的VLAN子接口。在虚拟安全设备上创建一个OVS bridge，并将两个VLAN子接口和接入`vswitch0`的网络接口接入OVS bridge。整体结构如下:
 
