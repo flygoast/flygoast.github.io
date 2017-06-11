@@ -157,5 +157,11 @@ iptables -F
 
 {% img /images/2017-06-10/8.png %}
 
+原属于同一个VLAN但分布在不同ESXi的网络接口在这种结构的内部虚拟交换机上可以具备不同的VLAN TAG，只需要虚拟安全设备接入vswitch0的接口上的子接口VLAN一致。此时网络结构与数据包路径如图:
+
+{% img /images/2017-06-10/9.png %}
+
+除了使用VLAN区分不同的网络，还可以使用VXLAN、GRE等overlay机制构建隔离的逻辑网络。可以参考OpenStack的Neutron实现中的`br-int`与`br-tun`实现。本文不再详细说明。
+
 VMware vSphere提供了相应API来操作端口组，修改虚拟机的网络接口所属端口组等，可以利用这些API自动化完成本文上述的网络结构改动与构建。
 
