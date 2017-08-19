@@ -7,7 +7,7 @@ categories: Network
 ---
 {% img /images/2017-07-07/1.png %}
 
-WEB访问一般都是基于Request/Response模式的HTTP协议，请求由浏览器发起，服务器处理请求后发送回响应。HTTP协议是短连接单向通信模型，服务器不能主动发送内容给客户端。为了解决这个问题，浏览器可以周期性地主动发送请求给服务器，服务器若没有相应数据则返回空响应，否则返回相应数据并关闭连接。这种方案被称为轮询(POLLING)。轮询需要不停地建立连接、并闭连接，不断浪费网络资源。为了减少不必要的网络消耗，LONG POLLING方案被提出。浏览器发送请求给服务器后，若服务器没有相应数据时并不返回空响应及断开连接，而是将请求保持住，当有了相应数据后或者超时发生再将数据返回给客户端并断开连接。当连接断开后，客户端会再次发起请求。这种方案依然会消耗多个TCP连接，HTTP Streaming技术进一步优化了TCP连接的使用效率。，当服务器返回响应后并不关闭TCP连接，后续的请求和响应继续复用该连接。
+WEB访问一般都是基于Request/Response模式的HTTP协议，请求由浏览器发起，服务器处理请求后发送回响应。HTTP协议是短连接单向通信模型，服务器不能主动发送内容给客户端。为了解决这个问题，浏览器可以周期性地主动发送请求给服务器，服务器若没有相应数据则返回空响应，否则返回相应数据并关闭连接。这种方案被称为轮询(POLLING)。轮询需要不停地建立连接、并闭连接，不断浪费网络资源。为了减少不必要的网络消耗，LONG POLLING方案被提出。浏览器发送请求给服务器后，若服务器没有相应数据时并不返回空响应及断开连接，而是将请求保持住，当有了相应数据后或者超时发生再将数据返回给客户端并断开连接。当连接断开后，客户端会再次发起请求。这种方案依然会消耗多个TCP连接，HTTP Streaming技术进一步优化了TCP连接的使用效率。当服务器返回响应后并不关闭TCP连接，后续的请求和响应继续复用该连接。
 
 本质上这些方案都是半双工单向通信，于是业内为基于浏览器的应用程序开发提出了全双工的实时双向通信方式: WebSocket。WebSocket是基于TCP的一种数据传输协议，它被设计成可以支持原来直接运行于TCP之上的任何协议。其他协议可以将WebSocket视为传输层，比如XMPP，STOMP，AMQP等。这给基于浏览器的应用程序开发带了具大灵活性，可以不再单纯依赖原有的HTTP协议。
 
@@ -101,8 +101,8 @@ socket.onmessage = function(event) {
 socket.binaryType = ”arraybuffer”;
 socket.onmessage = function(event) {
     if (event.data instanceof ArrayBuffer) { 
-       var buffer = event.data;
-       console.log(“Received arraybuffer”);
+        var buffer = event.data;
+        console.log(“Received arraybuffer”);
     }
 }
 ```
@@ -176,17 +176,6 @@ function connect() {
         log('recv: ' + e.data);
     };
 
-    ws.onclose = function() {
-        log('disconnected');
-        ws = null;
-    };
-
-    return false;
-}
-
-function disconnect() {
-    if (ws === null) return log('already disconnected');
-    ws.close();
     return false;
 }
 
@@ -202,9 +191,6 @@ function log(text) {
 <body>
     <button type = "button" onclick = "return connect();">
         Connect
-    </button>
-    <button type = "button" onclick = "return disconnect();">
-        Disconnect
     </button>
     <ol id="log"></ol>
 </body>
@@ -287,4 +273,4 @@ wb:send_close()
 
 {% img /images/2017-07-07/3.png %}
 
-整体来看，WebSocket还是比较底层的协议，只提供了消息通道，很多通用逻辑需要应用程序自己来实现，如身份验证，客户端管理等等。
+上述示例代码只是简单演示效果，并没有考虑逻辑是否合理。整体来看，WebSocket还是比较底层的协议，只提供了消息通道，很多通用逻辑需要应用程序自己来实现，如身份验证，客户端管理等等。
