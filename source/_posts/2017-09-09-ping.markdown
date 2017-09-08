@@ -1,0 +1,123 @@
+---
+layout: post
+title: "IPTABLES未有效阻断Windows环境下PING访问的问题分析"
+date: 2017-09-09 00:45:11 +0800
+comments: true
+categories: Network
+---
+我们在CentOS服务器上使用IPTABLES来禁止PING访问。但为了允许从CentOS服务器上主动向外发起的PING的响应包能够正常流入，我们使用了iptables的状态机制，允许RELATED和ESTABLISHED状态的数据包通过。
+
+我们首先配置上允许相关状态下的ICMP数据包通过的规则:
+```plain
+[root@localhost vagrant]# iptables -A INPUT -p icmp -m state --state RELATED,ESTABLISHED -j ACCEPT
+[root@localhost vagrant]# iptables -nL
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+```
+
+<!--more-->
+
+此时在Windows命令控制台上启动PING来进行测试:
+```bash
+ping -t 10.95.48.11
+```
+此时访问成功。
+
+在CentOS服务器上添加禁止ICMP数据包的规则:
+```plain
+[root@localhost vagrant]# iptables -A INPUT -p icmp -j DROP
+[root@localhost vagrant]# iptables -nL
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+DROP       icmp --  0.0.0.0/0            0.0.0.0/0
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+```
+
+这时，一直在运行的PING并没有被阻断，这是因为之前的ICMP会话状态已经建立，因而允许数据包通过。然而我们关掉之前的PING，再重新启动，发现竟然还是没有被阻断。这时，理论上应该是一个新的ICMP会话了，为什么PING还是成功了呢？
+
+我们猜测应该是再次PING时重用了之前未过期的表项而被放行了。IPTABLES的conntrack模块使用ICMP协议中`Type`, `code`和`ID`三个字段来构建会话状态。
+
+我们可以从`/proc/net/nf_conntrack`查看连接状态表:
+```plain
+[root@localhost vagrant]# cat /proc/net/nf_conntrack
+…
+ipv4     2 icmp     1 29 src=10.95.48.17 dst=10.95.48.11 type=8 code=0 id=14347 src=10.95.48.11 dst=10.95.48.17 type=0 code=0 id=14347 mark=0 zone=0 use=2
+```
+
+接着，我们在Windows环境下使用wireshark来抓包分析发出的PING包。
+
+我们调用两次PING命令, 每次发送两个ICMP请求，如图:
+
+{% img /images/2017-09-09/1.png %}
+
+Wireshark抓包结果如图:
+
+{% img /images/2017-09-09/2.png %}
+
+尽管多次调用了PING命令，但ICMP数据包中的ID一直都没有发生变化。这样在CentOS服务器端就会一直复用之前的状态记录而被直接放行了。
+
+CentOS默认的ICMP状态过期时间为30秒，于是我们在关闭了PING命令30秒之后再重新调用，发现终于可以正常阻断了。
+
+我们又用另一台CentOS服务器做为客户端按同样步骤来PING该CentOS服务器，则没有出现不能正常阻断的情况。
+
+
+ICMP的[RFC792](https://tools.ietf.org/html/rfc792)，对于Echo消息描述如下:
+```plain
+The data received in the echo message must be returned in the echo
+reply message.
+
+The identifier and sequence number may be used by the echo sender
+to aid in matching the replies with the echo requests.  For
+example, the identifier might be used like a port in TCP or UDP to
+identify a session, and the sequence number might be incremented
+on each echo request sent.  The echoer returns these same values
+in the echo reply.
+```
+从描述可以知道，ICMP的ID可以像TCP或UDP的端口一样用于标识会话。我们把PING关闭再重启应该是另一个独立的会话，理论上应该更换一个ID值，而Windows上的PING的实现并不是特别规范。
+
+Linux下的PING实现是在`iputils`工具包中, 我们来看源码文件`ping.c`下的`ping4_send_probe`函数:
+```c
+/*
+ * pinger --
+ *     Compose and transmit an ICMP ECHO REQUEST packet.  The IP packet
+ * will be added on by the kernel.  The ID field is our UNIX process ID,
+ * and the sequence number is an ascending integer.  The first 8 bytes
+ * of the data portion are used to hold a UNIX "timeval" struct in VAX
+ * byte-order, to compute the round-trip time.
+ */
+int ping4_send_probe(socket_st *sock, void *packet, unsigned packet_size)
+{
+    struct icmphdr *icp;
+    int cc;
+    int i;
+
+    icp = (struct icmphdr *)packet;
+    icp->type = ICMP_ECHO;
+    icp->code = 0;
+    icp->checksum = 0;
+    icp->un.echo.sequence = htons(ntransmitted+1);
+    icp->un.echo.id = ident;            /* ID */
+
+    rcvd_clear(ntransmitted+1);
+
+…
+```
+而`ident`定义在`ping_common.c`中:
+```c
+if (sock->socktype == SOCK_RAW)
+    ident = htons(getpid() & 0xFFFF);
+```
+可以看到，Linux下的PING实现中ICMP的ID取值为当前进程号，因而每次调用PING时，ID都会发生变化，因而不会复用之前的状态记录。
