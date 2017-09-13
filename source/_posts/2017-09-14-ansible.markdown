@@ -1,0 +1,312 @@
+---
+layout: post
+title: "Ansible入门"
+date: 2017-09-14 00:28:52 +0800
+comments: true
+categories: Network
+---
+
+{% img /images/2017-09-14/1.png %}
+
+[Ansible](https://www.ansible.com/)是一个自动化配置管理系统，主要用于简化运维人员对大量服务器上配置及服务等内容的管理工作。在自动化配置管理领域内，除了ansible, 比较著名的还有Puppet，SaltStack, Chef等项目。Ansible与这些同类项目相比，部署和使用更简单。Puppet等项目都是C/S架构，需要在被管理服务器上安装agent程序，agent程序与配置管理中心服务器通信拉取相应的配置或文件。而ansible无论是获取主机信息，发送命令还是拷贝文件等操作都是直接使用SSH通道来完成。
+
+我们在`CentOS7`环境中来演示ansible使用，首先安装ansible:
+```bash
+yum install -y epel-release
+yum install -y ansible
+```
+
+<!--more-->
+
+Ansible默认使用`SSH Key`登录被管理服务器。为了简化使用，我们首先配置ansible所在服务器能够以`SSH key`免密钥登录被管理服务器。
+
+一路直接回车生成`SSH key`:
+```plain
+[root@centos4 ansible]# ssh-keygen
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa):
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+Your identification has been saved in /root/.ssh/id_rsa.
+Your public key has been saved in /root/.ssh/id_rsa.pub.
+The key fingerprint is:
+81:86:f6:45:c4:5d:ac:3b:81:16:45:bf:c0:99:5d:72 root@centos4
+The key's randomart image is:
++--[ RSA 2048]----+
+|       oo+ooo E  |
+|     . oo..=.+   |
+|    o o oo=.o    |
+|   . o .o.o. .   |
+|      ..S  o.    |
+|          o      |
+|           .     |
+|                 |
+|                 |
++-----------------+
+```
+
+再将SSH公钥拷贝到被管理服务器，以`192.168.33.14`为例：
+```bash
+ssh-copy-id root@192.168.33.14
+```
+
+Ansible使用Inventory文件来管理被管理服务器，默认为/etc/ansible/hosts。在Inventory文件中，我们可以将服务器划分为组，或者直接以单机的形式来记录，可以划分为多个组。比如:
+```ini
+192.168.100.1
+192.168.100.10
+
+[group1]
+192.168.100.20
+192.168.100.30
+
+[group2]
+192.168.100.20
+192.168.100.30
+```
+其中前两条为未分组服务器，之后划分了两个组。Inventory文件中有非常多的注释，具体内容格式可以参考注释。
+
+在我们的示例中，我们将被管理服务器`192.168.33.13`和`192.168.33.14`划分为一组，组名定为`test`, 并给每台服务器定义一个别名，文件内容如下:
+```ini
+[test]
+centos4 ansible_ssh_host=192.168.33.13
+centos5 ansible_ssh_host=192.168.33.14
+```
+
+Ansible的使用方式主要有两种: 一种直接命令行调用；另一种是通过叫做`playbook`的配置脚本来定义需要执行的任务。
+
+首先，我们直接以命令行执行ansible:
+```plain
+[root@centos3 ansible]# ansible -m ping all
+centos5 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+centos4 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+Ansible的基本逻辑为在指定的服务器上运行Ansible模块，配置管理相关内容由模块来完成。Ansible内置实现了大量的模块，具体模块可以参考[官方文档](
+http://docs.ansible.com/ansible/latest/list_of_all_modules.html)。
+上述命令中的`-m ping`表示使用`ping`模块, 它会连接到被管理服务器并检测是否有可用的python，检测成功时返回`pong`。
+
+命令中的`all`表示Inventory文件中所有服务器。在命令行中我们也可以指定某个组或者服务器:
+```plain
+[root@centos3 ansible]# ansible -m ping test
+centos4 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+centos5 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+```plain
+[root@centos3 ansible]# ansible -m ping centos4
+centos4 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+也可以以”:”分隔来指定多个服务器:
+```plain
+[root@centos3 ansible]# ansible -m ping centos4:centos5
+centos4 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+centos5 | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+内置的`shell`模块可以在服务器上执行命令，比如，我们要查看`centos4`机器的内存情况, 可以这样运行:
+```plain
+[root@centos3 ansible]# ansible -m shell -a 'free -m' centos4
+centos4 | SUCCESS | rc=0 >>
+              total        used        free      shared  buff/cache   available
+Mem:            457          75         252           2         130         306
+Swap:          1015           9        1006
+```
+
+命令行方式适合用于一次性任务，而日常繁琐的配置管理，使用playbook脚本更为方便。Playbook脚本为YAML格式, 在脚本中，我们需要指明被管理的服务器或组，以及需要执行的任务等信息。在Playbook中可以定义许多任务，每个任务需要指明运行的模块及参数。任务以在脚本文件中的先后顺序运行。
+
+下面，我们以在CentOS7上通过ansible安装NGINX并管理NGINX的配置文件为例来说明Playbook脚本的编写与执行。
+
+创建`demo.yml`, 内容如下:
+```yaml
+---
+- hosts: test
+  vars:
+    nginx_port: 8080
+    nginx_root: /var/www/html
+  tasks:
+    - name: Install NGINX repo rpm
+      yum:
+        name: http://nginx.org/packages/centos/7/noarch/RPMS/nginx-release-centos-7-0.el7.ngx.noarch.rpm
+        state: present
+
+    - name: Install NGINX
+      yum: name=nginx state=latest
+
+    - name: create directory
+      file: path={{ nginx_root }} state=directory owner=nginx group=nginx
+
+    - name: populate file
+      copy: src=index.html dest={{ nginx_root }}/index.html owner=nginx group=nginx mode=0440
+
+    - name: generate conf
+      template: src=demo.conf.tpl dest=/etc/nginx/conf.d/demo.conf owner=nginx group=nginx
+      notify: Restart NGINX
+
+    - name: Stop and disable firewalld
+      service: name=firewalld state=stopped enabled=false
+    - name: Staring NGINX
+      service: name=nginx state=started
+
+  handlers:
+    - name: Restart NGINX
+      service: name=nginx state=restarted
+```
+其中，`hosts`指明需要执行任务的服务器或组，`vars`用于定义变量，这些变量可以在playbook脚本和模板文件中引用。`tasks`定义了需要执行的所有task，这些task会按先后顺序执行。前两个tasks使用`YUM`模块来安装NGINX。第三个task使用`file`模块创建NGINX的`Document ROOT`目录。第四个task执行`copy`模块将index.html文件拷贝到被管理服务器的NGINX的`Document Root`目录下。第五个task使用了template模块，它将模板文件内容中的变量替换为相应的值来生成目标文件。
+
+比如，我们的NGINX配置文件模板`demo.conf.tpl`内容如下，使用了`nginx_port`和`nginx_root`两个变量:
+```plain
+server {
+    listen {{ nginx_port }};
+
+    location / {
+        root {{ nginx_root }};
+        index index.html;
+    }
+}
+```
+
+最后两个tasks分别是关闭和禁用`firewalld`服务。
+
+`handlers`是Playbook中的事件机制，它需要由`task`使用`notify`指令触发。task执行都有状态结果，只有状态结果为`changed`, 才会触发相应的`handler`。
+
+在上述示例中，生成NGINX配置文件的`task: generate conf`完成后，状态为`changed`, 此时会触发`handler: Restart NGINX`来重启NGINX令我们的配置文件生效。再次执行该playbook脚本时，NGINX配置文件没有改动，任务状态结果为`ok`，则不会触发`handler: Restart NGINX`。
+
+上述示例的index.html内容如下:
+```plain
+hello index.html.
+```
+
+我们示例的所有文件结构如下:
+```plain
+[root@centos3 ansible]# tree .
+.
+├── demo.conf.tpl
+├── demo.yml
+└── index.html
+
+0 directories, 3 files
+```
+
+
+第一次执行`demo.yml`的结果:
+```plain
+[root@centos3 ansible]# ansible-playbook demo.yml
+
+PLAY [test] ********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [centos4]
+ok: [centos5]
+
+TASK [Install NGINX repo rpm] **************************************************
+changed: [centos5]
+changed: [centos4]
+
+TASK [Install NGINX] ***********************************************************
+changed: [centos5]
+changed: [centos4]
+
+TASK [create directory] ********************************************************
+changed: [centos4]
+changed: [centos5]
+
+TASK [populate file] ***********************************************************
+changed: [centos4]
+changed: [centos5]
+
+TASK [generate conf] ***********************************************************
+changed: [centos5]
+changed: [centos4]
+
+TASK [Stop and disable firewalld] **********************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [Staring NGINX] ***********************************************************
+changed: [centos5]
+changed: [centos4]
+
+RUNNING HANDLER [Restart NGINX] ************************************************
+changed: [centos5]
+changed: [centos4]
+
+PLAY RECAP *********************************************************************
+centos4                    : ok=9    changed=7    unreachable=0    failed=0
+centos5                    : ok=9    changed=7    unreachable=0    failed=0
+```
+
+再次执行`demo.yml`的结果如下:
+```plain
+[root@centos3 ansible]# ansible-playbook demo.yml
+
+PLAY [test] ********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [Install NGINX repo rpm] **************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [Install NGINX] ***********************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [create directory] ********************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [populate file] ***********************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [generate conf] ***********************************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [Stop and disable firewalld] **********************************************
+ok: [centos5]
+ok: [centos4]
+
+TASK [Staring NGINX] ***********************************************************
+ok: [centos4]
+ok: [centos5]
+
+PLAY RECAP *********************************************************************
+centos4                    : ok=8    changed=0    unreachable=0    failed=0
+centos5                    : ok=8    changed=0    unreachable=0    failed=0
+```
+
+可以看到第一次执行时，`task: generate conf`结果状态为`changed`, `handler: Restart NGINX`被触发。而第二次执行时，task结果状态为`ok`, `handle: Restart NGINX`没有被触发。
+
+最后，我们测试NGINX配置是否已经生效:
+```plain
+[root@centos3 ansible]# curl http://192.168.33.13:8080/
+hello index.html.
+```
+
+
+在Playbook中还可以定义循环执行、条件执行等各种情况，可以非常灵活的满足我们的业务需求。具体内容本文不再详述。
