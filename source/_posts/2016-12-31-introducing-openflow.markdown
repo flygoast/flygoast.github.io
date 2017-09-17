@@ -67,6 +67,7 @@ OpenFlow交换机基于多个流表(FlowTable)和一个组表(GroupTable)转发�
 {% img /images/2016-12-31/6.png %}
 
 OpenFlow定义了4种组类型:
+
 * indirect: 这种Group只能包含一个ActionBucket，主要用于多个流表项处理相同时，可以指向同一个Group。这样修改处理逻辑时只需要修改一个Group
 * all: 处理时执行Group包含的所有Action Bucket，主要用于广播和多播。交换机会为每个Action Bucket复制一个数据包单独进行处理
 * select: 交换机根据算法选择一个Action Bucket来执行，主要用于负载均衡功能实现
