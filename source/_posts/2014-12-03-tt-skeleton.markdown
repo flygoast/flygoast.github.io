@@ -3,7 +3,7 @@ layout: post
 title: "Abstract Database和Skeleton Database"
 date: 2014-12-03 11:30:50 +0800
 comments: true
-categories: TokyoTyrant
+categories: TokyoCabinet,TokyoTyrant
 ---
 TokyoCabinet(TC)提供了6种不同结构的数据库，包括:
 
