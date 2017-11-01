@@ -6,8 +6,9 @@ url: http://www.just4coding.com
 title: Just For Coding
 subtitle: Keep learning, keep living ...
 author: flygoast
-simple_search: http://www.baidu.com
+simple_search: /search
 description:
+tapir_token: 59f84dcd14ad663a690f0e98
 
 # Default date format is "ordinal" (resulting in "July 22nd 2007")
 # You can customize the format as defined in
