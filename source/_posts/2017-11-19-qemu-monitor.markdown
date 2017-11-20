@@ -91,6 +91,7 @@ QMP规范可以参考:
 
 * https://github.com/qemu/qemu/blob/master/docs/interop/qmp-intro.txt
 * https://github.com/qemu/qemu/blob/master/docs/interop/qmp-spec.txt
+* https://qemu.weilnetz.de/doc/qemu-qmp-ref.html
 
 QMP协议的工作流程如下:
 
