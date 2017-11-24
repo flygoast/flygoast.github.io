@@ -1,0 +1,157 @@
+---
+layout: post
+title: "Libvirt和QEMU hook机制介绍"
+date: 2017-11-25 00:23:23 +0800
+comments: true
+categories: Virtualization
+---
+在我们的`QEMU/KVM`虚拟化环境中，当所有的虚拟机启动时需要自动添加一个`ivshmem`设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用`QEMU`时，添加上`ivshmem`设备的相关参数，例如:
+```plain
+-device ivshmem,shm=fg_i3,size=8m,bus=pci.0,addr=0x1f
+```
+
+`Libvirt`使用XML文件来定义虚拟机配置，并根据XML文件来生成`QEMU`命令行参数，进而执行`QEMU`程序来启动虚拟机实例。我们可以在所有虚拟机的XML文件的`<devices>`节点中添加上`<shmem>`配置，如:
+```xml
+<shmem name="fg_i3">
+    <model type="ivshmem" />
+    <size unit='M'>8</size>
+    <address type='pci' domain='0x0000' bus='0x00' slot='0x1f' function='0x0' />
+</shmem>
+```
+这样，`libvirt`启用`QEMU`实例时，则会添加如下参数:
+```plain
+-device ivshmem,id=shmem0,size=8m,shm=fg_i3,bus=pci.0,addr=0x1f
+```
+
+Guest启动后，登录查看PCI设备，可以看到相应的`ivshmem`设备:
+
+{% img /images/2017-11-25/1.png %}
+
+<!--more-->
+
+Libvirt也支持在XML文件中直接定义要添加到QEMU命令行的参数，可以在`<domain>`节点中，添加`<qemu:commandline>`来直接添加命令行选项，需要注意的是，要在`<domain>`中添加命名空间属性: `xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0’`, 以这种方式同样实现上述逻辑，XML文件如下:
+```xml
+<domain type="kvm" xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+    <name>i3</name>
+    …
+    <qemu:commandline>
+        <qemu:arg value='-device' />
+        <qemu:arg value='ivshmem,shm=fg_i3,size=8m,bus=pci.0,addr=0x1f' />
+    </qemu:commandline>
+</domain>
+```
+
+一些场景下，虚拟机XML是由虚拟化平台或云平台动态生成，可能我们修改后又被覆盖回去。修改XML文件这种方式可能不再适用，我们需要寻找另外的方法。很直接的方式就是修改`libvirt`源码，这里使用的是libvirt-2.0.0版本。
+
+`Libvirt`中使用`qemuBuildCommandLine()`函数来生成QEMU命令行，该函数位于`src/qemu/qemu_command.c`, 该文件中的函数:
+```c
+char *
+qemuBuildShmemDevStr(virDomainDefPtr def,
+                     virDomainShmemDefPtr shmem,
+                     virQEMUCapsPtr qemuCaps)
+```
+就是用于生成`ivshmem`相关命令行参数。但这里我们不调用它，可以直接将相应参数字符串，添加进命令行中, 示意代码如下:
+```c
+    char ivshmem_device[1024];
+    snprintf(ivshmem_device, 1024,
+             "ivshmem,shm=fg_%s,size=8m,bus=pci.0,addr=0x1f", uuid);
+    virCommandAddArgList(cmd, "-device", ivshmem_device, NULL);
+
+    if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_MSG_TIMESTAMP) &&
+        cfg->logTimestamp)
+        virCommandAddArgList(cmd, "-msg", "timestamp=on", NULL);
+```
+如果`libvirt`是由其他厂商所开发，防止厂商对于`libvirt`做过修改，我们并不能直接修改代码后替换。这种情况下，我们只能使用更为灵活的HOOK方式。
+
+`Libvirt`本身支持HOOK机制。虚拟机启动前, `libvirt`会调用文件`$SYSCONFDIR/libvirt/hooks/qemu`，在RHEL或CentOS上，一般为`/etc/libvirt/hooks/qemu`，`libvirt`会将XML文件做为标准输入，虚拟机名称和其他一些参数以标准参数传入，如:
+```bash
+/etc/libvirt/hooks/qemu fg_i3 start begin -
+```
+我们可以在这个HOOK脚本中为虚拟机准备外部资源，如开放相应的`VNC`端口，建立`iptables`规则等等。不过，这个HOOK点并不支持修改`libvirt`所使用的XML文件，具体参考:
+https://libvirt.org/hooks.html
+
+而`RHEV(Red Hat Enterprise Virtualization)`和`oVirt`虚拟化平台中的VDSM则支持启动虚拟机实例前修改XML，这里不详细介绍，具体可以参考:
+https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_virtualization/3.6/html/administration_guide/appe-vdsm_and_hooks
+
+`Libvirt`的HOOK机制不能满足我们的需求，我们可以有另外两种HOOK方式。一种是将原有`QEMU`二进制文件重命名，我们自己生成一个与原来同名的`QEMU` wrapper程序，在我们的wrapper程序中，添加参数后再调用原生`QEMU`，示例代码如下:
+```python
+#!/usr/bin/python
+import sys
+import subprocess
+
+_internal = "/usr/libexec/qemu-kvm.bak"
+
+if len(sys.argv) == 1:
+    sys.exit(subprocess.call(_internal, shell=True))
+
+cmd = _internal + " " + ' '.join(sys.argv[1:])
+
+i = 0
+for arg in sys.argv:
+    if arg == '-uuid' and i < len(sys.argv):
+        uuid = sys.argv[i + 1]
+        cmd += " -device ivshmem,shm=fg_%s,size=8,bus=pci.0,addr=0x1f" % uuid
+        break
+    i = i + 1
+
+sys.exit(subprocess.call(cmd, shell=True))
+```
+另外一种方式则是直接Hook `libc`中的`execve`调用。`libvirt`执行`QEMU`程序时，最终是使用`execve`来调用`QEMU`命令行的，我们可以生成我们自己的`execve`函数，基于`LD_PRELOAD`机制来覆盖`libc`中的`execve`, 在其中添加参数后，再调用`libc`中的`execve`, 示例代码如下:
+```c
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <dlfcn.h>
+
+typedef ssize_t (*execve_func_t)(const char* filename, char* const argv[], char* const envp[]);
+
+static execve_func_t old_execve = NULL;
+
+int execve(const char* filename, char* const argv[], char* const envp[]) {
+    char  **new_argv;
+    int   i, len;
+    char  device[1024];
+
+    old_execve = dlsym(RTLD_NEXT, "execve");
+
+    if (strstr(filename, "qemu") == NULL && strstr(filename, "kvm") == NULL) {
+        return old_execve(filename, argv, envp);
+    }
+
+    for (i = 0; argv[i]; i++) {}
+
+    new_argv = malloc(sizeof(char *) * (i + 2));
+    if (new_argv == NULL) {
+        return old_execve(filename, argv, envp);
+    }
+
+    device[0] = '\0';
+    for (i = 0; argv[i]; i++) {
+        new_argv[i] = argv[i];
+        if ((strcmp(argv[i], "-uuid") == 0) && (argv[i + 1] != '\0')) {
+            snprintf(device, 1024,
+                     "ivshmem,shm=fg_%s,size=8m,bus=pci.0,addr=0x1f",
+                     argv[i + 1]);
+        }
+    }
+
+    if (device[0] == '\0') {
+        return old_execve(filename, argv, envp);
+    }
+
+    new_argv[i] = "-device";
+    new_argv[i + 1] = device;
+    new_argv[i + 2] = NULL;
+
+    return old_execve(filename, new_argv, envp);
+}
+```
+我们将代码编译为`so`:
+```bash
+gcc -fPIC -shared -o demo.so demo.c -ldl
+```
+使用`LD_PRELOAD`加载`demo.so`, 重新启用`libvirtd`, 此时再启动Guest，可以看到`ivshmem`设备参数也已经添加上。
+
+在`OpenStack`的计算结点上，还可以通过替换`nova`的`driver.py`来实现，在调用`libvirt`时修改XML文件，添加XML文件内容与上述一致，不细详述。
