@@ -154,4 +154,45 @@ gcc -fPIC -shared -o demo.so demo.c -ldl
 ```
 使用`LD_PRELOAD`加载`demo.so`, 重新启用`libvirtd`, 此时再启动Guest，可以看到`ivshmem`设备参数也已经添加上。
 
-在`OpenStack`的计算结点上，还可以通过替换`nova`的`driver.py`来实现，在调用`libvirt`时修改XML文件，添加XML文件内容与上述一致，不细详述。
+在`OpenStack`的计算结点上，还可以通过修改`nova/virt/libvirt/driver.py`文件来实现, 其中的`_get_guest_xml`函数返回实例的XML文件, `Newton`版本的代码如下:
+
+```python
+def _get_guest_xml(self, context, instance, network_info, disk_info,
+                   image_meta, rescue=None,
+                   block_device_info=None):
+    # NOTE(danms): Stringifying a NetworkInfo will take a lock. Do
+    # this ahead of time so that we don't acquire it while also
+    # holding the logging lock.
+    network_info_str = str(network_info)
+    msg = ('Start _get_guest_xml '
+           'network_info=%(network_info)s '
+           'disk_info=%(disk_info)s '
+           'image_meta=%(image_meta)s rescue=%(rescue)s '
+           'block_device_info=%(block_device_info)s' %
+           {'network_info': network_info_str, 'disk_info': disk_info,
+            'image_meta': image_meta, 'rescue': rescue,
+            'block_device_info': block_device_info})
+    # NOTE(mriedem): block_device_info can contain auth_password so we
+    # need to sanitize the password in the message.
+    LOG.debug(strutils.mask_password(msg), instance=instance)
+    conf = self._get_guest_config(instance, network_info, image_meta,
+                                  disk_info, rescue, block_device_info,
+                                  context)
+    xml = conf.to_xml()
+
+    LOG.debug('End _get_guest_xml xml=%(xml)s',
+              {'xml': xml}, instance=instance)
+    return xml
+```
+
+我们可以在函数返回前对XML内容进行修改, 在`xml = conf.to_xml()`添加修改语句:
+```python
+rs = "<qemu:commandline><qemu:arg value='-device'/><qemu:arg value='ivshmem,shm=fg-%s,size=8,bus=pci.0,addr=0x1f'/></qemu:commandline>" % (instance.uuid)
+xml = xml.replace('</domain>', rs + '</domain>')
+rs1 = "type=\\"kvm\\""
+rs2 = "type=\\"kvm\\" xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0\'";
+xml = xml.replace(rs1, rs2)
+```
+
+这样返回的XML内容中就含有了需要传给QEMU程序的参数。
+
