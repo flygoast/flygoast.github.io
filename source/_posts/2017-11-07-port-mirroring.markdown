@@ -80,14 +80,13 @@ listening on ens160, link-type EN10MB (Ethernet), capture size 262144 bytes
 
 {% img /images/2017-11-07/7.png %}
 
-我们在目标机器`10.95.30.43`上抓包，可以看到`t1`上的数据以GRE形式镜像了过来(`10.95.30.31`为`t1`宿主机IP):
+我们在目标机器`10.95.30.43`上抓包，可以看到`t1`上的以太网帧数据以GRE形式封装镜像了过来(`10.95.30.31`为`t1`宿主机IP):
 ```plain
-[root@localhost ~]# tcpdump -i br0 -nn proto GRE && proto icmp
+[root@localhost ~]# tcpdump -i br0 -e -nn proto GRE
 tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
 listening on br0, link-type EN10MB (Ethernet), capture size 65535 bytes
-15:14:09.695807 IP 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, length 68: ARP, Request who-has 10.95.31.252 tell 10.95.30.18, length 46
-15:14:09.747178 IP 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, length 68: ARP, Request who-has 10.95.31.252 tell 10.95.30.23, length 46
-15:14:09.747384 IP 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, length 68: ARP, Request who-has 10.95.31.252 tell 10.95.30.16, length 46
-15:14:09.768540 IP 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, length 68: ARP, Request who-has 10.95.47.56 tell 10.95.47.57, length 46
+15:28:20.615095 2c:9d:1e:5c:27:98 > 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 00:50:56:b1:2c:bb > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.47.50 tell 10.95.47.49, length 46
+15:28:20.640046 2c:9d:1e:5c:27:98 > 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: e8:61:1f:1b:9a:a8 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.31.252 tell 10.95.30.19, length 46
+15:28:20.705853 2c:9d:1e:5c:27:98 > 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 00:50:56:a0:34:ce > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.138.151 tell 10.95.46.20, length 46
+15:28:20.727207 2c:9d:1e:5c:27:98 > 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 > 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 6c:92:bf:58:5c:e0 > ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.31.252 tell 10.95.30.18, length 46
 ```
-
