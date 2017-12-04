@@ -246,7 +246,7 @@ ovs-vsctl clear bridge br1 mirrors
 
 添加一个GRE端口:
 ```bash
-ovs-vsctl add-port br0 gre0 -- set interface gre0 type=gre options:key=0x1000 options:remote_ip=10.95.30.43
+ovs-vsctl add-port br0 gre0 -- set interface gre0 type=gre options:key=0x1111 options:remote_ip=10.95.30.43
 ```
 
 创建`mirror`将`tap1`的数据包镜像至GRE端口:
