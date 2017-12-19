@@ -5,7 +5,7 @@ date: 2017-12-19 10:59:25 +0800
 comments: true
 categories: Virtualization
 ---
-之前的文章[<<VMware vSphere东西向网络防护>>](http://www.just4coding.com/blog/2017/06/10/vmware-westeast/)介绍了在`VMware vSphere`平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。
+之前的文章<<[VMware vSphere东西向网络防护](http://www.just4coding.com/blog/2017/06/10/vmware-westeast/)>>介绍了在`VMware vSphere`平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。
 
 我们使用`VMware`官方的Python SDK来实现，SDK地址如下:
 
