@@ -3,7 +3,7 @@ layout: post
 title: "虚拟机KPTI性能影响分析"
 date: 2018-01-11 03:52:34 +0800
 comments: true
-categories: Virtulization
+categories: Virtualization
 ---
 `Meltdown`漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级`Guest`是否有较大的性能影响, 是否应该升级`Guest`虚拟机等问题又困扰着云租户们。
 
