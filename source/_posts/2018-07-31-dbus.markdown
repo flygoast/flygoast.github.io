@@ -1,0 +1,310 @@
+---
+layout: post
+title: "D-Bus实例介绍"
+date: 2018-07-31 15:16:55 +0800
+comments: true
+categories: Network
+---
+`D-Bus`是`Linux`及其他类`UNIX`系统上的一种`IPC(Interprocess communication`)机制。相较于传统的`管道(PIPE)`、`Socket`等原生基于字节流的IPC方式，`D-Bus`提供了基于独立`Message`的传输方式，应用程序使用起来更加简单。`D-Bus`的设计初衷是为`Linux`桌面环境上的一系列应用程序提供通信方式，它的设计里保留了许多对上层框架设计考虑的元素。
+
+`D-Bus`的常用架构与传统的`Socket`一对一通信模式不同，它基于中间消息路由转发的模式来实现, 如下图:
+
+{% img /images/2018-07-31/1.png %}
+
+<!--more-->
+
+`D-Bus`默认提供两种BUS，`系统BUS(system)`和`会话BUS(session)`。系统BUS在每台机器上是惟一的，用于后台服务及操作系统之间的通信。会话BUS用于每个登录用户会话的应用程序之间的通信。每个BUS实例由一个`bus-daemon`进程来管理，由其负责消息路由转发。应用程序需要收发消息，需要连接到BUS实例上。BUS实例使用基于XML的配置文件来控制安全策略，如用户能否注册服务，能给哪些服务接口发送消息等等。
+
+下面介绍`D-Bus`的一些概念。
+
+* Service
+
+也叫`BUS Name`，这个名称有些令人费解。它并不是指BUS实例的名称，而应该理解为进程连接到BUS实例之后的名称。BUS实例依据`BUS Name`转发消息。进程连接到BUS实例时，会由BUS实例自动分配一个惟一的连接名称，形式如`:1.98`, 但这个名称不是很容易记，可以注册更有实际意义的名称。自行注册的服务名称使用反向域名的方式，类似于`JAVA`中的类名。比如, 服务名称`org.freedesktop.login1`对应系统BUS上的`systemd-logind`服务。
+
+* object
+
+一个D-Bus服务可以包含多个对象, 每个对象对外提供一组功能特性。它是一个独立处理消息的实体，也就是说消息的传送路径为对象到对象。不同的编程语言和库中，定义了自身领域内的对象，如`JAVA`中的`java.lang.Object`, `GLIB`中的`GObject`, `QT`中的`QObject`等。`D-Bus`使用通用的对象路径的方式来让更高层的接口来绑定到特定语言和库的对象中。这种对象路径类似于类`UNIX`系统中的文件路径，如`/org/freedesktop/systemd`。这种路径只是提供了对象的惟一标识符，不同的服务实现可以自行来决定是否需要使用其层次性的价值。
+
+* Interface
+
+object支持一个或者多个接口，接口是一组方法和信号的集和。可以理解为方法(methods)和信号(signals)的命名空间。命名也是采用反向域名方式，如`org.freedesktop.DBus`。大多数编程语言的`D-Bus`绑定库会将这些接口映射为语言本身的结构，如`JAVA`中的`Interface`，`C++`的纯虚类。
+
+* Members
+
+Interface中成员可以包含多个methods和signals。Methods表示能够被其他进程调用的操作，可以带有参数和响应结果。Signals是一种带有Payload的广播消息，进程可以定义自己感兴趣的Signals。这两种情形分别对应`RPC(Remote Procedure Call)`和`Publish/Subscribe`模式。
+
+`D-Bus`的消息中会包含以上的这些信息，如下图所示:
+
+{% img /images/2018-07-31/2.png %}
+
+实际上，这些面向对象的结构设计更多地是为更高层的语言绑定服务。若我们直接使用底层的libdbus库来开发程序，可以简单地将其理解为消息内容的不同区分标识。
+
+下面我们用一个基于`libdbus`库实现的示例来说明简单的方法调用。
+
+`libdbus`的官方文档地址为: https://dbus.freedesktop.org/doc/api/html/index.html
+
+文档开头就写道: `If you use this low-level API directly, you’re signing up for some pain.`不过, 对于我们只是简单的应用D-Bus做为消息通道的场景中并不存在太大的难度。
+
+示例中的服务功能为根据消息中object的不同，在收到的内容前添加`yes`或者`no`并返回。
+
+服务端代码`dbus-server.c`如下:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <dbus/dbus.h>
+
+const char *const SERVER_BUS_NAME = "com.just4coding.dbus";
+const char *const OBJECT_PATH_NAME_YES = "/com/just4coding/dbus/yes";
+const char *const OBJECT_PATH_NAME_NO = "/com/just4coding/dbus/no";
+const char *const INTERFACE_NAME = "com.just4coding.dbus_demo";
+const char *const METHOD_NAME = "hello";
+
+DBusError dbus_error;
+void print_dbus_error(char *str);
+
+int main(int argc, char **argv)
+{
+    DBusConnection *conn;
+    int ret;
+
+    dbus_error_init(&dbus_error);
+
+    conn = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error);
+
+    if (dbus_error_is_set(&dbus_error)) {
+        print_dbus_error("dbus_bus_get");
+    }
+
+    if (!conn) {
+        exit(1);
+    }
+
+    ret = dbus_bus_request_name(conn, SERVER_BUS_NAME, DBUS_NAME_FLAG_DO_NOT_QUEUE, &dbus_error);
+
+    if (dbus_error_is_set(&dbus_error)) {
+        print_dbus_error("dbus_bus_request_name");
+    }
+
+    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+        fprintf(stderr, "not primary owner, ret = %d\n", ret);
+    }
+
+    while (1) {
+        if (!dbus_connection_read_write_dispatch(conn, -1)) {
+            fprintf(stderr, "Not connected now.\n");
+            exit (1);
+        }
+
+        DBusMessage *message;
+
+        if ((message = dbus_connection_pop_message(conn)) == NULL) {
+            fprintf(stderr, "Did not get message\n");
+            continue;
+        }
+
+        if (dbus_message_is_method_call(message, INTERFACE_NAME, METHOD_NAME)) {
+            char *s;
+            if (dbus_message_get_args(message,
+                                      &dbus_error,
+                                      DBUS_TYPE_STRING, &s, DBUS_TYPE_INVALID))
+            {
+                printf("Received: %s\n", s);
+
+                DBusMessage *reply;
+                char answer[1024];
+
+                assert(reply = dbus_message_new_method_return(message));
+
+                DBusMessageIter iter;
+                dbus_message_iter_init_append(reply, &iter);
+
+                if (dbus_message_has_path(message, OBJECT_PATH_NAME_YES)) {
+                    sprintf(answer, "Yes, %s", s);
+                } else if (dbus_message_has_path(message, OBJECT_PATH_NAME_NO)) {
+                    sprintf(answer, "No, %s", s);
+                } else {
+                    sprintf(answer, "No object found");
+                }
+
+                char *ptr = answer;
+                assert(dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &ptr));
+
+                assert(dbus_connection_send(conn, reply, NULL));
+                dbus_connection_flush (conn);
+                dbus_message_unref (reply);
+
+            } else {
+                print_dbus_error("Error getting message");
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+void print_dbus_error(char *str)
+{
+    fprintf(stderr, "%s: %s\n", str, dbus_error.message);
+    dbus_error_free(&dbus_error);
+}
+```
+
+服务端程序从BUS实例中读取消息，并根据消息中的不同部分来做不同处理。
+
+编译服务端程序:
+```bash
+gcc -o dbus-server dbus-server.c `pkg-config --libs --cflags dbus-1`
+```
+
+直接执行`dbus-server`, 我们会发现安全策略不允许注册服务。
+```plain
+[root@centos1 dbus]# ./dbus-server
+dbus_bus_request_name: Connection ":1.107" is not allowed to own the service "com.just4coding.dbus" due to security policies in the configuration file
+not primary owner, ret = -1
+```
+
+我们在`/etc/dbus-1/system.d/`下创建安全策略文件`com.just4coding.dbus.conf`，内容如下:
+```xml
+<!DOCTYPE busconfig PUBLIC
+ "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+
+  <policy user="root">
+    <allow own="com.just4coding.dbus"/>
+  </policy>
+
+  <policy context="default">
+    <allow send_interface="com.just4coding.dbus_demo"/>
+  </policy>
+
+</busconfig>
+```
+
+再次运行`dbus-server`可以成功，我们使用`busctl`查看, 可以看到`dbus-server`已经注册成功:
+
+{% img /images/2018-07-31/3.png %}
+
+我们再来看客户端代码`dbus-client.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdbool.h>
+#include <ctype.h>
+
+#include <dbus/dbus.h>
+
+
+const char *const SERVER_BUS_NAME = "com.just4coding.dbus";
+const char *const CLIENT_BUS_NAME = "com.just4coding.client";
+const char *const OBJECT_PATH_NAME_YES = "/com/just4coding/dbus/yes";
+const char *const OBJECT_PATH_NAME_NO = "/com/just4coding/dbus/no";
+const char *const INTERFACE_NAME = "com.just4coding.dbus_demo";
+const char *const METHOD_NAME = "hello";
+
+
+DBusError dbus_error;
+void print_dbus_error(char *str);
+
+int main(int argc, char **argv)
+{
+    DBusConnection *conn;
+    char input[80];
+
+    dbus_error_init(&dbus_error);
+
+    assert(conn = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error));
+
+    if (dbus_error_is_set(&dbus_error)) {
+        print_dbus_error("dbus_bus_get");
+    }
+
+    const char *objects[] = {OBJECT_PATH_NAME_YES, OBJECT_PATH_NAME_NO, NULL};
+    int i = 0;
+
+    for ( ; objects[i]; i++) {
+        DBusMessage *request;
+        assert((request = dbus_message_new_method_call(SERVER_BUS_NAME, objects[i], INTERFACE_NAME, METHOD_NAME)));
+
+        DBusMessageIter iter;
+        dbus_message_iter_init_append(request, &iter);
+        snprintf(input, sizeof(input), "alice");
+
+        char *ptr = input;
+        assert(dbus_message_iter_append_basic (&iter, DBUS_TYPE_STRING, &ptr));
+
+        DBusPendingCall *pending_return;
+        assert(dbus_connection_send_with_reply (conn, request, &pending_return, -1));
+
+        assert(pending_return);
+        dbus_connection_flush(conn);
+        dbus_message_unref(request);
+
+        dbus_pending_call_block(pending_return);
+
+        DBusMessage *reply;
+        assert((reply = dbus_pending_call_steal_reply (pending_return)));
+        dbus_pending_call_unref(pending_return);
+
+        char *s;
+        if (dbus_message_get_args(reply, &dbus_error, DBUS_TYPE_STRING, &s, DBUS_TYPE_INVALID)) {
+            printf("Reply: %s\n", s);
+        } else {
+            fprintf (stderr, "Did not get arguments in reply\n");
+            exit(1);
+        }
+
+        dbus_message_unref(reply);
+    }
+
+    return 0;
+}
+
+
+void print_dbus_error(char *str)
+{
+    fprintf (stderr, "%s: %s\n", str, dbus_error.message);
+    dbus_error_free(&dbus_error);
+}
+```
+客户端程序分别向`/com/just4coding/dbus/yes`和`/com/just4coding/dbus/no`两个object发送了字符串”alice”并打印出响应。
+
+编译程序:
+```bash
+gcc -o dbus-client dbus-client.c `pkg-config --libs --cflags dbus-1`
+```
+
+执行结果如下:
+```plain
+[root@centos1 dbus]# ./dbus-client
+Reply: Yes, alice
+Reply: No, alice
+```
+
+系统本身也自带了一些命令行工具可以进行`D-Bus`操作。我们也可以使用`dbus-send`命令来进行测试, 返回结果也一样:
+```plain
+[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/yes com.just4coding.dbus_demo.hello string:"alice"
+method return time=1533021068.211336 sender=:1.111 -> destination=:1.118 serial=8 reply_serial=2
+   string "Yes, alice"
+[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/no com.just4coding.dbus_demo.hello string:"alice"
+method return time=1533021079.752412 sender=:1.111 -> destination=:1.119 serial=9 reply_serial=2
+   string "No, alice"
+[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/dummy com.just4coding.dbus_demo.hello string:"alice"
+method return time=1533021087.748693 sender=:1.111 -> destination=:1.120 serial=10 reply_serial=2
+   string "No object found”
+```
+
+
+值得注意的是，`D-Bus`本身实现性能上并不是特别高，因而只适合于传送控制消息而非数据。并且现在用于实现RPC和PUB/SUB场景的中间件选择非常多，如`RabbitMQ`、`Redis`等, 使用起来都更为简单。在一般情形下更推荐使用这些消息队列类型的中间件。但是若需要和系统本身的一些使用`D-Bus`的服务(如`systemd`, `NetworkManager`)需要交互时，使用`D-Bus`则是一个非常方便的方式。
+
