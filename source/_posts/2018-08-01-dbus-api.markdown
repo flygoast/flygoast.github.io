@@ -1,0 +1,173 @@
+---
+layout: post
+title: "D-BUS API查找与调用"
+date: 2018-08-01 11:07:51 +0800
+comments: true
+categories: Network
+---
+上篇文章<<[D-Bus实例介绍](http://www.just4coding.com/blog/2018/07/31/dbus/)>>中简要介绍了`D-Bus`的基本概念，其中提到`systemd`、`NetworkManager`等系统服务导出了`D-Bus API`供其他程序来调用。本文通过示例来说明这些API的查找与调用。
+
+[上篇文章](http://www.just4coding.com/blog/2018/07/31/dbus/)我们提到`D-Bus`的`object`可以实现多个`Interface`。[`D-Bus`规范](https://dbus.freedesktop.org/doc/dbus-specification.html)中标准化了一些接口，这些接口对于我们调用其他服务提供的D-Bus API非常有帮助。
+
+我们主要来看其中的两个:
+
+* [org.freedesktop.DBus.Introspectable](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable)
+
+它有一个方法:
+```plain
+org.freedesktop.DBus.Introspectable.Introspect (out STRING xml_data)
+```
+
+它会返回一个包含有对象(object), 接口(interface), 方法(methods), 信号(signals)，属性(properties)等信息的XML字符串。对象如果实现这个接口, 我们就可以通过调用该方法了解这个对象对外提供的所有信息。
+
+XML字符串的解析方法可以参考官方文档:
+https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
+
+<!--more-->
+
+* [org.freedesktop.DBus.Properties](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
+
+它有三个方法:
+
+```plain
+org.freedesktop.DBus.Properties.Get (in STRING interface_name,
+                                     in STRING property_name,
+                                     out VARIANT value);
+org.freedesktop.DBus.Properties.Set (in STRING interface_name,
+                                     in STRING property_name,
+                                     in VARIANT value);
+org.freedesktop.DBus.Properties.GetAll (in STRING interface_name,
+                                        out DICT<STRING,VARIANT> props);
+
+```
+如果对象实现了该接口, 那么可以通过调用这些方法来对该对象的属性(properties)进行操作。
+
+`NetworkManager`服务都实现了这些标准接口。我们通过`busctl`工具来看一下具体的信息。
+
+`busctl`是`systemd`提供的一个`D-Bus`操作工具，功能非常强大，在之前的文章中我们也用它来查看当前的`D-Bus`服务。具体用法可以参考[`Man Page`](https://www.freedesktop.org/software/systemd/man/busctl.html)
+
+首先，使用`busctl`来查看`org.freedesktop.NetworkManager`服务提供了哪些对象(`objects`):
+```plain
+[root@centos1 dbus]# busctl tree org.freedesktop.NetworkManager
+├─/com
+│ └─/com/redhat
+│   └─/com/redhat/ifcfgrh1
+└─/org
+  └─/org/freedesktop
+    └─/org/freedesktop/NetworkManager
+      ├─/org/freedesktop/NetworkManager/ActiveConnection
+      │ └─/org/freedesktop/NetworkManager/ActiveConnection/0
+      ├─/org/freedesktop/NetworkManager/AgentManager
+      ├─/org/freedesktop/NetworkManager/Devices
+      │ ├─/org/freedesktop/NetworkManager/Devices/0
+      │ ├─/org/freedesktop/NetworkManager/Devices/1
+      │ └─/org/freedesktop/NetworkManager/Devices/2
+      ├─/org/freedesktop/NetworkManager/IP4Config
+      │ ├─/org/freedesktop/NetworkManager/IP4Config/0
+      │ ├─/org/freedesktop/NetworkManager/IP4Config/1
+      │ └─/org/freedesktop/NetworkManager/IP4Config/2
+      ├─/org/freedesktop/NetworkManager/IP6Config
+      │ ├─/org/freedesktop/NetworkManager/IP6Config/0
+      │ ├─/org/freedesktop/NetworkManager/IP6Config/1
+      │ └─/org/freedesktop/NetworkManager/IP6Config/2
+      └─/org/freedesktop/NetworkManager/Settings
+        └─/org/freedesktop/NetworkManager/Settings/0
+
+```
+接着，来查看某个对象实现的接口及其成员:
+```plain
+[root@centos1 dbus]# busctl introspect org.freedesktop.NetworkManager /org/freedesktop/NetworkManager/Devices/0
+NAME                                          TYPE      SIGNATURE RESULT/VALUE                             FLAGS
+org.freedesktop.DBus.Introspectable           interface -         -                                        -
+.Introspect                                   method    -         s                                        -
+org.freedesktop.DBus.Properties               interface -         -                                        -
+.Get                                          method    ss        v                                        -
+.GetAll                                       method    s         a{sv}                                    -
+.Set                                          method    ssv       -                                        -
+org.freedesktop.NetworkManager.Device         interface -         -                                        -
+.Delete                                       method    -         -                                        -
+.Disconnect                                   method    -         -                                        -
+.ActiveConnection                             property  o         "/"                                      emits-change
+.Autoconnect                                  property  b         false                                    emits-change writable
+.AvailableConnections                         property  ao        0                                        emits-change
+.Capabilities                                 property  u         7                                        emits-change
+.DeviceType                                   property  u         14                                       emits-change
+.Dhcp4Config                                  property  o         "/"                                      emits-change
+.Dhcp6Config                                  property  o         "/"                                      emits-change
+.Driver                                       property  s         "unknown"                                emits-change
+.DriverVersion                                property  s         ""                                       emits-change
+.FirmwareMissing                              property  b         false                                    emits-change
+.FirmwareVersion                              property  s         ""                                       emits-change
+.Interface                                    property  s         "lo"                                     emits-change
+.Ip4Address                                   property  u         16777343                                 emits-change
+.Ip4Config                                    property  o         "/org/freedesktop/NetworkManager/IP4C... emits-change
+.Ip6Config                                    property  o         "/org/freedesktop/NetworkManager/IP6C... emits-change
+.IpInterface                                  property  s         "lo"                                     emits-change
+.Managed                                      property  b         false                                    emits-change
+.Mtu                                          property  u         65536                                    emits-change
+.PhysicalPortId                               property  s         ""                                       emits-change
+.State                                        property  u         10                                       emits-change
+.StateReason                                  property  (uu)      10 0                                     emits-change
+.Udi                                          property  s         "/sys/devices/virtual/net/lo"            emits-change
+.StateChanged                                 signal    uuu       -                                        -
+org.freedesktop.NetworkManager.Device.Generic interface -         -                                        -
+.HwAddress                                    property  s         "00:00:00:00:00:00"                      emits-change
+.TypeDescription                              property  s         "loopback"                               emits-change
+.PropertiesChanged                            signal    a{sv}     -                                        -
+```
+
+返回结果中显示了该对象实现的接口及其方法(methods)、信息(signals)、属性(properties)等信息，属性值也被列出。
+
+如果我们需要获取特定的属性值，还可以使用`busctl`的`get-property`子命令单独获取。
+
+比如，我们获取某个网卡的名称:
+```plain
+[root@centos1 python]# busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager/Devices/1 org.freedesktop.NetworkManager.Device Interface
+s "enp0s3"
+```
+
+上面我们使用`busctl`工具来示范了`D-Bus`服务API的调用方式。下面，我们再通一个`Python`程序来说明如何在程序中实现属性获取。
+
+源码如下:
+```python
+import dbus
+from pprint import pprint
+from dbus import SystemBus
+from dbus import Interface
+from xml.etree import ElementTree
+
+def print_network_ifaces(bus, service, object_path):
+    try:
+        if object_path == "/org/freedesktop/NetworkManager/Devices":
+            return
+
+        obj = bus.get_object(service, object_path)
+        interface = Interface(obj, 'org.freedesktop.DBus.Properties')
+
+        m = interface.get_dbus_method('Get', dbus_interface=None)
+
+        ifacename = m('org.freedesktop.NetworkManager.Device', 'Interface')
+        print(ifacename)
+
+    except Exception, err:
+        print err
+
+def rec_intro(bus, service, object_path, callback):
+    callback(bus, service, object_path)
+    obj = bus.get_object(service, object_path)
+    interface = Interface(obj, 'org.freedesktop.DBus.Introspectable')
+    xmlstring = interface.Introspect()
+    for child in ElementTree.fromstring(xmlstring):
+        if child.tag == 'node':
+            if object_path == '/':
+                object_path = ''
+            new_path = '/' . join((object_path, child.attrib['name']))
+            rec_intro(bus, service, new_path, callback)
+
+bus = SystemBus()
+rec_intro(bus, 'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager/Devices', print_network_ifaces)
+```
+
+我们的程序中首先调用标准接口`org.freedesktop.DBus.Introspectable`的方法`Introspect`拿到所有网络接口对象，然后调用标准接口`org.freedesktop.DBus.Properties`的方法`Get`获取属性`Interface`的值，从而获取网络接口名称。
+
+系统本身的许多服务都提供了`D-Bus` API, 在许多场景下通过调用这些API可以非常便捷地实现我们的功能需求。
