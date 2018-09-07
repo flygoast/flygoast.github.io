@@ -1,0 +1,238 @@
+---
+layout: post
+title: "TUI库newt和snack简要介绍"
+date: 2018-09-07 13:25:19 +0800
+comments: true
+categories: MISC
+---
+大多数商业化软件产品一般会通过实现GUI(Graphical User Interface)或者TUI(Text-based User Interface/Textual User Interface/Terminal User Interface)来降低软件的使用难度。本文简要介绍一个TUI库: [`newt`](https://pagure.io/newt)。
+
+`newt`是由RedHat开发，主要用在RatHat的Linux发行版本(RHEL, Fedora和CentOS)的安装程序项目[`Anaconda`](https://fedoraproject.org/wiki/Anaconda)中。`NEWT`的全称是: `Not Erik’s Windowing Toolkit`，它基于[`S-Lang`](https://www.jedsoft.org/slang/index.html)库实现。
+
+因为`newt`是用于Linux发行版本的安装程序中，因而它的运行空间非常有限，需要保证程序尽可能小，所以在设计时选择使用C语言进行开发，也尽量不支持多余特性。于是在设计之初就不支持事件驱动。在支持事件驱动的窗口库中，有一个事件循环监听事件发生，根据发生的事件展示不同的窗口。在`newt`中，窗口创建和销毁基于栈模式，新创建的窗口位于之前的窗口之上，且只能展示最上层窗口，当最上层窗口销毁之后才能展示下边的窗口。这也就是说所有窗口都为模态窗口(`model windows`)。这种特性限制了`newt`库本身只适合用于完成顺序的程序流程，一个典型的场景就是程序的安装向导。SHELL程序往往也是顺序的流程，从SHELL程序转换为`newt`窗口程序完全不涉及程序流程的改变，实现非常简单。
+
+<!--more-->
+
+`newt`中的主要结构为组件(`components`), 它和其他窗口库中所称的`widget`为相同概念。`newt`组件有许多, 常用的包括:
+
+* Button
+* CompactButton
+* EntryBox
+* CheckBox
+* RadioButton
+* Textbox
+* Scrollbars
+* Listbox
+
+具体可以参考这篇[tutorail文章](http://delphi.pd.infn.it/~saccarol/tutorial.html)
+。这篇文章写于2003年, 当时`newt`版本为v0.31，略有些老，但内容上在现在的版本(v0.52)上依然适用。
+
+`Form`是一种特殊的组件，它将其他组件组合在一起。`newt`应用程序使用`form`做为与用户交互的媒介。`newt`应用程序与用户交互的的简要逻辑为: 当`newt`应用需要从用户获取输入时，它运行一个`form`。此时，`newt`应用开始等待用户输入。用户输入信息到`form`中所包含的组件后，将控制权交还`newt`应用(如通过触发按钮等行为)，`newt`应用再从组件中获取到用户输入的内容继续执行。`form`可以包含任意组件，也包括其他`form`。`form`嵌套可以用于改变`TAB`键触发的移动顺序、控制窗口不同区域的背景色，滚动特定窗口区域等。
+
+`newt`代码中将所有的组件都用一种变量类型:`newtComponent`来表示。我们可以给组件注册回调函数，回调函数何时被触发取决于组件类型。回调函数原型和注册函数原型如下:
+
+```c
+typedef void (*newtCallback)(newtComponent, void *);
+void newtComponentAddCallback(newtComponent co, newtCallback f, void * data);
+```
+
+`newt`所有组件都绘制在窗口(`window`)上，`newt`默认创建了一个特殊的背景窗口，叫做`root`窗口。我们能够在该窗口上放置组件，也可以使用API创建新的窗口。`newt`库的坐标系统原点坐于屏幕左上角，函数原型中，`left`参数表示`x`坐标，从原点出发从左至右增大，`top`参数表示`y`坐标，从上到下增大。`left`可以对应为列数，`top`可以对应为行数，两个坐标都可以为负数，表示从反方向开始计算。如:
+
+```c
+newtDrawRootText(10, -5, "Hello NEWT");
+```
+表示在距屏幕左上角的第10列，倒数第5行的位置输出字符串`Hello NEWT`。
+
+下边我们以一个实例来说明`newt`的使用。
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <newt.h>
+
+void show_message_window(void) {
+    char message[] = "This is a pretty long message. It will be displayed "
+                     "in a newt textbox, and illustrates how to construct "
+                     "a textbox from arbitrary text which may not have "
+                     "very good line breaks.\n\n"
+                     "Notice how literal \\n characters are respected, and "
+                     "may be used to force line breaks and blank lines.";
+    newtComponent text, button, form;
+
+    newtCls();
+    text = newtTextboxReflowed(1, 1, message, 30, 5, 5, 0);
+    button = newtButton(12, newtTextboxGetNumLines(text) + 2, "Exit");
+    newtCenteredWindow(37, newtTextboxGetNumLines(text) + 7, "MESSAGE");
+    form = newtForm(NULL, NULL, 0);
+    newtFormAddComponents(form, text, button, NULL);
+    newtRunForm(form);
+
+    newtFormDestroy(form);
+    newtPopWindow();
+}
+
+void show_login_failed_window(void) {
+    newtComponent label, button, form;
+
+    newtCls();
+    newtCenteredWindow(60, 6, "NOTE");
+    label = newtLabel(10, 2, "Login failed!");
+
+    button = newtCompactButton(30, 4, "Exit");
+
+    form = newtForm(NULL, NULL, 0);
+    newtFormAddComponents(form, label, button, NULL);
+    newtRunForm(form);
+
+    newtFormDestroy(form);
+    newtPopWindow();
+}
+
+int main(void) {
+    int cols, rows;
+
+    newtInit();
+
+    do {
+        newtCls();
+        newtPushHelpLine(NULL);
+
+        newtGetScreenSize(&cols, &rows);
+        newtOpenWindow(1, 1, cols - 2, rows - 4, "LOGIN");
+
+        newtComponent form, btn_ok, btn_cancel, label_username, label_password,
+                      entry_username, entry_password, result;
+        const char *username, *password;
+
+        label_username = newtLabel(10, 3, "Username:");
+        entry_username = newtEntry(20, 3, "root", 20, &username,
+                                   NEWT_FLAG_SCROLL);
+        label_password = newtLabel(10, 5, "Password:");
+        entry_password = newtEntry(20, 5, "", 20, &password,
+                                   NEWT_FLAG_PASSWORD | NEWT_FLAG_SCROLL);
+
+        result = newtLabel(10, 10, "");
+
+        btn_ok = newtButton(10, 7, "OK");
+        btn_cancel = newtButton(20, 7, "Cancel");
+
+        form = newtForm(NULL, NULL, 0);
+
+        newtFormAddComponents(form, label_username, entry_username,
+                              label_password, entry_password,
+                              btn_ok, btn_cancel, result,
+                              NULL);
+        struct newtExitStruct exit_status;
+        newtFormRun(form, &exit_status);
+
+        if (exit_status.reason == NEWT_EXIT_COMPONENT) {
+            if (exit_status.u.co == btn_ok) {
+                if ((strcmp(username, "root") == 0)
+                    && (strcmp(password, "123456") == 0))
+                {
+                    show_message_window();
+                    break;
+                } else {
+                    show_login_failed_window();
+                }
+            } else if (exit_status.u.co == btn_cancel) {
+                break;
+            }
+        }
+
+        newtRefresh();
+        newtFormDestroy(form);
+        newtPopWindow();
+        newtPopHelpLine();
+
+    } while (1);
+
+    newtFinished();
+    return 0;
+}
+```
+
+CentOS发行版默认已带有`newt`库，我们需要安装`newt-devel`库:
+```bash
+yum install newt-devel
+```
+
+编译该程序:
+
+```c
+gcc -o newtdemo newtdemo.c -lnewt
+```
+
+执行`newtdemo`, 界面如下图:
+
+{% img /images/2018-09-07/1.png %}
+
+在密码框中输入`123456`后，移动焦点选择`OK`按钮，回车后显示另一个窗口:
+
+{% img /images/2018-09-07/2.png %}
+
+我们简单说明下源代码。`main`函数中首先调用了:
+
+```c
+newtInit();
+```
+
+`newtInit()`用于初始化`newt`库的内部数据结构，并将终端设置为`raw`模式。接着调用`newtCls()`来清空屏幕。`newt`窗口的最后一行用于显示帮助信息，如每个快捷键所对应的功能。代码中调用`newtPushHelpLine(NULL)`显示默认的帮助信息。接下来通过调用`newtOpenWindow()`创建了一个新窗口，后续的组件将绘制在该窗口中。接下来，在窗口上创建了`Username`和`Password`两个输入框用于接收用户输入，以及两个按钮。
+
+从组件定义的代码行中可以看到所有的组件都是`newtComponent`类型:
+
+```c
+        newtComponent form, btn_ok, btn_cancel, label_username, label_password,
+                      entry_username, entry_password, result;
+```
+
+我们使用一个`Form`表单将这些组件组合起来:
+
+```c
+        newtFormAddComponents(form, label_username, entry_username,
+                              label_password, entry_password,
+                              btn_ok, btn_cancel, result,
+                              NULL);
+```
+
+当执行`newtFormRun()`时，`newt`应用将等待用户操作。我们通过`exit_status`结构体接收用户的操作信息来判断哪个按钮被触发。如果用户触发了`Cancel`按钮则程序结束。如果触发的为`OK`按钮，则检测输入的密码是否为`123456`。如果输入错误，则显示一个错误信息窗口。密码验证通过则显示一个长消息`Textbox`窗口。
+
+这里我们也可以通过注册回调函数给两个按钮组件，根据哪个回调函数被执行来判断哪个按钮被触发。
+
+`newt`整体使用非常简单，然而比较遗憾的是，它基本没有文档，最好的参考资料为官方源码中的几个示例:
+
+* https://pagure.io/newt/blob/master/f/test.c
+* https://pagure.io/newt/blob/master/f/testgrid.c
+* https://pagure.io/newt/blob/master/f/textbox.c
+
+官方`newt`库中还提供了Python封装库，名称为`snack`。具体用法和C库类似，官方也提供了两个示例:
+
+* https://pagure.io/newt/blob/master/f/peanuts.py
+* https://pagure.io/newt/blob/master/f/popcorn.py
+
+除此之外，`newt`库中还提供了一个`whiptail`的命令行程序，用在SHELL脚本中显示对话框。比如，我们在BASH中执行:
+```bash
+whiptail --yesno "Continue?" 10 50
+```
+
+这将显示如下窗口:
+
+{% img /images/2018-09-07/3.png %}
+
+当选择`YES`按钮时，程序退出码为`0`，选择`NO`按钮，程序退出码为`1`。我们选择`YES`之后，查看退出码:
+```plain
+[root@centos2 newt]# echo $?
+0
+```
+
+具体信息可以参考:
+
+* https://linux.die.net/man/1/whiptail
+
+类似的TUI工具还有[CDK](http://invisible-island.net/cdk/cdk.html)和[dialog](http://invisible-island.net/dialog/)。[CDK](Curses Development Kit)是一个程序库，能够链接进我们自己开发的应用程序，`dialog`为一个命令行程序，与`whiptail`类似，可以在SHELL脚本中实现TUI界面。它们都是基于[`ncurses`](http://www.gnu.org/software/ncurses/ncurses.html)开发的，`ncurses`是目前最为广泛使用的TUI库。不过它的API过于底层，我们直接使用相对繁琐，对于简单的界面实现，还是推荐使用更为上层的封装库。
+
+
+
+
+
