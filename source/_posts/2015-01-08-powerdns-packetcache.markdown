@@ -257,7 +257,7 @@ bool PacketHandler::getAuth(DNSPacket *p, SOAData *sd, const string &target, int
   return found;
 }
 ```
-getAuth函数对域名或其子域调用Backend的getSOA函数获得SOA记录，找到则返回。比如，请求解析"www.foo.com"，首先查找"www.foo.com"是否存在SOA记录。如果没有，接着查找"foo.com"是否存在SOA记录。直到查找部分为""。如果没有找到SOA记录，返回某种错误的响应。接下来，questionOrRecurse函数以QTYPE::ANY为参数调用Backend的lookup函数，并依次调用B.get获取找到的记录。
+getAuth函数对域名或其子域调用Backend的getSOA函数获得SOA记录，找到则返回。比如，请求解析`www.foo.com`，首先查找`www.foo.com`是否存在SOA记录。如果没有，接着查找"foo.com"是否存在SOA记录。直到查找部分为""。如果没有找到SOA记录，返回某种错误的响应。接下来，questionOrRecurse函数以`QTYPE::ANY`为参数调用Backend的lookup函数，并依次调用`B.get`获取找到的记录。
 ```cpp
 B.lookup(QType(QType::ANY), target, p, sd.domain_id);
 rrset.clear();
