@@ -1,10 +1,18 @@
 ---
 layout: post
-title: "虚拟网络设备"
+title: "Linux虚拟网络设备"
 date: 2016-12-04 18:21:36 +0800
 comments: true
-categories: OpenStack
+tags:
+- interface
+- network
+- tap
+categories: Network
 ---
+更新(2020-05-06):
+Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:
+https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking
+
 OpenStack虚拟化网络实现中大量应用了多种虚拟网络设备，了解这些设备是理解OpenStack虚拟网络实现的基础，本文来简单介绍这些虚拟网络设备。
 
 ## TUN/TAP设备
