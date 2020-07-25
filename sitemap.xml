@@ -2,9 +2,23 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://just4coding.com/2020/07/25/kubernetes-cni/</loc>
+    
+    <lastmod>2020-07-25T02:45:44.676Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2020/07/13/nsx-t/</loc>
+    
+    <lastmod>2020-07-13T04:15:31.803Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>http://just4coding.com/2020/06/21/NSX/</loc>
     
-    <lastmod>2020-06-21T15:55:08.121Z</lastmod>
+    <lastmod>2020-06-22T11:57:30.055Z</lastmod>
     
   </url>
   

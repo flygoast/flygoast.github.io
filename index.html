@@ -164,6 +164,169 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/25/kubernetes-cni/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/07/25/kubernetes-cni/" class="post-title-link" itemprop="url">Kubernetes网络和CNI</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2020-07-25 10:40:57 / 修改时间：10:45:44" itemprop="dateCreated datePublished" datetime="2020-07-25T10:40:57+08:00">2020-07-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><a href="https://github.com/containernetworking/cni" target="_blank" rel="noopener"><code>CNI: Container Network Interface</code></a>是配置Linux容器网络接口的一种规范。它将<code>容器运行时</code>和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的<code>容器运行时</code>环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。</p>
+<p><code>CNI</code>规范主要涉及<code>容器运行时</code>和<code>CNI</code>插件两个角色，规范约定了二者的交互方式。<code>容器运行时</code>在容器实例创建时调用<code>CNI</code>插件的<code>ADD</code>接口以创建容器络连接所需的资源网络连接，当容器删除时调用<code>CNI</code>的<code>DEL</code>接口移除所创建的相应资源完成资源释放。不同的<code>CNI</code>插件按照规范所统一定义的接口、参数、响应实现不同的网络方案。</p>
+<p>官方提供了开发库<code>libcni</code>，<code>容器运行时</code>可以使用该库来集成<code>CNI</code>能力，并且还提供了一系列的<a href="https://github.com/containernetworking/plugins" target="_blank" rel="noopener">CNI插件参考实现</a>。</p>
+<p>目前<code>CNI</code>规范的最新版本为<code>0.4.0</code>。</p>
+<p>从具体实现上看，<code>容器运行时</code>会先创建好相应的<code>network namespace</code>, 然后<code>CNI</code>插件负责将网络接口插入到容器实例的<code>network namespace</code>、在宿主机上做必要的网络操作(如绑定IP到接口、建立路由等)以实现容器网络连通。</p>
+<p>一般设计中，主体模块与插件之间的交互会采用<code>RPC</code>、二进制兼容的动态库加载等手段。<code>CNI</code>规范则指定<code>CNI</code>插件实现为可执行程序，相应接口参数通过环境变量与标准输入流传给<code>CNI</code>插件，类似于早年WEB领域的<code>CGI</code>模式。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/07/25/kubernetes-cni/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/13/nsx-t/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/07/13/nsx-t/" class="post-title-link" itemprop="url">NSX-T路由逻辑介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2020-07-13 10:34:22 / 修改时间：12:15:31" itemprop="dateCreated datePublished" datetime="2020-07-13T10:34:22+08:00">2020-07-13</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章&lt;&lt;NSX分布式逻辑路由器介绍&gt;&gt;简要介绍了<code>NSX-V(NSX for vSphere)</code>中的分布式逻辑路由器。<code>NSX-V</code>只支持vSphere平台，对<code>VMware vCenter</code>强依赖。<code>NSX-T</code>是针对异构虚拟化平台以及多Hypervisor环境来设计的，不仅支持vSphere平台，还支持KVM、Docker、Kubernetes等平台。当前来看，<code>NSX-T</code>更像是<code>VMware</code>未来的主要投入方向。<a href="https://www.nakivo.com/blog/nsx-v-vs-nsx-t-comprehensive-comparison/" target="_blank" rel="noopener">这篇文章</a>很透彻地介绍了<code>NSX-V</code>和<code>NSX-T</code>的差别，但文章中的内容是基于<code>NSX-T</code>的<code>2.3</code>版本，当前已经是<code>3.0</code>, 有些内容已经不太适用。</p>
+<p><code>NSX-T</code>的路由实现与<code>NSX-V</code>有较大不同，本文来简要介绍<code>NSX-T</code>平台下逻辑路由器的概念。</p>
+<p>在<code>NSX-T</code>中，逻辑路由器分为<code>Tier-0</code>网关和<code>Tier-1</code>网关。<code>Tire-0</code>网关用于连接<code>NSX-T</code>虚拟网络与外部网络，主要处理南北向路由。<code>Tier-1</code>网关用于处理不同<code>分段: Segment</code>(以前版本叫做<code>逻辑交换机: Logical Switch</code>, 虚拟二层网络)之间的东西向路由。从概念上来看，<code>Tire-1</code>网关对应<code>NSX-V</code>中的<code>LDR: Logical Distributed Router</code>, <code>Tire-0</code>对应<code>NSX-V</code>中的<code>ESG: Edge Service Gateway</code>。</p>
+<p>典型的部署结构如下图, 图片来自<a href="https://blogs.vmware.com/networkvirtualization/2018/02/nsx-t-multi-tiered-routing-architecture.html/" target="_blank" rel="noopener">VMware官方博客</a>:</p>
+<img src="/images/2020-07-13/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/07/13/nsx-t/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/06/21/NSX/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -187,10 +350,16 @@
                 <i class="fa fa-calendar-o"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              
 
-              <time title="创建时间：2020-06-21 23:46:56 / 修改时间：23:55:08" itemprop="dateCreated datePublished" datetime="2020-06-21T23:46:56+08:00">2020-06-21</time>
+              <time title="创建时间：2020-06-21 23:46:56" itemprop="dateCreated datePublished" datetime="2020-06-21T23:46:56+08:00">2020-06-21</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-06-22 19:57:30" itemprop="dateModified" datetime="2020-06-22T19:57:30+08:00">2020-06-22</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="fa fa-folder-o"></i>
@@ -220,7 +389,7 @@
 <ul>
 <li>消费平面: 云管平台<code>CMP(Cloud Management Platform)</code>不是NSX的组件，NSX提供了丰富的REST API, 可根据需要集成NSX。</li>
 <li>管理平面: NSX Manager是NSX的集中管理器，主要功能包括管理NSX Controller集群，管理EDGE节点，为上层消费平台提供管理和配置接口。NSX Manager自身实现了vSphere vCenter插件，可注册在vCenter中，通过GUI进行管理。</li>
-<li>控制平面: 控制平台主要包括NSX Controller集群，Controller负责维护所有ESXi主机、逻辑交换机(Logical Switch)和分布式逻辑路由器(DLR: Distributed Logical Router)的信息。实际上，控制平面还包括DLR的<code>Control VM</code>, 上图中没有体现。上图来自官方6.4版本的<a href="https://docs.vmware.com/cn/VMware-NSX-Data-Center-for-vSphere/6.4/com.vmware.nsx.install.doc/GUID-3BC07B7A-29F4-4F1B-9D5C-97154FF9C54B.html" target="_blank" rel="noopener">文档</a>, 在之前的官方的架构图中，曾经是体现出来的。后文会再介绍它的作用。</li>
+<li>控制平面: 控制平台主要包括NSX Controller集群，Controller负责维护所有ESXi主机、逻辑交换机(Logical Switch)和分布式逻辑路由器(DLR: Distributed Logical Router)的信息。实际上，控制平面还包括DLR的<code>Control VM</code>, 上图中没有体现。上图来自官方6.4版本的<a href="https://docs.vmware.com/cn/VMware-NSX-Data-Center-for-vSphere/6.4/com.vmware.nsx.install.doc/GUID-3BC07B7A-29F4-4F1B-9D5C-97154FF9C54B.html" target="_blank" rel="noopener">文档</a>。后文会再介绍它的作用。</li>
 <li>数据平面: 数据平面主要包括<code>NSX Virtual Switch</code>, <code>DLR</code>, 和<code>ESG: Edge Service Gateway</code>。按图中表示，<code>NSX Virtual Switch</code>是基于vSphere的分布式交换机并在内核中实现VXLAN、防火墙过滤、分布式路由等功能的逻辑交换机。我个人更倾向将<code>NSX Virtual Switch</code>理解为<code>VDS</code>+<code>VXLAN</code>实现，将<code>DLR</code>看成独立组件。<code>VDS</code>可以理解为基于<code>VLAN</code>隔离的虚拟交换机，<code>NSX Virtual Switch</code>是基于<code>VXLAN</code>隔离的虚拟交换机。NSX界面上，<code>NSX Virtual Switch</code>叫做<code>逻辑交换机: Logical Switch</code>。<code>DLR</code>和<code>ESG</code>都是路由器，<code>DLR</code>负责虚拟数据中心中东西向流量路由，<code>ESG</code>负责虚拟数据中心边缘的南北向流量路由。其他数据面组件都在ESXi主机内核中实现，而<code>ESG</code>是独立的虚拟机。 NSX的一个典型逻辑网络架构如下图:<img src="/images/2020-06-21/2.png" class="">
 
 
@@ -841,182 +1010,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2019/08/10/service-catalog/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2019/08/10/service-catalog/" class="post-title-link" itemprop="url">Kubernetes服务目录简要介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2019-08-10 08:14:56" itemprop="dateCreated datePublished" datetime="2019-08-10T08:14:56+08:00">2019-08-10</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a href="https://www.openservicebrokerapi.org/" target="_blank" rel="noopener"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
-<p><code>OSBAPI</code>规范定义了高度抽象的应用平台与外部服务代理的交互逻辑，规范化外部服务的使用，主要包括:</p>
-<ul>
-<li>注册服务代理: 应用平台会获取服务代理提供的服务列表及相应规格，<code>OSBAPI</code>使用术语<code>Plan</code>来表示规格。</li>
-<li><code>Provision</code>服务实例: <code>OSBAPI</code>使用术语<code>Provision</code>来统一指定服务资源的供应。在外部服务具体实现上，可以是创建虚拟机实例，也可以是分配资源，也可以是创建SaaS帐号等等。</li>
-<li>绑定应用及服务实例: 当服务实例创建完成后，开发者想要其应用与该服务实例进行交互。从服务代理的角度来看，就是将应用与服务实例进行绑定。具体实现逻辑可以非常灵活，一般情况下，会生成访问该服务实例所需的新凭证。比如，生成数据库实例的IP、端口、用户名、密码等等。这些凭证会被返回给应用平台以提供给具体应用使用。</li>
-</ul>
-<p><code>OSBAPI</code>的具体工作模式如下图:</p>
-<img src="/images/2019-08-10/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2019/08/10/service-catalog/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/23/fabric/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/11/23/fabric/" class="post-title-link" itemprop="url">Python远程执行库Fabric简要介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-11-23 16:06:09" itemprop="dateCreated datePublished" datetime="2018-11-23T16:06:09+08:00">2018-11-23</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/MISC/" itemprop="url" rel="index">
-                    <span itemprop="name">MISC</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="/blog/2017/09/14/ansible/">Ansible入门</a>&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库<a href="http://www.fabfile.org/" target="_blank" rel="noopener">Fabric</a>。</p>
-<p>Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Python程序中直接<code>import</code>，并基于它实现远程命令执行。此外，它还提供了一个<code>fab</code>命令行工具，使用它可以更简单地编写我们需要执行的任务。这种模式被使用的更为普遍，我们主要来介绍以<code>fab</code>命令来使用fabric。</p>
-<p>需要注意的是，Fabric的2.x版本并不兼容1.x版本，而且2.x版本很大程度上边缘化了fab命令行工具，因而我们还是来介绍1.x版本。当前最新1.x版本为1.14, 文档地址为:<a href="http://docs.fabfile.org/en/1.14/。" target="_blank" rel="noopener">http://docs.fabfile.org/en/1.14/。</a></p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/11/23/fabric/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1087,7 +1080,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">82</span>
+          <span class="site-state-item-count">84</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1100,7 +1093,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-count">17</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

@@ -164,6 +164,182 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2019/08/10/service-catalog/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2019/08/10/service-catalog/" class="post-title-link" itemprop="url">Kubernetes服务目录简要介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-08-10 08:14:56" itemprop="dateCreated datePublished" datetime="2019-08-10T08:14:56+08:00">2019-08-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a href="https://www.openservicebrokerapi.org/" target="_blank" rel="noopener"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
+<p><code>OSBAPI</code>规范定义了高度抽象的应用平台与外部服务代理的交互逻辑，规范化外部服务的使用，主要包括:</p>
+<ul>
+<li>注册服务代理: 应用平台会获取服务代理提供的服务列表及相应规格，<code>OSBAPI</code>使用术语<code>Plan</code>来表示规格。</li>
+<li><code>Provision</code>服务实例: <code>OSBAPI</code>使用术语<code>Provision</code>来统一指定服务资源的供应。在外部服务具体实现上，可以是创建虚拟机实例，也可以是分配资源，也可以是创建SaaS帐号等等。</li>
+<li>绑定应用及服务实例: 当服务实例创建完成后，开发者想要其应用与该服务实例进行交互。从服务代理的角度来看，就是将应用与服务实例进行绑定。具体实现逻辑可以非常灵活，一般情况下，会生成访问该服务实例所需的新凭证。比如，生成数据库实例的IP、端口、用户名、密码等等。这些凭证会被返回给应用平台以提供给具体应用使用。</li>
+</ul>
+<p><code>OSBAPI</code>的具体工作模式如下图:</p>
+<img src="/images/2019-08-10/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2019/08/10/service-catalog/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/23/fabric/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2018/11/23/fabric/" class="post-title-link" itemprop="url">Python远程执行库Fabric简要介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-23 16:06:09" itemprop="dateCreated datePublished" datetime="2018-11-23T16:06:09+08:00">2018-11-23</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章&lt;&lt;<a href="/blog/2017/09/14/ansible/">Ansible入门</a>&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库<a href="http://www.fabfile.org/" target="_blank" rel="noopener">Fabric</a>。</p>
+<p>Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Python程序中直接<code>import</code>，并基于它实现远程命令执行。此外，它还提供了一个<code>fab</code>命令行工具，使用它可以更简单地编写我们需要执行的任务。这种模式被使用的更为普遍，我们主要来介绍以<code>fab</code>命令来使用fabric。</p>
+<p>需要注意的是，Fabric的2.x版本并不兼容1.x版本，而且2.x版本很大程度上边缘化了fab命令行工具，因而我们还是来介绍1.x版本。当前最新1.x版本为1.14, 文档地址为:<a href="http://docs.fabfile.org/en/1.14/。" target="_blank" rel="noopener">http://docs.fabfile.org/en/1.14/。</a></p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2018/11/23/fabric/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/19/npyscreen/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -851,182 +1027,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/01/11/meltdown-pcid/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/01/11/meltdown-pcid/" class="post-title-link" itemprop="url">虚拟机KPTI性能影响分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-01-11 03:52:34" itemprop="dateCreated datePublished" datetime="2018-01-11T03:52:34+08:00">2018-01-11</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
-                    <span itemprop="name">Virtualization</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p><code>Meltdown</code>漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级<code>Guest</code>是否有较大的性能影响, 是否应该升级<code>Guest</code>虚拟机等问题又困扰着云租户们。</p>
-<p>本文基于实例来分析<code>Guest</code>虚拟机的性能影响。</p>
-<p>首先来看<code>Meltdown</code>的原理。现代CPU架构在不同的安全等级运行指令。内核需要直接操作硬件，运行于最高权限，而几乎所有的应用程序都运行于各低权限上。用户态进程通过系统调用访问内核数据。一般情况下，CPU在执行时使用虚拟内存地址，内核使用页表来控制虚拟内存与物理内存的映射。用户态进程不能访问映射给内核的内存页。这些映射关系的计算较为耗时，因而CPU使用<code>TLB(Translation lookaside buffer)</code>来存储计算后的映射关系。从<code>TLB</code>中移除这些映射再重新计算并缓存会消耗性能，因而内核实现上会尽可能减少刷新TLB，于是内核将用户态和内核的数据都映射进用户态页表中。正常情况下，这不存在安全风险，页表的权限可以阻止用户态进程访问内核数据。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/01/11/meltdown-pcid/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/12/19/vsphere-api/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/12/19/vsphere-api/" class="post-title-link" itemprop="url">VMware vSphere平台下API操作虚拟交换机及虚拟接口</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-12-19 10:59:25" itemprop="dateCreated datePublished" datetime="2017-12-19T10:59:25+08:00">2017-12-19</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-02-13 20:26:37" itemprop="dateModified" datetime="2020-02-13T20:26:37+08:00">2020-02-13</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
-                    <span itemprop="name">Virtualization</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="http://www.just4coding.com/blog/2017/06/10/vmware-westeast/" target="_blank" rel="noopener">VMware vSphere东西向网络防护</a>&gt;&gt;介绍了在<code>VMware vSphere</code>平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。</p>
-<p>我们使用<code>VMware</code>官方的Python SDK来实现，SDK地址如下:</p>
-<ul>
-<li><a href="https://github.com/vmware/pyvmomi" target="_blank" rel="noopener">https://github.com/vmware/pyvmomi</a></li>
-</ul>
-<p>首先使用<code>pip</code>安装<code>pyvmomi</code>, 这里我们使用支持<code>vSphere6.5</code>的版本:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install pyvmomi==6.5.0.2017.5-1</span><br></pre></td></tr></table></figure>
-
-<p>下面介绍使用Python SDK的基本流程。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/12/19/vsphere-api/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1097,7 +1097,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">82</span>
+          <span class="site-state-item-count">84</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1110,7 +1110,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-count">17</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
