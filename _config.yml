@@ -106,5 +106,6 @@ theme: next
 ## Docs: https://hexo.io/docs/deployment.html
 deploy:
   type: 'git'
-  repo: https://github.com/flygoast/flygoast.github.io.git
+#  repo: https://github.com/flygoast/flygoast.github.io.git
+  repo: https://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@github.com/flygoast/flygoast.github.io.git
   branch: master
