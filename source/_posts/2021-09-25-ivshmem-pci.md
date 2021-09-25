@@ -178,7 +178,7 @@ static int ivpci_request_msix_vectors(struct ivpci_private *ivpci_dev, int n)
         ivpci_dev->msix_entries[i].entry = i;
     }
 
-    ret = pci_enable_msix(ivpci_dev->dev, ivpci_dev->msix_entries, n);
+    ret = pci_enable_msix_exact(ivpci_dev->dev, ivpci_dev->msix_entries, n);
     if (ret) {
         dev_err(&ivpci_dev->dev->dev, PFX "unable to enable msix: %d\n", ret);
         goto free_names;
