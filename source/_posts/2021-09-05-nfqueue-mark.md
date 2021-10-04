@@ -49,6 +49,8 @@ int nfq_set_verdict2(struct nfq_q_handle *  qh,
 
 如果我们的流量检测程序所设置的`mark`值设置为`kube-proxy`所依赖的`0x8000`位，就会导致数据包被丢弃。
 
+<!--more-->
+
 下面通过简化后的程序来验证。
 
 首先，编写一个内核模块将数据包通过`NFQUEUE`队列送往用户态:

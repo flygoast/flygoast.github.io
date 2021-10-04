@@ -34,6 +34,8 @@ Linux的`/sys/bus/pci/devices/`目录会列出所有的PCI设备，`ivshmem`设�
 
 有时候无法预留，不同虚拟机上的`ivshmem`地址可能不同。这种情况可以通过与宿主机上的应用约定好相应的固定内容做为`signature`写入共享内存头部，虚拟机应用读取共享内存头部的`signature`信息来识别相应设备。
 
+<!--more-->
+
 之前的文章[<<QEMU monitor机制实例介绍>>](/2017/11/19/qemu-monitor/)介绍了`QEMU`的监控机制。我们使用可以该机制动态添加`ivshmem`设备。
 
 首先，识别虚拟机当前的PCI设备:

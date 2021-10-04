@@ -19,6 +19,8 @@ description:
 
 要使用中断机制，用户态程序是无能为力的，需要编写相应的`PCI`驱动来实现。本文通过一个简单的`PCI`驱动示例来说明`ivshmem-doorbell`的`MSI-X`中断机制的使用。
 
+<!--more-->
+
 `ivpci.c`代码如下:
 
 ```c
