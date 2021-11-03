@@ -5,7 +5,7 @@ tags:
 - network
 - kubernetes
 - kernel
-categories: Network
+categories: Kubernetes
 description:
 ---
 在Kubernetes节点上安装我们的流量检测模块之后所有的`Pod`会断网。经分析是由于流量检测模块的`NFQUEUE`机制与`kube-proxy`使用的`iptables`的`mark`机制冲突的原因。

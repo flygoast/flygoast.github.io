@@ -6,7 +6,7 @@ tags:
 - kubernetes
 - kernel
 - nfqueue
-categories: Network
+categories: Kubernetes
 description:
 ---
 之前的文章<<[Kubernetes环境中NFQUEUE与MARK机制冲突](/2021/09/05/nfqueue-mark/)>>介绍了我们使用`NFQUEUE`机制将数据包送往用户态进行安全检测。之前程序逻辑是将来自虚拟网络设备的数据包直接放行。而当把逻辑修改为对`POD`虚拟网卡的流量也进行检测时，`POD`网络就无法连通了。排查发现数据包送上用户态之后，并没有收到用户态程序的裁决信息。
