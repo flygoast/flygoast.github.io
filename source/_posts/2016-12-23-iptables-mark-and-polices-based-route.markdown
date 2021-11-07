@@ -3,9 +3,12 @@ layout: post
 title: "基于IPTABLES MARK机制实现策略路由"
 date: 2016-12-23 17:16:12 +0800
 comments: true
-categories: OpenStack
+tags:
+- Iptables
+- Mark
+categories: Network
 ---
-MARK是IPTABLES的一种规则目标，它用于给匹配了相应规则的数据包设置标签。它只能用于mangle表中。然而，标签并不是设置于数据包内容中，而是设置在内核中数据包的载体上。如果需要在数据包内容中设置标签，可以使用TOS规则目标，它可以修改IP数据包头的TOS值。
+MARK是IPTABLES的一种规则目标，它用于给匹配了相应规则的数据包设置标签。然而，标签并不是设置于数据包内容中，而是设置在内核中数据包的载体上。如果需要在数据包内容中设置标签，可以使用TOS规则目标，它可以修改IP数据包头的TOS值。
 
 MARK是一个32位整数值, MARK目标可以使用3种方法来设置mark值:
 
