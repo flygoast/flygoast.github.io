@@ -194,6 +194,20 @@ listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
 * 使用`OSPF`的`ECMP`来配置多主的`Director`集群(可以参考之前的文章[<<基于Cumulus VX实验ECMP+OSPF负载均衡>>](/2020/05/05/emcp-ospf-cumulus/))
 * 省略`LVS`的`Director`层，直接使用`OSPF`的`ECMP`将流量分发到`worker`节点的`VIP`
 
+另外, 根据之前网上的[这篇文章](https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/), `worker`节点可以不设置`VIP`，因为`VIP`并不需要由用户态程序来接收流量，而是直接由`iptables`来进行数据包转换。
+
+在大多数场景下这是正确的。但是如果直接从`worker`节点上通过`VIP`访问该服务时，如果`LVS`把数据包返回到自身这台`RealServer`时, 由于数据包源`IP`就是本机`IP`, 这条规则无法匹配:
+```
+-A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment "default/whoami:web external IP" -m tcp --dport 80 -m physdev ! --physdev-is-in -m addrtype ! --src-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU
+```
+而因为本机没有配置`VIP`, 下面这条规则的`-m addrtype --dst-type LOCAL`也无法匹配:
+
+```
+-A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment "default/whoami:web external IP" -m tcp --dport 80 -m addrtype --dst-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU
+```
+因而数据包最终被丢弃。
+
 参考:
 * https://medium.com/swlh/kubernetes-external-ip-service-type-5e5e9ad62fcd
 * http://www.361way.com/lvs-dr-theory/5195.html
+* https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/
