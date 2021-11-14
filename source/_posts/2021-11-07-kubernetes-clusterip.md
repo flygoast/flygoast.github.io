@@ -163,7 +163,7 @@ User-Agent: curl/7.35.0
 Accept: */*
 ```
 
-`kube-proxy`服务会监听`kube-apiserver`中的`service`和`endpoint`的变化来配置`service`和`endpoint`的对应关系。当前具体的转发实现方案有`userspace`, `iptables`, `ipvs`几种，默认实现为`iptables`。本文来分析`iptables`实现方案下，`POD`访问`ClusterIP`的数据包路径。数据包整体通过`iptables`链的过程，可以参考之前的文章[<<IPTABLES机制分析>>](2016/12/11/iptables/)。
+`kube-proxy`服务会监听`kube-apiserver`中的`service`和`endpoint`的变化来配置`service`和`endpoint`的对应关系。当前具体的转发实现方案有`userspace`, `iptables`, `ipvs`几种，默认实现为`iptables`。本文来分析`iptables`实现方案下，`POD`访问`ClusterIP`的数据包路径。数据包整体通过`iptables`链的过程，可以参考之前的文章[<<IPTABLES机制分析>>](/2016/12/11/iptables/)。
 
 要注意的是，`kube-proxy`的`iptables`规则都是添加在`init_net`的，所以数据包从`pod`一端的`veth peer`发出，然后从宿主机这端`veth peer`进入`init_net`时，才会由`nat`表的`PREROUTING`链处理, 跳转至`KUBE-SERVICES`链:
 ```bash
