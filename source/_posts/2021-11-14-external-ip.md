@@ -81,7 +81,9 @@ whoami       ClusterIP   10.32.0.60   10.240.0.201   80/TCP    30m   app=whoami
 -A KUBE-SERVICES -d 10.32.0.1/32 -p tcp -m comment --comment "default/kubernetes:https cluster IP" -m tcp --dport 443 -j KUBE-SVC-NPX46M4PTMTKRN6Y
 -A KUBE-SERVICES -m comment --comment "kubernetes service nodeports; NOTE: this must be the last rule in this chain" -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS
 ```
-当数据包目的地址为`10.240.0.201:80`时，跳转到`KUBE-SVC-*`链，从而分发到相应的`pod`中。由于在规则中指定了`-m addrtype --dst-type LOCAL`, 我们需要在节点上添加上这个`VIP`:
+当数据包目的地址为`10.240.0.201:80`时，跳转到`KUBE-SVC-*`链，从而分发到相应的`pod`中。
+
+我们在节点上添加上这个`VIP`:
 ```bash
 [root@node1 ~]# ip addr add 10.240.0.201/32 dev lo
 [root@node1 ~]# ip addr show lo
@@ -189,25 +191,139 @@ listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
     link/ether 08:00:27:23:1b:95 brd ff:ff:ff:ff:ff:ff
 ```
 
+
+根据之前网上的[这篇文章](https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/), `worker`节点可以不设置`VIP`，因为`VIP`并不需要由用户态程序来接收流量，而是直接由`iptables`来进行数据包转换。
+
+在大多数场景下这是正确的。但是如果需要直接从`worker`节点上通过`VIP`访问该服务时就需要在`worker`节点上配置`VIP`了。数据包在从`worker`节点发送出去时，会经由`nat:OUTPUT`和`nat:POSTROUTING`来处理。`iptables`的`NAT`实现是基于`conntrack`来实现的，发出时系统会建立`conntrack`条目。`iptables`的`nat:PREROUTING`和`nat:POSTROUTING`的处理都会调用`nf_nat_ipv4_fn`函数。当数据包由`LVS Director`把数据包返回到自身这台`RealServer`时, `nat:PREROUTING`阶段调用`nf_nat_ipv4_fn`:
+```c
+    switch (ctinfo) {
+    case IP_CT_RELATED:
+    case IP_CT_RELATED_REPLY:
+        if (ip_hdr(skb)->protocol == IPPROTO_ICMP) {
+            if (!nf_nat_icmp_reply_translation(skb, ct, ctinfo,
+                               ops->hooknum))
+                return NF_DROP;
+            else
+                return NF_ACCEPT;
+        }
+        /* Fall thru... (Only ICMPs can be IP_CT_IS_REPLY) */
+    case IP_CT_NEW:
+        /* Seen it before?  This can happen for loopback, retrans,
+         * or local packets.
+         */
+        if (!nf_nat_initialized(ct, maniptype)) {
+            unsigned int ret;
+
+            ret = do_chain(ops, skb, state, ct);
+            if (ret != NF_ACCEPT)
+                return ret;
+
+            if (nf_nat_initialized(ct, HOOK2MANIP(ops->hooknum)))
+                break;
+
+            ret = nf_nat_alloc_null_binding(ct, ops->hooknum);
+            if (ret != NF_ACCEPT)
+                return ret;
+        } else {
+            pr_debug("Already setup manip %s for ct %p\n",
+                 maniptype == NF_NAT_MANIP_SRC ? "SRC" : "DST",
+                 ct);
+            if (nf_nat_oif_changed(ops->hooknum, ctinfo, nat,
+                           state->out))
+                goto oif_changed;
+        }
+        break;
+
+    default:
+        /* ESTABLISHED */
+        NF_CT_ASSERT(ctinfo == IP_CT_ESTABLISHED ||
+                 ctinfo == IP_CT_ESTABLISHED_REPLY);
+        if (nf_nat_oif_changed(ops->hooknum, ctinfo, nat, state->out))
+            goto oif_changed;
+    }
+```
+
+这时`nf_nat_initialized`会返回`0`, 因而跳过`do_chain`的调用，也就不再会执行`nat:PREROUTING`所设置的链和规则，放行通过进入到路由决策阶段。但由于数据包的源`IP`是本机地址，默认情况下Linux路由实现不允许非`loopback`设备之外的设备所进入的数据包源地址为本机地址, 因而该数据包会被丢弃。
+
+但内核提供了参数`accept_local`可以允许这种包通过:
+```plain
+accept_local - BOOLEAN
+    Accept packets with local source addresses. In combination
+    with suitable routing, this can be used to direct packets
+    between two local interfaces over the wire and have them
+    accepted properly.
+
+    rp_filter must be set to a non-zero value in order for
+    accept_local to have an effect.
+
+
+rp_filter - INTEGER
+    0 - No source validation.
+    1 - Strict mode as defined in RFC3704 Strict Reverse Path
+        Each incoming packet is tested against the FIB and if the interface
+        is not the best reverse path the packet check will fail.
+        By default failed packets are discarded.
+    2 - Loose mode as defined in RFC3704 Loose Reverse Path
+        Each incoming packet's source address is also tested against the FIB
+        and if the source address is not reachable via any interface
+        the packet check will fail.
+
+    Current recommended practice in RFC3704 is to enable strict mode
+    to prevent IP spoofing from DDos attacks. If using asymmetric routing
+    or other complicated routing, then loose mode is recommended.
+
+    The max value from conf/{all,interface}/rp_filter is used
+    when doing source validation on the {interface}.
+
+    Default value is 0. Note that some distributions enable it
+    in startup scripts.
+```
+
+修改相应参数放行数据包:
+```bash
+sysctl -w net.ipv4.conf.eth1.rp_filter=1
+sysctl -w net.ipv4.conf.eth1.accept_local=1
+```
+
+再次从`worker`节点访问`VIP`, 同时开启`tcpdump`抓包分析:
+```bash
+[root@node1 ~]# curl http://10.240.0.201
+curl: (7) Failed connect to 10.240.0.201:80; No route to host
+```
+
+可以看到返回路由错误，而从抓包结果看，我们放行数据包后，根据目的地址，数据包会再被发送出去，从而形成环路。直到`IP`包的`ttl`减为`0`返回了路由错误。
+
+```bash
+[root@node1 ~]# tcpdump -ieth1 tcp port 80 -nn -e -v
+tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
+02:57:18.801428 08:00:27:3a:25:df > 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0x173c (incorrect -> 0xc00b), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:18.801803 08:00:27:48:90:6c > 08:00:27:3a:25:df, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:18.814275 08:00:27:3a:25:df > 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 63, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:18.814579 08:00:27:48:90:6c > 08:00:27:3a:25:df, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 63, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+
+...
+
+02:57:19.054672 08:00:27:3a:25:df > 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 2, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:19.054982 08:00:27:48:90:6c > 08:00:27:3a:25:df, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 2, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:19.057681 08:00:27:3a:25:df > 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 1, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+02:57:19.057978 08:00:27:48:90:6c > 08:00:27:3a:25:df, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 1, id 48372, offset 0, flags [DF], proto TCP (6), length 60)
+    10.240.0.101.39700 > 10.240.0.201.80: Flags [S], cksum 0xc00b (correct), seq 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0
+```
+
 本文只是简单实验可行性。如果用于生产环境，需要额外的方案考虑，比如:
 * `LVS`本身可以配合`keepalived`使用主备模式保证`Director`的HA
 * 使用`OSPF`的`ECMP`来配置多主的`Director`集群(可以参考之前的文章[<<基于Cumulus VX实验ECMP+OSPF负载均衡>>](/2020/05/05/emcp-ospf-cumulus/))
 * 省略`LVS`的`Director`层，直接使用`OSPF`的`ECMP`将流量分发到`worker`节点的`VIP`
 
-另外, 根据之前网上的[这篇文章](https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/), `worker`节点可以不设置`VIP`，因为`VIP`并不需要由用户态程序来接收流量，而是直接由`iptables`来进行数据包转换。
-
-在大多数场景下这是正确的。但是如果直接从`worker`节点上通过`VIP`访问该服务时，如果`LVS`把数据包返回到自身这台`RealServer`时, 由于数据包源`IP`就是本机`IP`, 这条规则无法匹配:
-```
--A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment "default/whoami:web external IP" -m tcp --dport 80 -m physdev ! --physdev-is-in -m addrtype ! --src-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU
-```
-而因为本机没有配置`VIP`, 下面这条规则的`-m addrtype --dst-type LOCAL`也无法匹配:
-
-```
--A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment "default/whoami:web external IP" -m tcp --dport 80 -m addrtype --dst-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU
-```
-因而数据包最终被丢弃。
-
 参考:
 * https://medium.com/swlh/kubernetes-external-ip-service-type-5e5e9ad62fcd
 * http://www.361way.com/lvs-dr-theory/5195.html
 * https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/
+* https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt
