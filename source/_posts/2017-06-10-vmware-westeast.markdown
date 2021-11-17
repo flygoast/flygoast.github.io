@@ -103,7 +103,7 @@ ip link set up br100
 ip link set up br200
 ```
 查看OVS bridge结构:
-```plain
+```bash
 [root@localhost ~]# ovs-vsctl show
 67c86a45-0c76-4ab9-9f8e-de37545f57fe
     Bridge "ovsbr1" 
@@ -118,21 +118,25 @@ ip link set up br200
             Interface "o200" 
     ovs_version: “2.4.0" 
 ```
+
 查看Linux Bridge结构:
-```plain
+
+```bash
 [root@localhost ~]# brctl show
 bridge name    bridge id        STP enabled    interfaces
 br100        8000.000c29c2a2e2    no        ens192.100
                                             r100
 br200        8000.000c29c2a2e2    no        ens192.200
                                             r200
-```                                            
+```
+
 调整后结构如图:
 
 {% img /images/2017-06-10/6.png %}
 
 添加访问控制规则, 并查看:
-```plain
+
+```bash
 [root@localhost ~]# iptables -A FORWARD -p icmp -m physdev --physdev-is-bridged --physdev-out ens192.200 -s 10.187.160.40/32 -d 10.187.160.41/32 -j DROP
 [root@localhost ~]# iptables -nL
 Chain INPUT (policy ACCEPT)
@@ -145,10 +149,13 @@ DROP       icmp --  10.187.160.40        10.187.160.41        PHYSDEV match --ph
 Chain OUTPUT (policy ACCEPT)
 target     prot opt source               destination
 ```
+
 接着再清空规则:
+
 ```bash
 iptables -F
 ```
+
 从结果上可以看到, 添加规则时数据包被丢弃了，清空规则后访问恢复:
 
 {% img /images/2017-06-10/7.png %}
