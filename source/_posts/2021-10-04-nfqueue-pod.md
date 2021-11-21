@@ -2,10 +2,10 @@
 title: Kubernetes POD环境的NFQUEUE机制
 date: 2021-10-04 21:01:06
 tags:
-- network
-- kubernetes
-- kernel
-- nfqueue
+- Network
+- Kubernetes
+- Kernel
+- Nfqueue
 categories: Kubernetes
 description:
 ---
