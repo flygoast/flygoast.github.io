@@ -2,8 +2,8 @@
 title: 基于LVS DR模式的Kubernetes Service External-IP实现
 date: 2021-11-14 22:34:27
 tags:
-- kubernetes
-- externalIP
+- Kubernetes
+- ExternalIP
 categories: Kubernetes
 ---
 之前的文章[<<Kubernetes Service网络通信路径>>](/2021/11/07/kubernetes-clusterip/)介绍了`kubernetes`的几种`Service`。如果要暴露服务给`kubernetes`集群外使用，可以选择`NodePort`和`LoadBalancer`。但`LoadBalancer`现在主要在各大公有云厂商上能够原生支持。而使用`NodePort`暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如`mysql`的`3306`端口。

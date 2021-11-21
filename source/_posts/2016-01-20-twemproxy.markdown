@@ -3,7 +3,7 @@ layout: post
 title: "twemproxy实现分析"
 date: 2016-01-20 00:36:43 +0800
 comments: true
-categories: twemproxy
+categories: Twemproxy
 ---
 twemproxy(https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。
 

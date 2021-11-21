@@ -2,8 +2,8 @@
 title: Linux内核TCP网络连接关联进程
 date: 2021-07-21 19:02:48
 tags:
-- network
-- kernel
+- Network
+- Kernel
 categories: Network
 description:
 ---

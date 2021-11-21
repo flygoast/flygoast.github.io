@@ -2,9 +2,9 @@
 title: QEMU虚拟机内识别ivshmem设备
 date: 2021-09-12 12:56:34
 tags:
-- virtualization
-- ivshmem
-- qemu
+- Virtualization
+- Ivshmem
+- Qemu
 categories: Virtualization
 description:
 ---

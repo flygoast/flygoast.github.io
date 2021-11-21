@@ -3,7 +3,7 @@ layout: post
 title: "XenServer编译内核模块"
 date: 2016-11-06 17:25:14 +0800
 comments: true
-categories: xen
+categories: Xen
 ---
 Citrix提供了DDK(Driver Development Kit)来支持在XenServer中要构建自定义的内核模块或硬件驱动。DDK是一个OVA格式的虚拟机镜像，包含了内核头文件和编译器等开发工具。
 

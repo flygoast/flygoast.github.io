@@ -3,7 +3,11 @@ layout: post
 title: "LVS FULLNAT模式下客户端真实地址的传递"
 date: 2015-11-16 18:01:03 +0800
 comments: true
-categories: kernel
+tags:
+- Kernel
+- LVS
+- IPVS
+categories: Kernel
 ---
 在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。
 

@@ -2,7 +2,7 @@
 title: Security Boot开启下CentOS8内核模块签名及加载
 date: 2021-10-17 23:59:32
 tags:
-- kernel
+- Kernel
 categories: Kernel
 ---
 `Security Boot`机制是`UEFI`的一个特性，用于确保固件所加载的代码是可信的。它通过将`可信根`存放在固件中，在加载阶段校验所加载的二进制可信。当前实现主要是基于`X.509`证书的公私钥体系。固件使用可信的公钥来校验所加载的`bootloader`, `bootloader`再来校验内核或者第二阶段的`bootloader`, 内核校验所加载的内核模块，这样一级级完成校验。

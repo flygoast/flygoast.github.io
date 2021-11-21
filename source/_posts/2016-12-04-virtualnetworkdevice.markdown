@@ -4,9 +4,9 @@ title: "Linux虚拟网络设备"
 date: 2016-12-04 18:21:36 +0800
 comments: true
 tags:
-- interface
-- network
-- tap
+- Interface
+- Network
+- Tap
 categories: Network
 ---
 更新(2020-05-06):

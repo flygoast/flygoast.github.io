@@ -4,7 +4,7 @@ date: 2021-11-21 14:04:59
 tags:
 - Kubernetes
 - ExternalIP
-- Loadbalancer
+- LoadBalance
 categories: Kubernetes
 ---
 `Kubernetes`没有给本地环境(`Bare-metal`, `On-Premise`)提供负载均衡实现，`LoadBalancer`类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建`LoadBalancer`类型的服务后，服务的`EXTERNAL-IP`会一直处于`<pending>`状态。这是因为在本地环境没有相应的`controller`来处理这些`LoadBalancer`服务。比如:

@@ -5,7 +5,7 @@ tags:
 - EMCP
 - OSPF
 - Cumulus VX
-- Load Balance
+- LoadBalance
 categories: Network
 ---
 互联网服务为了保证高可用和可扩展性，在流量入口一般都需要部署负载均衡设备。负载均衡设备可分为4层(传输层)和7层(应用层)。L4负载均衡设备之前较为流行的方案是`LVS`，后来各大厂商又基于`DPDK`或`XDP`/`eBPF`等技术实现了性能更高的一些方案, 如:

@@ -2,12 +2,11 @@
 title: ivshmem PCI设备中断机制驱动示例
 date: 2021-09-25 19:00:59
 tags:
-- virtualization
-- ivshmem
-- qemu
-- pci
+- Virtualization
+- Ivshmem
+- Qemu
+- PCI
 categories: Virtualization
-description:
 ---
 之前的文章[<<QEMU虚拟机内识别ivshmem设备>>](/2021/09/12/qemu-ivshmem/)介绍了在虚拟机内通过用户态程序访问`ivshmem`设备的共享内存。在虚拟机之间或者宿主机与虚拟机之间通过共享内存进行通信的情形下，共享内存的两端必须依赖轮询方式来实现通知机制。这种方式是`ivshmem`提供的`ivshmem-plain`的使用方式。除此之外，`ivshmem`还提供了`ivshmem-doorbell`的使用方式，它提供了基于中断的通知机制。
 
