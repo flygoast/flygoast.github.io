@@ -448,3 +448,4 @@ single-request-reopen (since glibc 2.9)
 * http://cxd2014.github.io/2017/08/15/connection-tracking-system/
 * https://zhuanlan.zhihu.com/p/373060740
 * https://www.codedump.info/post/20200128-systemtap-by-example/
+* https://thermalcircle.de/doku.php?id=blog:linux:connection_tracking_1_modules_and_hooks
