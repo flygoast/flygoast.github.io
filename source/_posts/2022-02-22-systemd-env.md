@@ -4,7 +4,7 @@ date: 2022-02-22 18:06:49
 tags:
 - Docker
 - Systemd
-categories: Misc
+categories: MISC
 description:
 ---
 我们的业务`Docker`镜像是在[centos/systemd](https://hub.docker.com/r/centos/systemd)镜像基础上构建的，业务进程由`systemd`来启动。最近需要对业务逻辑进行改造，需要识别传入的环境变量。看上去是相当简单的改动，但在我们的进程中加入读取环境变量的逻辑却发现读取不到传入的变量内容，最终定位原因是在`systemd`的环境变量的处理。
