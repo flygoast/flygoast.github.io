@@ -164,6 +164,95 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/19/ebpf-bcc/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/03/19/ebpf-bcc/" class="post-title-link" itemprop="url">使用eBPF和BCC调查创建文件的进程</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-03-19 15:49:15 / 修改时间：21:06:22" itemprop="dateCreated datePublished" datetime="2022-03-19T15:49:15+08:00">2022-03-19</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在我们的一个<code>CentOS 7.8</code>系统上，<code>/tmp</code>目录下偶尔会有一些随机名称的文件产生。业务比较久远，已经不清楚这些文件的来源，需要确定是哪个进程在创建它们。</p>
+<p><code>Linux</code>以<code>VFS: Virtual File System</code>通用文件模型的方式在物理存储介质上的文件系统和用户接口之间建立一个虚拟文件系统的抽象层。其中最重要的两个结构是:</p>
+<ul>
+<li><code>inode</code>: 存放文件的一般信息，每个<code>inode</code>结构都有自己的编号，这个号码唯一标识了文件系统中的文件。</li>
+<li><code>dentry</code>: 存放文件名称信息，以及与对应文件进行链接的有关信息。</li>
+</ul>
+<p><code>VFS</code>创建文件的最主要的步骤是:</p>
+<ol>
+<li>为要创建的文件创建一个<code>dentry</code>结构</li>
+<li>为要创建的文件创建一个<code>inode</code>结构并分配<code>inode</code>编号</li>
+<li>将<code>inode</code>编号和文件名映射关系保存在所分配的<code>dentry</code>结构中</li>
+<li>将<code>dentry</code>写入到父目录的数据区</li>
+</ol>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/03/19/ebpf-bcc/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/02/socks-dante/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -959,99 +1048,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/04/nfqueue-pod/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/10/04/nfqueue-pod/" class="post-title-link" itemprop="url">Kubernetes POD环境的NFQUEUE机制</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-10-04 21:01:06" itemprop="dateCreated datePublished" datetime="2021-10-04T21:01:06+08:00">2021-10-04</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 14:32:03" itemprop="dateModified" datetime="2021-11-21T14:32:03+08:00">2021-11-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="/2021/09/05/nfqueue-mark/">Kubernetes环境中NFQUEUE与MARK机制冲突</a>&gt;&gt;介绍了我们使用<code>NFQUEUE</code>机制将数据包送往用户态进行安全检测。之前程序逻辑是将来自虚拟网络设备的数据包直接放行。而当把逻辑修改为对<code>POD</code>虚拟网卡的流量也进行检测时，<code>POD</code>网络就无法连通了。排查发现数据包送上用户态之后，并没有收到用户态程序的裁决信息。</p>
-<p>在对<code>NFQUEUE</code>的源码实现了进行草略分析后,发现<code>NFQUEUE</code>机制是支持<code>network namespace</code>的。<code>POD</code>虚拟网络设备的数据包送往用户态的队列是在<code>POD</code>独有的<code>network namespace</code>中创建的，和默认的<code>network namespace</code>:<code>init_net</code>中的队列是完全独立的。我们的用户态程序运行是在<code>init_net</code>中运行，而<code>POD</code>的<code>network namespace</code>中并没有用户态程序在读取队列获取数据包，因而数据包会被丢弃。</p>
-<p>和之前文章同样，通过简化程序来进行实验。实验的<code>Kubernetes</code>环境有3个<code>node</code>, 容器组网使用<code>flannel</code>。</p>
-<p>我们创建了两个<code>busybox</code>的<code>pod</code>：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">kubectl run busybox1 --image=busybox --<span class="built_in">command</span> -- sleep 3600</span><br><span class="line">kubectl run busybox2 --image=busybox --<span class="built_in">command</span> -- sleep 3600</span><br></pre></td></tr></table></figure>
-
-<p>他们分别位于<code>node1</code>和<code>node2</code>上:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl get pods -o wide</span><br><span class="line">NAME                        READY   STATUS    RESTARTS   AGE   IP             NODE    NOMINATED NODE   READINESS GATES</span><br><span class="line">busybox1-77bb94599d-x89z4   1&#x2F;1     Running   12         22h   10.230.96.4    node1   &lt;none&gt;           &lt;none&gt;</span><br><span class="line">busybox2-7d76b658b6-h5r2k   1&#x2F;1     Running   10         22h   10.230.12.2    node2   &lt;none&gt;           &lt;none&gt;</span><br></pre></td></tr></table></figure>
-
-<p>我们从<code>busybox2</code>中访问<code>busybox1</code>，网络连通正常:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl exec -ti busybox2-7d76b658b6-h5r2k -- ping -c2 10.230.96.4</span><br><span class="line">PING 10.230.96.4 (10.230.96.4): 56 data bytes</span><br><span class="line">64 bytes from 10.230.96.4: seq&#x3D;0 ttl&#x3D;62 time&#x3D;1.076 ms</span><br><span class="line">64 bytes from 10.230.96.4: seq&#x3D;1 ttl&#x3D;62 time&#x3D;0.770 ms</span><br><span class="line"></span><br><span class="line">--- 10.230.96.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 packets received, 0% packet loss</span><br><span class="line">round-trip min&#x2F;avg&#x2F;max &#x3D; 0.770&#x2F;0.923&#x2F;1.076 ms</span><br></pre></td></tr></table></figure>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/10/04/nfqueue-pod/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1122,7 +1118,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">108</span>
+          <span class="site-state-item-count">109</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
