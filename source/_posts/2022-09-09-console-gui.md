@@ -57,7 +57,7 @@ getty@.service                                enabled
 util-linux-2.23.2-63.el7.x86_64
 ```
 
-之前的文章<<TUI库newt和snack简要介绍>>介绍过`Redhat`的`TUI`库`newt`, 这里基于`newt`实现一个简单的登录界面，`tuilogin.c`:
+之前的文章<<[TUI库newt和snack简要介绍](/2018/09/07/newt/)>>介绍过`Redhat`的`TUI`库`newt`, 这里基于`newt`实现一个简单的登录界面，`tuilogin.c`:
 ```c
 #include <stdio.h>
 #include <stdlib.h>
