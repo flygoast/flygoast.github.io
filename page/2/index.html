@@ -164,6 +164,97 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/20/fix-exit/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/04/20/fix-exit/" class="post-title-link" itemprop="url">Linux内核模块无法卸载分析与修复</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-04-20 23:56:33" itemprop="dateCreated datePublished" datetime="2022-04-20T23:56:33+08:00">2022-04-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-04-22 09:39:41" itemprop="dateModified" datetime="2022-04-22T09:39:41+08:00">2022-04-22</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>近期遇到一个服务器上内核模块无法卸载的问题。执行<code>rmmod</code>命令返回错误信息:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Device or resource busy</span><br></pre></td></tr></table></figure>
+
+<p>通过Google搜索，发现其他人也遇到过类似的问题，原因基本指向是编译内核模块的<code>gcc</code>版本和编译内核的<code>gcc</code>版本不一致。</p>
+<ul>
+<li><a href="https://goodcommand.readthedocs.io/zh_CN/latest/bs/rmmod_device_or_resource_busy.html" target="_blank" rel="noopener">https://goodcommand.readthedocs.io/zh_CN/latest/bs/rmmod_device_or_resource_busy.html</a></li>
+<li><a href="https://stackoverflow.com/questions/17251822/not-able-to-remove-a-loadable-kernel-module" target="_blank" rel="noopener">https://stackoverflow.com/questions/17251822/not-able-to-remove-a-loadable-kernel-module</a></li>
+</ul>
+<p>于是开始检查我们的环境。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/04/20/fix-exit/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/03/seccomp/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -940,105 +1031,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/07/kubernetes-clusterip/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/11/07/kubernetes-clusterip/" class="post-title-link" itemprop="url">Kubernetes Service网络通信分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-11-07 23:26:39" itemprop="dateCreated datePublished" datetime="2021-11-07T23:26:39+08:00">2021-11-07</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-15 01:11:58" itemprop="dateModified" datetime="2021-11-15T01:11:58+08:00">2021-11-15</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章<a href="/2020/07/25/kubernetes-cni/">&lt;&lt;Kubernetes网络和CNI&gt;&gt;</a>和<a href="/2021/11/03/flannel/">&lt;&lt;Kubernetes flannel网络分析&gt;&gt;</a>介绍了Kubernetes集群的<code>pod</code>网络的通信过程。</p>
-<p><code>pod</code>本质上非固定的，经常发生变化，而<code>pod IP</code>在<code>pod</code>销毁和创建的时候会发生变更，因而不能直接对外提供服务。<code>Kubernetes</code>通过<code>service</code>资源来对外提供服务，<code>service</code>的<code>IP</code>是固定的，它自动绑定一组<code>pod</code>并根据不同实现将流量转发到这些<code>pod</code>中, 并在流量转发的过程中实现负载均衡(load balance)。</p>
-<p>在<code>Kubernetes</code>的<code>node</code>节点上的主要组件有<code>kube-proxy</code>和<code>kubelet</code>, <code>kubelet</code>会调用相关的<code>CNI</code>实现完成<code>POD</code>网络的通信。而<code>kube-proxy</code>则负责上述的<code>service</code>与<code>POD</code>之间的流量转发。实际上，在之前文章的实验环境里，即使把<code>node</code>节点上的<code>kube-proxy</code>组件都停止，也不会影响<code>pod</code>网络通信。</p>
-<p><code>service</code>本质就是将一组<code>pod</code>通过固定<code>IP</code>暴露给使用者，可以由<code>ip:port:protocol</code>来标识。</p>
-<p><code>service</code>主要以下几种类型:</p>
-<ul>
-<li><p><code>ClusterIP</code>: 用<code>Kubernetes</code>集群内部<code>IP</code>暴露服务，也就是说只有在<code>Kubernetes</code>集群内才可以访问这个<code>service</code>。这是默认的<code>service</code>类型。<code>ClusterIP</code>的范围是在<code>kube-apiserver</code>启动时通过<code>-service-cluster-ip-range</code>参数指定的。这些<code>IP</code>只能在<code>kubernetes</code>集群内进行访问。<code>service</code>的相关信息是在<code>yaml</code>文件中定义的，最终暴露的信息可表示为:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>NodePort</code>: 在<code>Kubernetes</code>集群的所有<code>node</code>节点上使用相同的固定<code>port</code>来暴露服务。这种类型会自动创建<code>ClusterIP</code>类型的服务，<code>NodePort</code>的<code>service</code>会将流量转发到<code>ClusterIP</code>类型的服务。服务的使用者可以使用<code>NodeIP:NodePort</code>来访问该服务。这种类型服务暴露的信息可以表示为:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&lt;NodeIP&gt;:spec.ports[*].nodePort:spec.ports[*].protocol</span><br><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>LoadBalancer</code>: 是通过<code>kubernetes</code>集群外部设施所提供的<code>IP</code>来暴露服务。<code>NodePort</code>和<code>ClusterIP</code>类型的服务会被自动创建。不同的<code>LoadBalancer</code>负责实现外部<code>IP:port</code>与<code>NodePort</code>服务的映射。这种类型暴露的信息可以表示为:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">spec.loadBalancerIp:spec.ports[*].port:spec.ports[*].protocol</span><br><span class="line">&lt;NodeIP&gt;:spec.ports[*].nodePort:spec.ports[*].protocol</span><br><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/11/07/kubernetes-clusterip/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1109,7 +1101,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">112</span>
+          <span class="site-state-item-count">113</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

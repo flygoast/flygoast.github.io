@@ -164,6 +164,99 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/opentracker/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2014/12/03/opentracker/" class="post-title-link" itemprop="url">Opentracker扩展</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 11:27:11" itemprop="dateCreated datePublished" datetime="2014-12-03T11:27:11+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OPENTRACKER/" itemprop="url" rel="index">
+                    <span itemprop="name">OPENTRACKER</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><a href="http://erdgeist.org/arts/software/opentracker" target="_blank" rel="noopener">opentracker</a>是一个开源P2P tracker服务器.之前我们系统中主要使用的是PHP+MYSQL实现的peertracker。随着业务增长，peertracker的性能已经不能满足系统需要。因而我们决定引入性能更好的opentracker。不过, opentracker在功能上并不能完全满足我们的需求，因而我对它进行了一些扩展。</p>
+<ul>
+<li>UDP单播同步数据</li>
+</ul>
+<p>opentracker本身支持cluster模式。cluster内各节点之间会同步数据。这样可以通过添加节点提高整体的集群性能。然而，opentracker原生通过UDP多播进行数据同步。我们不具备多播IP，因而开发了单播模式进行同步。实现非常简单，就是依次向cluster内其他节点发送数据。缺点是当节点数较多时，会影响性能。</p>
+<ul>
+<li>持久化支持</li>
+</ul>
+<p>opentracker将torrent和peer信息保存在内存中。当opentracker重启时，所有的torrent和peer信息就都丢失了。这会导致我们的系统一段时间内不能进行正常的P2P传输。因而我扩展了持久化功能。opentracker架构上通过多个不同的线程执行不同的任务。我添加了一个线程，周期性地将内存中的torrent和peer信息保存到磁盘文件中。这个线程很像Redis中进行数据dump的进程。磁盘文件格式定义为ODB(opentracker database)，它主要借鉴自Redis的RDB格式。目前，没有处理IPV6格式，因而只支持IPV4。<br>我还提供了一个工具支持流式地对odb文件进行处理。</p>
+<p>具体用法请参考: <code>perldoc OdbParser</code></p>
+<p>格式规范:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">----------------------------------- # ODB is a binary format. There are no new lines or spaces in the file.</span><br><span class="line">4f 50 45 4e 54 52 41 43 4b 45 52    # Magic String &quot;OPENTRACKER&quot;</span><br><span class="line">30 30 30 33                         # ODB Version Number in ASCII characters. In this case, version &#x3D; &quot;0001&quot; &#x3D; 1</span><br><span class="line">-----------------------------------</span><br><span class="line">FE                                  # FE &#x3D; Opcode that indicates following is a torrent information.</span><br><span class="line">----------------------------------- # Torrent information starts from here.</span><br><span class="line">00 02 2e 33 01 c4 a1 df bb 82</span><br><span class="line">1f 51 0f b5 b6 02 6f 93 6e 9f       # 20 byte info_hash of torrent</span><br><span class="line">-----------------------------------</span><br><span class="line">e2 37 59 01 00 00 00 00             # Last access time in minutes since UNIX epoch, 8 bytes.</span><br><span class="line">                                    # At present, when loading ODB file, just use current clock, ignore this.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Seeding peer count for current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Total peer count for current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Download times of files in current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">01 00 00 00                         # Peer count in current peer, 4 bytes integer in little endian.</span><br><span class="line">----------------------------------- # Peers information starts from here.</span><br><span class="line">7f 00 00 01                         # 4 bytes ip address in network byte order. In this case, 0x7f000001 &#x3D; &quot;127.0.0.1&quot;</span><br><span class="line">1b 31                               # 2 bytes port in network byte order. In this case, 0x1b31 &#x3D; 6961.</span><br><span class="line">80                                  # Flag of peers. SEEDING &#x3D; 0x80, COMPLETED &#x3D; 0x40, STOPPED &#x3D; 0x20, LEECHING &#x3D; 0x00</span><br><span class="line">00                                  # Reserved. Just set zero.</span><br><span class="line">-----------------------------------</span><br><span class="line">...                                 # Other peers information.</span><br><span class="line">-----------------------------------</span><br><span class="line">FE</span><br><span class="line">-----------------------------------</span><br><span class="line">...                                 # Other torrent information.</span><br><span class="line">-----------------------------------</span><br><span class="line">FF                                  # EOF opcode.</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>HTTP debug接口</li>
+</ul>
+<p>由于opentracker响应内容是按BENCODE编码过的,调试时不太方便。因而扩展了一个返回human-readable内容的调试接口。</p>
+<p>具体参看: <a href="https://github.com/flygoast/opentracker" target="_blank" rel="noopener">https://github.com/flygoast/opentracker</a></p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/passenger-blocking/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1224,132 +1317,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/01/ejabberd-stanza-processing/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2014/11/01/ejabberd-stanza-processing/" class="post-title-link" itemprop="url">ejabberd消息处理流程分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2014-11-01 23:48:07" itemprop="dateCreated datePublished" datetime="2014-11-01T23:48:07+08:00">2014-11-01</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/XMPP/" itemprop="url" rel="index">
-                    <span itemprop="name">XMPP</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>ejabberd的程序入口为ejabberd_app.erl中的start/2，简化后逻辑如下:</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">(normal, _Args)</span> -&gt;</span></span><br><span class="line">    ...</span><br><span class="line">    Sup = ejabberd_sup:start_link(),</span><br><span class="line">    ...</span><br><span class="line">    ejabberd_listener:start_listeners(),</span><br><span class="line">    ?INFO_MSG(<span class="string">"ejabberd ~s is started in the node ~p"</span>, [?VERSION, node()]),</span><br><span class="line">    Sup;</span><br><span class="line"><span class="function"><span class="title">start</span><span class="params">(_, _)</span> -&gt;</span></span><br><span class="line">    &#123;error, badarg&#125;.</span><br></pre></td></tr></table></figure>
-<p>ejabberd_sup是一个supervisor，调用start_link时，它会生成各功能组件进程，如下图所示:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line">------------------------------------------------</span><br><span class="line"></span><br><span class="line">                +------------+</span><br><span class="line">                |ejabberd_sup|</span><br><span class="line">                +-----+------+</span><br><span class="line">                      |</span><br><span class="line">+---------------------+------------------------+</span><br><span class="line">|                                              |</span><br><span class="line">|  +-----+              +-------+              |</span><br><span class="line">|  |hooks|              |c2s_sup|              |</span><br><span class="line">|  +-----+              +-------+              |</span><br><span class="line">|                                              |</span><br><span class="line">|  +-----------+        +---------+            |</span><br><span class="line">|  |node_groups|        |s2sin_sup|            |</span><br><span class="line">|  +-----------+        +---------+            |</span><br><span class="line">|                                              |</span><br><span class="line">|  +--------------+     +----------+           |</span><br><span class="line">|  |system_monitor|     |s2sout_sup|           |</span><br><span class="line">|  +--------------+     +----------+           |</span><br><span class="line">|                                              |</span><br><span class="line">|  +------+             +-----------+          |</span><br><span class="line">|  |router|             |service_sup|          |</span><br><span class="line">|  +------+             +-----------+          |</span><br><span class="line">|                                              |</span><br><span class="line">|  +--+                 +--------+             |</span><br><span class="line">|  |sm|                 |http_sup|             |</span><br><span class="line">|  +--+                 +--------+             |</span><br><span class="line">|                                              |</span><br><span class="line">|  +---+                +-------------+        |</span><br><span class="line">|  |s2s|                |http_poll_sup|        |</span><br><span class="line">|  +---+                +-------------+        |</span><br><span class="line">|                                              |</span><br><span class="line">|  +-----+              +-------------------+  |</span><br><span class="line">|  |local|              |frontend_socket_sup|  |</span><br><span class="line">|  +-----+              +-------------------+  |</span><br><span class="line">|                                              |</span><br><span class="line">|  +-------+            +------+               |</span><br><span class="line">|  |captcha|            |iq_sup|               |</span><br><span class="line">|  +-------+            +------+               |</span><br><span class="line">|                                              |</span><br><span class="line">|  +--------+           +--------+             |</span><br><span class="line">|  |listener|           |stun_sup|             |</span><br><span class="line">|  +--------+           +--------+             |</span><br><span class="line">|                                              |</span><br><span class="line">|  +------------+       +-------------+        |</span><br><span class="line">|  |receiver_sup|       |cache_tab_sup|        |</span><br><span class="line">|  +------------+       +-------------+        |</span><br><span class="line">|                                              |</span><br><span class="line">+----------------------------------------------+</span><br></pre></td></tr></table></figure>
-<p>部分关键组件功能：</p>
-<ul>
-<li>hooks: 执行各模块注册的HOOK函数</li>
-<li>router: 分发用户发送的消息</li>
-<li>sm: session manager, 处理用户到用户的消息分发</li>
-<li>local: 处理发送给Server本身的消息。</li>
-<li>listener: supervisor进程，创建子进程监听网络端口</li>
-<li>receiver_sup: supervisor进程, 它为每一个TCP连接创建一个进程来接收该TCP连接的数据</li>
-<li>c2s_sup: supervisor进程, 它为每一个TCP连接创建一个进程来处理协议状态，并负责向TCP连接发送数据</li>
-</ul>
-<p>ejabberd_listener:start_listerners/0会从配置文件(ejabberd.cfg)中获取“listen”选项。<br>listen配置的一般形式为:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#123;listen,</span><br><span class="line"> [</span><br><span class="line">  &#123;5222, ejabberd_c2s, [</span><br><span class="line">            &#123;access, c2s&#125;,</span><br><span class="line">            &#123;shaper, c2s_shaper&#125;,</span><br><span class="line">            &#123;max_stanza_size, 65536&#125;</span><br><span class="line">               ]&#125;,</span><br><span class="line">  ...</span><br><span class="line"> ]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>每一个端口需要指定一个处理模块。</p>
-<p>start_listeners/0遍历listen配置中指定的所有端口，为每个端口调用start_listener/3。</p>
-
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start_listeners</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ejabberd_config:get_local_option(listen) <span class="keyword">of</span></span><br><span class="line">    undefined -&gt;</span><br><span class="line">        ignore;</span><br><span class="line">    Ls -&gt;</span><br><span class="line">        Ls2 = lists:map(</span><br><span class="line">            <span class="keyword">fun</span>(&#123;Port, Module, Opts&#125;) -&gt;</span><br><span class="line">                <span class="keyword">case</span> start_listener(Port, Module, Opts) <span class="keyword">of</span></span><br><span class="line">                &#123;ok, _Pid&#125; = R -&gt; R;</span><br><span class="line">                &#123;error, Error&#125; -&gt;</span><br><span class="line">                throw(Error)</span><br><span class="line">            <span class="keyword">end</span></span><br><span class="line">        <span class="keyword">end</span>, Ls),</span><br><span class="line">        report_duplicated_portips(Ls),</span><br><span class="line">        &#123;ok, &#123;&#123;one_for_one, <span class="number">10</span>, <span class="number">1</span>&#125;, Ls2&#125;&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-
-<p>start_listerner最终会调用start_listener_sup/3。它通过supervisor:start_child令ejabberd_listeners进程创建子进程执行ejabberd_listener:start/3。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start_listener_sup</span><span class="params">(Port, Module, Opts)</span> -&gt;</span></span><br><span class="line">    ChildSpec = &#123;Port,</span><br><span class="line">         &#123;?MODULE, start, [Port, Module, Opts]&#125;,</span><br><span class="line">         transient,</span><br><span class="line">         brutal_kill,</span><br><span class="line">         worker,</span><br><span class="line">         [?MODULE]&#125;,</span><br><span class="line">    supervisor:start_child(ejabberd_listeners, ChildSpec).</span><br></pre></td></tr></table></figure>
-<p>ejabberd_listener:start/3依据该端口处理模块的socket_type/0函数的返回值进行相应处理。如果返回值为independent时，则表示该处理模块自行处理监听端口a。否则，调用start_dependent/3。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">(Port, Module, Opts)</span> -&gt;</span></span><br><span class="line">    <span class="comment">%% Check if the module is an ejabberd listener or an independent listener</span></span><br><span class="line">    ModuleRaw = strip_frontend(Module),</span><br><span class="line">    <span class="keyword">case</span> ModuleRaw:socket_type() <span class="keyword">of</span></span><br><span class="line">    independent -&gt; ModuleRaw:start_listener(Port, Opts);</span><br><span class="line">    _ -&gt; start_dependent(Port, Module, Opts)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>start_dependent/3中会创建子进程执行init/3, init/3函数根据配置参数调用init_tcp/6或init_udp/6。<br>init_tcp/6开始监听相应端口，然后调用accept/0等待TCP连接。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init_tcp</span><span class="params">(PortIP, Module, Opts, SockOpts, Port, IPS)</span> -&gt;</span></span><br><span class="line">    ...</span><br><span class="line">    Res = gen_tcp:listen(Port, [binary,</span><br><span class="line">                &#123;packet, <span class="number">0</span>&#125;,</span><br><span class="line">                &#123;active, false&#125;,</span><br><span class="line">                &#123;reuseaddr, true&#125;,</span><br><span class="line">                &#123;nodelay, true&#125;,</span><br><span class="line">                &#123;send_timeout, ?TCP_SEND_TIMEOUT&#125;,</span><br><span class="line">                &#123;keepalive, true&#125; |</span><br><span class="line">                SockOpts2]),</span><br><span class="line">    <span class="keyword">case</span> Res <span class="keyword">of</span></span><br><span class="line">    &#123;ok, ListenSocket&#125; -&gt;</span><br><span class="line">        <span class="comment">%% Inform my parent that this port was opened succesfully</span></span><br><span class="line">        proc_lib:init_ack(&#123;ok, self()&#125;),</span><br><span class="line">        <span class="comment">%% And now start accepting connection attempts</span></span><br><span class="line">        accept(ListenSocket, Module, Opts);</span><br><span class="line">    &#123;error, Reason&#125; -&gt;</span><br><span class="line">        socket_error(Reason, PortIP, Module, SockOpts, Port, IPS)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>如果监听UDP端口，则init/3调用init_udp/6。init/6打开一个UDP端口，调用udp_recv/3等待接收UDP数据。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init_udp</span><span class="params">(PortIP, Module, Opts, SockOpts, Port, IPS)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> gen_udp:open(Port, [binary,</span><br><span class="line">                 &#123;active, false&#125;,</span><br><span class="line">                 &#123;reuseaddr, true&#125; |</span><br><span class="line">                 SockOpts]) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, Socket&#125; -&gt;</span><br><span class="line">        <span class="comment">%% Inform my parent that this port was opened succesfully</span></span><br><span class="line">        proc_lib:init_ack(&#123;ok, self()&#125;),</span><br><span class="line">        udp_recv(Socket, Module, Opts);</span><br><span class="line">    &#123;error, Reason&#125; -&gt;</span><br><span class="line">        socket_error(Reason, PortIP, Module, SockOpts, Port, IPS)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>至此ejabberd启动完成。</p>
-<p>当UDP数据到来后，udp_recv/3调用该端口处理模块的udp_recv/5处理，接着递归调用udp_recv继续等待接收UDP数据。处理模块的udp_recv/5函数中需要处理返回UDP响应等逻辑。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">udp_recv</span><span class="params">(Socket, Module, Opts)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> gen_udp:recv(Socket, <span class="number">0</span>) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, &#123;Addr, Port, Packet&#125;&#125; -&gt;</span><br><span class="line">        <span class="keyword">case</span> <span class="keyword">catch</span> Module:udp_recv(Socket, Addr, Port, Packet, Opts) <span class="keyword">of</span></span><br><span class="line">        &#123;'EXIT', Reason&#125; -&gt;</span><br><span class="line">            ?ERROR_MSG(<span class="string">"failed to process UDP packet:~n"</span></span><br><span class="line">                   <span class="string">"** Source: &#123;~p, ~p&#125;~n"</span></span><br><span class="line">                   <span class="string">"** Reason: ~p~n** Packet: ~p"</span>,</span><br><span class="line">                   [Addr, Port, Reason, Packet]);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        udp_recv(Socket, Module, Opts);</span><br><span class="line">    &#123;error, Reason&#125; -&gt;</span><br><span class="line">        ?ERROR_MSG(<span class="string">"unexpected UDP error: ~s"</span>, [format_error(Reason)]),</span><br><span class="line">        throw(&#123;error, Reason&#125;)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>当有TCP连接成功后，gen_tcp:accept/1返回，accept/3根据配置中处理模块是否指定了frontend, 选择调用ejabberd_frontend_socket:start/4或ejabberd_socket:start/4, 然后递归调用accept再次等待TCP连接。</p>
-
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">accept</span><span class="params">(ListenSocket, Module, Opts)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> gen_tcp:accept(ListenSocket) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, Socket&#125; -&gt;</span><br><span class="line">        <span class="keyword">case</span> &#123;inet:sockname(Socket), inet:peername(Socket)&#125; <span class="keyword">of</span></span><br><span class="line">        &#123;&#123;ok, Addr&#125;, &#123;ok, PAddr&#125;&#125; -&gt;</span><br><span class="line">            ?INFO_MSG(<span class="string">"(~w) Accepted connection ~w -&gt; ~w"</span>,</span><br><span class="line">                  [Socket, PAddr, Addr]);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        CallMod = <span class="keyword">case</span> is_frontend(Module) <span class="keyword">of</span></span><br><span class="line">              <span class="literal">true</span> -&gt; ejabberd_frontend_socket;</span><br><span class="line">              <span class="literal">false</span> -&gt; ejabberd_socket</span><br><span class="line">              <span class="keyword">end</span>,</span><br><span class="line">        CallMod:start(strip_frontend(Module), gen_tcp, Socket, Opts),</span><br><span class="line">        accept(ListenSocket, Module, Opts);</span><br><span class="line">    &#123;error, Reason&#125; -&gt;</span><br><span class="line">        ?INFO_MSG(<span class="string">"(~w) Failed TCP accept: ~w"</span>,</span><br><span class="line">              [ListenSocket, Reason]),</span><br><span class="line">        accept(ListenSocket, Module, Opts)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-
-<p>ejabberd_socket:start/4函数根据处理模块的socket_type/0的返回值进行不同处理。5222端口的处理模块是ejabberd_c2s，该模块socket_type/0返回xml_stream。</p>
-<p>ejabberd_socket:start/4对于xml_stream的处理的简化逻辑如下:</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">RecPid = ejabberd_receiver:start(</span><br><span class="line">       Socket, SockMod, none, MaxStanzaSize),</span><br><span class="line"></span><br><span class="line">&#123;ReceiverMod, Receiver, RecRef&#125; =</span><br><span class="line">    &#123;ejabberd_receiver, RecPid, RecPid&#125;</span><br><span class="line"></span><br><span class="line">SocketData = #socket_state&#123;sockmod = SockMod,</span><br><span class="line">               socket = Socket,</span><br><span class="line">               receiver = RecRef&#125;,</span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> Module:start(&#123;?MODULE, SocketData&#125;, Opts) <span class="keyword">of</span></span><br><span class="line">&#123;ok, Pid&#125; -&gt;</span><br><span class="line">    <span class="keyword">case</span> SockMod:controlling_process(Socket, Receiver) <span class="keyword">of</span></span><br><span class="line">    ok -&gt;</span><br><span class="line">        ok;</span><br><span class="line">    &#123;error, _Reason&#125; -&gt;</span><br><span class="line">        SockMod:close(Socket)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    ReceiverMod:become_controller(Receiver, Pid);</span><br><span class="line">&#123;error, _Reason&#125; -&gt;</span><br><span class="line">    SockMod:close(Socket)</span><br><span class="line"><span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
-<p>首先，它调用ejabberd_receiver:start/4, 它创建一个receiver进程，接着调用处理模块的start/2创建一个处理模块子进程。然后将新的receiver进程设为该TCP Socket的控制进程，以后从该Socket收到数据将以消息形式发送给该receiver进程。最后调用ejabberd_receiver:become_controller/2, 向该receiver进程发送become_controller消息。receiver进程处理该消息，生成一个XML解析状态并将处理进程Pid保存在状态中。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_call</span><span class="params">(&#123;become_controller, C2SPid&#125;, _From, State)</span> -&gt;</span></span><br><span class="line">    XMLStreamState = xml_stream:new(C2SPid, State#state.max_stanza_size),</span><br><span class="line">    NewState = State#state&#123;c2s_pid = C2SPid,</span><br><span class="line">               xml_stream_state = XMLStreamState&#125;,</span><br><span class="line">    activate_socket(NewState),</span><br><span class="line">    Reply = ok,</span><br><span class="line">    &#123;reply, Reply, NewState, ?HIBERNATE_TIMEOUT&#125;;</span><br></pre></td></tr></table></figure>
-<p>当该Socket有数据可读时，receiver进程将收到TCP消息，receiver进程调用process_data/1函数来处理收到的数据。它调用xml_stream:parse进行解析，当解析出XML元素后，它会通过gen_fsm:send_event向该TCP的处理进程发送消息。处理进程根据消息进行协议状态的转换。</p>
-<p>当XMPP协商完成后，处理进程状态为session_established。此时收到XMPP消息，处理进程解析出From和To属性, 调用ejabberd_router:route/3分发消息。ejabberd_router:route/3调用do_route进行分发。它查询route表中是否已经注册了JID所在域名。ejabberd_local进程启动时会在route表中注册配置中所添加的域名。如果已经注册，该消息则应该由当前服务器处理，否则路由至其他Server。</p>
-<p>处理本地域名时，do_route首先获取ejabbred_local进程的Pid,如果只有一个进程，并且该进程位于当前节点，则直接调用ejabberd_local:route/3进行处理，否则发送route消息至相应的Pid。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">LDstDomain = To#jid.lserver,</span><br><span class="line"><span class="keyword">case</span> mnesia:dirty_read(route, LDstDomain) <span class="keyword">of</span></span><br><span class="line">[] -&gt;</span><br><span class="line">    ejabberd_s2s:route(From, To, Packet);</span><br><span class="line">[R] -&gt;</span><br><span class="line">    Pid = R#route.pid,</span><br><span class="line">    <span class="keyword">if</span></span><br><span class="line">    node(Pid) == node() -&gt;</span><br><span class="line">        <span class="keyword">case</span> R#route.local_hint <span class="keyword">of</span></span><br><span class="line">        &#123;apply, Module, Function&#125; -&gt;</span><br><span class="line">            Module:Function(From, To, Packet);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            Pid ! &#123;route, From, To, Packet&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    is_pid(Pid) -&gt;</span><br><span class="line">        Pid ! &#123;route, From, To, Packet&#125;;</span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        drop</span><br><span class="line">    <span class="keyword">end</span>;</span><br><span class="line">...</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
-<p>这两种方式都会调用ejabberd_local:do_route来处理。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">do_route</span><span class="params">(From, To, Packet)</span> -&gt;</span></span><br><span class="line">    ?DEBUG(<span class="string">"local route~n\tfrom ~p~n\tto ~p~n\tpacket ~P~n"</span>,</span><br><span class="line">       [From, To, Packet, <span class="number">8</span>]),</span><br><span class="line">    <span class="keyword">if</span></span><br><span class="line">    To#jid.luser /= <span class="string">""</span> -&gt;</span><br><span class="line">        ejabberd_sm:route(From, To, Packet);</span><br><span class="line">    To#jid.lresource == <span class="string">""</span> -&gt;</span><br><span class="line">        &#123;xmlelement, Name, _Attrs, _Els&#125; = Packet,</span><br><span class="line">        <span class="keyword">case</span> Name <span class="keyword">of</span></span><br><span class="line">        <span class="string">"iq"</span> -&gt;</span><br><span class="line">            process_iq(From, To, Packet);</span><br><span class="line">        <span class="string">"message"</span> -&gt;</span><br><span class="line">            ok;</span><br><span class="line">        <span class="string">"presence"</span> -&gt;</span><br><span class="line">            ok;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        &#123;xmlelement, _Name, Attrs, _Els&#125; = Packet,</span><br><span class="line">        <span class="keyword">case</span> xml:get_attr_s(<span class="string">"type"</span>, Attrs) <span class="keyword">of</span></span><br><span class="line">        <span class="string">"error"</span> -&gt; ok;</span><br><span class="line">        <span class="string">"result"</span> -&gt; ok;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ejabberd_hooks:run(local_send_to_resource_hook,</span><br><span class="line">                       To#jid.lserver,</span><br><span class="line">                       [From, To, Packet])</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">    <span class="keyword">end</span>.</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
-<p>如果”To”属性的JID指定了user, 则该消息应该分发至用户，调用ejabberd_sm:route/3进行分发。ejabberd根据JID的Resource是否为空进行了不同处理。JID的Resource为空的情况本文略过。JID的Resource不为空时，ejabberd_sm:route/3的处理逻辑如下：</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">USR = &#123;LUser, LServer, LResource&#125;,</span><br><span class="line"><span class="keyword">case</span> mnesia:dirty_index_read(session, USR, #session.usr) <span class="keyword">of</span></span><br><span class="line">[] -&gt;</span><br><span class="line">    <span class="keyword">case</span> Name <span class="keyword">of</span></span><br><span class="line">    <span class="string">"message"</span> -&gt;</span><br><span class="line">        route_message(From, To, Packet);</span><br><span class="line">    <span class="string">"iq"</span> -&gt;</span><br><span class="line">        <span class="keyword">case</span> xml:get_attr_s(<span class="string">"type"</span>, Attrs) <span class="keyword">of</span></span><br><span class="line">        <span class="string">"error"</span> -&gt; ok;</span><br><span class="line">        <span class="string">"result"</span> -&gt; ok;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            Err =</span><br><span class="line">            jlib:make_error_reply(</span><br><span class="line">              Packet, ?ERR_SERVICE_UNAVAILABLE),</span><br><span class="line">            ejabberd_router:route(To, From, Err)</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        ?DEBUG(<span class="string">"packet droped~n"</span>, [])</span><br><span class="line">    <span class="keyword">end</span>;</span><br><span class="line">Ss -&gt;</span><br><span class="line">    Session = lists:max(Ss),</span><br><span class="line">    Pid = element(<span class="number">2</span>, Session#session.sid),</span><br><span class="line">    ?DEBUG(<span class="string">"sending to process ~p~n"</span>, [Pid]),</span><br><span class="line">    Pid ! &#123;route, From, To, Packet&#125;</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
-<p>它从session表中读取出该用户的信息，这些信息是用户连接上由该TCP的处理进程添加到session表中的。从中获得为该用户TCP连接的处理进程，向该进程发送route消息。处理进程处理该route消息，向该用户Socket发送消息。这便完成了一个用户到另一个用户的消息传递。</p>
-<p>本文中ejabberd代码版本为2.1.3。</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1420,7 +1387,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">112</span>
+          <span class="site-state-item-count">113</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
