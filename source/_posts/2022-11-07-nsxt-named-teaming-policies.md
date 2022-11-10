@@ -77,3 +77,4 @@ esxcli network nic down -n vmnic0
 * https://tomaskalabis.com/wordpress/vmware-esxi-how-shutdown-vmnic-interface/
 * https://vxplanet.com/2019/09/25/achieving-deterministic-peering-using-nsx-t-named-teaming-policies/
 * http://www.cloudxtreme.info/nsx-t-uplink-profile/
+* https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html
