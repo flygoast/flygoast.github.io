@@ -164,6 +164,95 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/13/nsxt-vlan/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/11/13/nsxt-vlan/" class="post-title-link" itemprop="url">NSX-T逻辑交换机VLAN和Transport VLAN</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-11-13 00:31:20 / 修改时间：00:36:45" itemprop="dateCreated datePublished" datetime="2022-11-13T00:31:20+08:00">2022-11-13</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在<code>VMware NSX-T</code>网络构建中，有两个地方需要配置<code>VLAN</code>, 分别是:</p>
+<ul>
+<li><p><code>逻辑交换机/分段</code>中的<code>VLAN</code>, 如图:</p>
+<img src="/images/2022-11-13/1.png" class="">
+</li>
+<li><p><code>Uplink Profile</code>中的<code>传输VLAN(Transport VLAN</code>), 如图:</p>
+<img src="/images/2022-11-13/2.png" class="">
+
+</li>
+</ul>
+<p><code>逻辑交换机</code>的<code>VLAN</code>决定了逻辑交换机上的端口类型，表示<code>access</code>或者<code>trunk</code>类型的端口。<code>逻辑交换机</code>又分为基于<code>VLAN</code>类型和<code>Overlay</code>类型两种。<br>对于<code>VLAN</code>类型的<code>逻辑交换机</code>, 如果配置的<code>VLAN</code>为单一<code>VLAN</code>时，表示端口为<code>access</code>类型。这时<code>逻辑交换机</code>与所连接的虚拟接口间的数据是不携带<code>VLAN tag</code>的，但发送到ESXi主机外部的物理网络的报文会携带有所配置的<code>VLAN tag</code>。<code>VLAN 0</code>则比较特殊，在<code>NSX-T</code>以及<code>vSphere</code>体系里都表示不携带<code>VLAN tag</code>。而如果配置多个<code>VLAN</code>后，表示端口为<code>trunk</code>类型。这种情况下，发送到<code>逻辑交换机</code>的报文则必须携带有配置范围内的<code>VLAN tag</code>。而该<code>tag</code>也会透传到外部物理网络。因而使用<code>VLAN</code>类型的逻辑交换机需要底层物理网络做相应的配置允许相应的<code>VLAN</code>通行。<br>而对于<code>Overlay</code>类型的<code>逻辑交换机</code>, 可以不配置<code>VLAN</code>, 这种情况下，<code>逻辑交换机</code>的端口为<code>access</code>类型。当设置<code>VLAN</code>时，即使设置的是单一<code>VLAN</code>，也会自动修改为<code>trunk</code>类型。这种情况下，<code>逻辑交换机</code>与虚拟接口间的报文则必须携带配置范围内的<code>VLAN tag</code>。</p>
+<p>整体逻辑可以梳理为:</p>
+<img src="/images/2022-11-13/3.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/11/13/nsxt-vlan/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/07/nsxt-named-teaming-policies/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -936,90 +1025,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/11/bash-test/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2022/06/11/bash-test/" class="post-title-link" itemprop="url">Bash test和[命令分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2022-06-11 23:16:54 / 修改时间：23:34:56" itemprop="dateCreated datePublished" datetime="2022-06-11T23:16:54+08:00">2022-06-11</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/MISC/" itemprop="url" rel="index">
-                    <span itemprop="name">MISC</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>近期我们的<code>BASH</code>脚本中遇到一个BUG，最终分析到是变量值为空时没有用<code>&quot;&quot;</code>包裹导致的。</p>
-<p>我们使用一个测试脚本来进行分析。测试脚本<code>t.sh</code>内容如下:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"></span><br><span class="line">kof=<span class="string">""</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ ! -f <span class="variable">$kof</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">echo</span> <span class="string">"1"</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ ! -f <span class="string">"<span class="variable">$kof</span>"</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">echo</span> <span class="string">"2"</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">echo</span> <span class="string">"END"</span></span><br></pre></td></tr></table></figure>
-
-<p>测试脚本的执行结果如下:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># bash t.sh</span></span><br><span class="line">2</span><br><span class="line">END</span><br></pre></td></tr></table></figure>
-
-<p>可以看到当变量<code>$kof</code>为空时，第一个<code>if</code>语句块中的语句没有被执行，而第二个<code>if</code>语句块中的语句被执行了。这两个语句块的差别就在于第二个语句块中的<code>$kof</code>变量用<code>&quot;&quot;</code>进行了包裹。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2022/06/11/bash-test/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1090,7 +1095,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">113</span>
+          <span class="site-state-item-count">114</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

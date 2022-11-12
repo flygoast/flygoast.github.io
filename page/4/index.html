@@ -164,6 +164,94 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/25/kubernetes-cni/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/07/25/kubernetes-cni/" class="post-title-link" itemprop="url">Kubernetes网络和CNI</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-07-25 10:40:57" itemprop="dateCreated datePublished" datetime="2020-07-25T10:40:57+08:00">2020-07-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-10-04 21:08:19" itemprop="dateModified" datetime="2021-10-04T21:08:19+08:00">2021-10-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><a href="https://github.com/containernetworking/cni" target="_blank" rel="noopener"><code>CNI: Container Network Interface</code></a>是配置Linux容器网络接口的一种规范。它将<code>容器运行时</code>和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的<code>容器运行时</code>环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。</p>
+<p><code>CNI</code>规范主要涉及<code>容器运行时</code>和<code>CNI</code>插件两个角色，规范约定了二者的交互方式。<code>容器运行时</code>在容器实例创建时调用<code>CNI</code>插件的<code>ADD</code>接口以创建容器络连接所需的资源网络连接，当容器删除时调用<code>CNI</code>的<code>DEL</code>接口移除所创建的相应资源完成资源释放。不同的<code>CNI</code>插件按照规范所统一定义的接口、参数、响应实现不同的网络方案。</p>
+<p>官方提供了开发库<code>libcni</code>，<code>容器运行时</code>可以使用该库来集成<code>CNI</code>能力，并且还提供了一系列的<a href="https://github.com/containernetworking/plugins" target="_blank" rel="noopener">CNI插件参考实现</a>。</p>
+<p>目前<code>CNI</code>规范的最新版本为<code>0.4.0</code>。</p>
+<p>从具体实现上看，<code>容器运行时</code>会先创建好相应的<code>network namespace</code>, 然后<code>CNI</code>插件负责将网络接口插入到容器实例的<code>network namespace</code>、在宿主机上做必要的网络操作(如绑定IP到接口、建立路由等)以实现容器网络连通。</p>
+<p>一般设计中，主体模块与插件之间的交互会采用<code>RPC</code>、二进制兼容的动态库加载等手段。<code>CNI</code>规范则指定<code>CNI</code>插件实现为可执行程序，相应接口参数通过环境变量与标准输入流传给<code>CNI</code>插件，类似于早年WEB领域的<code>CGI</code>模式。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/07/25/kubernetes-cni/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/13/nsx-t/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -976,97 +1064,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2019/08/10/service-catalog/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2019/08/10/service-catalog/" class="post-title-link" itemprop="url">Kubernetes服务目录简要介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2019-08-10 08:14:56" itemprop="dateCreated datePublished" datetime="2019-08-10T08:14:56+08:00">2019-08-10</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a href="https://www.openservicebrokerapi.org/" target="_blank" rel="noopener"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
-<p><code>OSBAPI</code>规范定义了高度抽象的应用平台与外部服务代理的交互逻辑，规范化外部服务的使用，主要包括:</p>
-<ul>
-<li>注册服务代理: 应用平台会获取服务代理提供的服务列表及相应规格，<code>OSBAPI</code>使用术语<code>Plan</code>来表示规格。</li>
-<li><code>Provision</code>服务实例: <code>OSBAPI</code>使用术语<code>Provision</code>来统一指定服务资源的供应。在外部服务具体实现上，可以是创建虚拟机实例，也可以是分配资源，也可以是创建SaaS帐号等等。</li>
-<li>绑定应用及服务实例: 当服务实例创建完成后，开发者想要其应用与该服务实例进行交互。从服务代理的角度来看，就是将应用与服务实例进行绑定。具体实现逻辑可以非常灵活，一般情况下，会生成访问该服务实例所需的新凭证。比如，生成数据库实例的IP、端口、用户名、密码等等。这些凭证会被返回给应用平台以提供给具体应用使用。</li>
-</ul>
-<p><code>OSBAPI</code>的具体工作模式如下图:</p>
-<img src="/images/2019-08-10/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2019/08/10/service-catalog/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1137,7 +1134,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">113</span>
+          <span class="site-state-item-count">114</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
