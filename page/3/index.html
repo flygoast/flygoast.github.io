@@ -164,6 +164,102 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/12/29/nfqueue-dns/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/12/29/nfqueue-dns/" class="post-title-link" itemprop="url">NFQUEUE机制导致DNS请求5秒超时分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-12-29 15:14:56" itemprop="dateCreated datePublished" datetime="2021-12-29T15:14:56+08:00">2021-12-29</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-12-30 09:43:22" itemprop="dateModified" datetime="2021-12-30T09:43:22+08:00">2021-12-30</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在一台<code>CentOS 7.0</code>服务器(内核版本号:<code>3.10.0-123.el7.x86_64</code>)上安装我们的安全防护程序后，会出现<code>curl</code>访问网址超时5秒的情况。现象如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># time curl -s www.baidu.com -o /dev/null</span></span><br><span class="line"></span><br><span class="line">real	0m5.120s</span><br><span class="line">user	0m0.002s</span><br><span class="line">sys	0m0.009s</span><br></pre></td></tr></table></figure>
+
+<p>通过<code>strace</code>分析程序调用的过程:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">strace -f -tt -o curl.strace curl -s www.baidu.com -o &#x2F;dev&#x2F;null</span><br></pre></td></tr></table></figure>
+<p>从<code>strace</code>输出可以看到, 第一次<code>curl</code>调用<code>sendmmsg</code>同时发送了两个<code>DNS</code>数据包，分别是<code>A</code>记录和<code>AAAA</code>记录请求，但是只收到了<code>A</code>记录响应包:</p>
+<img src="/images/2021-12-29/1.png" class="">
+
+<p>然后等待5秒超时后，依次调用<code>sendto</code>和<code>recvfrom</code>串行处理两个<code>DNS</code>请求, 这次两个<code>DNS</code>响应全部收到后，继续向下执行:</p>
+<img src="/images/2021-12-29/2.png" class="">
+
+
+<p>而从抓包结果分析，<code>tcpdump</code>只能看到第一次同时发送的两个<code>DNS</code>请求中的<code>A</code>记录请求，<code>AAAA</code>记录请求数据包被内核协议栈丢弃了:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">17:04:24.772049 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:24.773693 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3&#x2F;0&#x2F;0 CNAME www.a.shifen.com., A 180.101.49.12, A 180.101.49.11 (90)</span><br><span class="line">17:04:29.776474 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:29.778694 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3&#x2F;0&#x2F;0 CNAME www.a.shifen.com., A 180.101.49.11, A 180.101.49.12 (90)</span><br><span class="line">17:04:29.778925 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 42471+ AAAA? www.baidu.com. (31)</span><br><span class="line">17:04:29.780523 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 42471 1&#x2F;1&#x2F;0 CNAME www.a.shifen.com. (115)</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/12/29/nfqueue-dns/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/21/custom-loadbalancer/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -967,101 +1063,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/09/05/nfqueue-mark/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/09/05/nfqueue-mark/" class="post-title-link" itemprop="url">Kubernetes环境中NFQUEUE与MARK机制冲突</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-09-05 22:03:23" itemprop="dateCreated datePublished" datetime="2021-09-05T22:03:23+08:00">2021-09-05</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 14:31:43" itemprop="dateModified" datetime="2021-11-21T14:31:43+08:00">2021-11-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在Kubernetes节点上安装我们的流量检测模块之后所有的<code>Pod</code>会断网。经分析是由于流量检测模块的<code>NFQUEUE</code>机制与<code>kube-proxy</code>使用的<code>iptables</code>的<code>mark</code>机制冲突的原因。</p>
-<p>在Linux内核中，网络数据包是由<code>sk_buff</code>结构来表示的，一般数据包简写作<code>SKB</code>。<code>mark</code>是<code>sk_buff</code>结构的一个字段, 如(<code>include/linux/skbuff.h</code>):</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sk_buff</span> &#123;</span></span><br><span class="line">    ...</span><br><span class="line">	<span class="keyword">union</span> &#123;</span><br><span class="line">		__u32		mark;</span><br><span class="line">		__u32		reserved_tailroom;</span><br><span class="line">	&#125;;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><code>mark</code>并不是网络协议结构的部分，不会存在于任一层协议头中，而是Linux网络子系统用于在主机内部传递状态信息的标记机制。各种网络应用可以根据自身需要使用该字段来实现自身的状态传递。</p>
-<p>这个<code>mark</code>机制主要用在<code>netfilter</code>框架中，所以也叫<code>nfmark</code>。除了它之外，内核中还有<code>conntrack</code>模块也有自己的<code>mark</code>机制，一般叫做<code>ctmark</code>。</p>
-<p>之前的文章<a href="/2016/12/23/iptables-mark-and-polices-based-route/">&lt;&lt;基于IPTABLES MARK机制实现策略路由&gt;&gt;</a>也介绍过<code>iptables</code>的<code>MARK</code>模块，可以用于修改和匹配数据包的<code>mark</code>值。</p>
-<p><code>NFQUEUE</code>机制可以在内核中将数据通过<code>NFQUEUE</code>通道将数据包送往用户态，在用户态进行安全检测，再将裁决(<code>verdict</code>)结果送回内核。之前的文章<a href="/2017/03/27/nfqueue/">&lt;&lt;NFQUEUE和libnetfilter_queue实例分析&gt;&gt;</a>介绍了<code>libnetfilter_queue</code>库的简单用法。我们的流量检测程序会使用<code>libnetfilter_queue</code>库中的<code>nfq_set_verdict2</code>在返回<code>verdict</code>的同时，设置数据包的<code>mark</code>值,以传递更多的信息给内核模块，函数原型如下:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">nfq_set_verdict2</span><span class="params">(struct nfq_q_handle *  qh,</span></span></span><br><span class="line"><span class="function"><span class="params">                     <span class="keyword">uint32_t</span>               id,</span></span></span><br><span class="line"><span class="function"><span class="params">                     <span class="keyword">uint32_t</span>               verdict,</span></span></span><br><span class="line"><span class="function"><span class="params">                     <span class="keyword">uint32_t</span>               mark,</span></span></span><br><span class="line"><span class="function"><span class="params">                     <span class="keyword">uint32_t</span>               data_len,</span></span></span><br><span class="line"><span class="function"><span class="params">                     <span class="keyword">const</span> <span class="keyword">unsigned</span> <span class="keyword">char</span>*   buf</span></span></span><br><span class="line"><span class="function"><span class="params">)</span></span></span><br></pre></td></tr></table></figure>
-<p>这就会导致数据包<code>sk_buff</code>结构的<code>mark</code>值被设置。而<code>kube-proxy</code>实现也依赖<code>iptables</code>的<code>mark</code>机制, 会在主机上添加如下<code>iptables</code>规则:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-MARK-DROP -j MARK --set-xmark 0x8000&#x2F;0x8000</span><br><span class="line">...</span><br><span class="line">-A KUBE-FIREWALL -m comment --comment &quot;kubernetes firewall for dropping marked packets&quot; -m mark --mark 0x8000&#x2F;0x8000 -j DROP</span><br></pre></td></tr></table></figure>
-<p>对于不合法的报文，<code>kube-proxy</code>会给相应报文标记<code>0x8000/0x8000</code>, 之后通过<code>KUBE-FIREWALL</code>规则链将数据包丢弃。</p>
-<p>如果我们的流量检测程序所设置的<code>mark</code>值设置为<code>kube-proxy</code>所依赖的<code>0x8000</code>位，就会导致数据包被丢弃。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/09/05/nfqueue-mark/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1132,7 +1133,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">115</span>
+          <span class="site-state-item-count">116</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1145,7 +1146,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">45</span>
+        <span class="site-state-item-count">47</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
