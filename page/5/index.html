@@ -164,6 +164,103 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/03/13/vault-introduction/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/03/13/vault-introduction/" class="post-title-link" itemprop="url">HashiCorp Vault介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-03-13 16:09:56" itemprop="dateCreated datePublished" datetime="2020-03-13T16:09:56+08:00">2020-03-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>应用服务常常需要存取各种各样的机密信息，比如，数据库的访问凭证，依赖的外部服务的<code>Token</code>和<code>Key</code>，服务之间的通信凭证等等。在每个这样的应用中都重复实现机密信息的存取、更新与吊销等管理操作相当繁重，而且容易出问题。HashiCorp公司的开源项目<a href="https://www.vaultproject.io/" target="_blank" rel="noopener">Vault</a>就将这部分工作以独立服务方式来实现，需要机密信息操作的应用可以与Vault服务交互完成相应的操作。</p>
+<p>Vault的应用场景非常广泛，如:</p>
+<ul>
+<li>机密信息存取</li>
+<li>凭证的动态生成，比如数据库凭证、PKI证书、公有云服务的凭证等等</li>
+<li>加密即服务</li>
+</ul>
+<p>Vault架构非常清晰，如下图所示，主要分为三部分:</p>
+<img src="/images/2020-03-13/1.png" class="">
+
+<ul>
+<li><strong>HTTP/S API</strong>: Vault服务对外提供HTTP API接口</li>
+<li><strong>Storage Backend</strong>: 负责加密数据的持久化存储, Vault支持多种存储机制。</li>
+<li><strong>Barrier</strong>: 负责各种机密信息相关的处理逻辑，最核心的组件是<code>Secrets Engine</code>和<code>Auth Method</code>。<code>Secrets Engine</code>负责实际机密信息处理功能的实现，各种不同的<code>Secrets Engine</code>有着不同的功能服务，<code>Auth Method</code>提供各种不同的身份校验方法。这两个组件都依赖Plugin机制实现，如果官方提供的功能不满足需求，还可以自己写相应Plugin实现特有功能或身份校验方法。</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/03/13/vault-introduction/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/03/02/Kubernetes-CDR/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -942,91 +1039,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/08/openstack-vfw/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/08/08/openstack-vfw/" class="post-title-link" itemprop="url">OpenStack私有网络旁路部署虚拟防火墙</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-08-08 10:10:18" itemprop="dateCreated datePublished" datetime="2018-08-08T10:10:18+08:00">2018-08-08</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="/blog/2017/08/19/traffic-broker/">OpenStack私有网络安全防护</a>&gt;&gt;介绍了在私有网络中将虚拟防火墙(以下称为<code>VFW</code>)串联接入的方法。本文来介绍旁路部署<code>VFW</code>, 通过策略路由实现防火墙接入的方法。</p>
-<p>逻辑网络拓扑如下:</p>
-<img src="/images/2018-08-08/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/08/08/openstack-vfw/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1097,7 +1109,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">116</span>
+          <span class="site-state-item-count">117</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
