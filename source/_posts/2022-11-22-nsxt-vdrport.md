@@ -1,5 +1,5 @@
 ---
-title: nsxt-vdrport
+title: NSX-T东西向路由
 date: 2022-11-22 20:45:44
 tags:
 - NSX-T
