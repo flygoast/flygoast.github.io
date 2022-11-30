@@ -164,6 +164,106 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/05/01/vmvare/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2017/05/01/vmvare/" class="post-title-link" itemprop="url">VMware vSphere虚拟网络防护</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-05-01 22:38:03" itemprop="dateCreated datePublished" datetime="2017-05-01T22:38:03+08:00">2017-05-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>随着数据中心虚拟化和云计算发展，虚拟网络的安全防护需求越来越多。本文通过实例介绍VMware vSphere虚拟网络的安全防护。</p>
+<p>首先介绍VMware vSphere虚拟网络的基础知识。</p>
+<p>ESXi主机使用虚拟交换机来路由虚拟网络内部流量以及虚拟网络和物理网络之间的网络流量。vSphere有三种虚拟交换机:</p>
+<ul>
+<li>vSS: vNetwork Standard Switch</li>
+<li>vDS: vNetwork Distributed Switch</li>
+<li>Cisco Nexus 1000v</li>
+</ul>
+<p>vSS工作在单一ESXi主机中，适用于小规模环境，需要在每个ESXi主机上单独配置。vDS和Nexus 1000v具备更多高级网络特性, 但需要额外License。本文介绍在vSS环境下的虚拟网络防护。</p>
+<p>vSS有三种类型的端口:</p>
+<ul>
+<li>vNIC: 虚拟机的网络接口</li>
+<li>VMKernel: 用于ESXi主机与外界物理网络或者VMware其他基础设施交互，如vMotion, vSAN等</li>
+<li>uplink: 连接虚拟交换机与主机物理网卡，将虚拟网络和物理网络联通</li>
+</ul>
+<p>vSS通过端口组(Port Group)将vNIC端口分组，针对端口组，可以设置不同的VLAN ID，安全参数、流量整形参数等。在创建虚拟机时需要指定虚拟网络接口属的端口组。</p>
+<p>vSphere虚拟网络的架构示意图如下:</p>
+<img src="/images/2017-05-01/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2017/05/01/vmvare/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/04/17/chracter-device/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -946,93 +1046,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/31/introducing-openflow/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2016/12/31/introducing-openflow/" class="post-title-link" itemprop="url">SDN和OpenFlow介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2016-12-31 14:14:24" itemprop="dateCreated datePublished" datetime="2016-12-31T14:14:24+08:00">2016-12-31</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>传统网络架构下，数据转发和转发决策逻辑都集中在网络设备内部，而各厂商的网络设备都有自己的配置方法, 运维和管理的复杂性很高。云计算等业务发展对网络调整的迅速响应需求越来越高，传统方式网络架构越来越不能满足灵活性要求。因而业界提出了SDN方案，将数据平面和控制平面分离，数据平面由网络设备完成，而决策逻辑交由独立的控制器来完成，从而控制器能够对整个网络进行全局管控。除此之外，控制器对上层应用程序提供API(称为北向API)，上层的业务逻辑可以使用北向API处理流量和部署服务，网络控制逻辑可以直接通过编写程序来完成，网络调整的响应速度大为加快，灵活性大为提高。控制器与负责转发数据的网络设备之间通过标准协议交互转发策略，这之间协议称为南向协议或南向API。</p>
-<p>整体架构如图:</p>
-<img src="/images/2016-12-31/1.png" class="">
-
-<p>OpenFlow是一种南向API协议，并且定义了交换机规范。实现OpenFlow规范的交换机称为OpenFlow交换机。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2016/12/31/introducing-openflow/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1103,7 +1116,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">117</span>
+          <span class="site-state-item-count">118</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1116,7 +1129,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">47</span>
+        <span class="site-state-item-count">48</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
