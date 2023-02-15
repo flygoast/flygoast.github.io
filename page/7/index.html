@@ -164,6 +164,92 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/09/timewait/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2017/11/09/timewait/" class="post-title-link" itemprop="url">TIME_WAIT状态实验分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-09 23:03:34" itemprop="dateCreated datePublished" datetime="2017-11-09T23:03:34+08:00">2017-11-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>TIME_WAIT是排查TCP连接问题经常遇到的一种TCP状态。首先我们来看TIME_WAIT状态是如何产生的。TCP关闭连接的状态变化图如下:</p>
+<img src="/images/2017-11-09/1.png" class="">
+
+<p>可以看到，主动关闭连接的一端在发送最后一个<code>ACK</code>后进入TIME_WAIT状态。TIME_WAIT状态会持续2倍的MSL(Maximum Segment Lifetime)，MSL是指一个TCP分段在网络上存在的最大时间，因而TIME_WAIT状态也被称为<code>2MSL</code>状态。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2017/11/09/timewait/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/07/port-mirroring/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -937,92 +1023,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/05/21/vxlan/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/05/21/vxlan/" class="post-title-link" itemprop="url">VXLAN原理介绍与实例分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-05-21 14:49:11" itemprop="dateCreated datePublished" datetime="2017-05-21T14:49:11+08:00">2017-05-21</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>云计算环境的一个典型属性是多租户共享物理资源。其中每个租户可以构建自己专属的虚拟逻辑网络，而每个逻辑网络都需要由唯一的标识符来标识。不同的逻辑网络默认情况下相互隔离。传统上，网络工程师一般使用VLAN来隔离不同二层网络，但VLAN的标识符命名空间只有12位，只能提供4096个标识符，这无法满足大型云计算环境的需求。另外，使用VLAN隔离虚拟逻辑网络，往往需要对底层物理网络设备进行手动配置，这无法满足云计算环境的自动化需求。为了解决VLAN在网络虚拟化环境中应用存在的种种问题，Cisco，VMware等厂商提出了新的网络协议VXLAN来隔离虚拟逻辑网络。</p>
-<p>VXLAN的全称为Virtual eXtensible LAN，从名称看，它的目标就是扩展VLAN协议。802.1Q的VLAN TAG只占12位，只能提供4096个网络标识符。而在VXLAN中，标识符扩展到24位，能提供16777216个逻辑网络标识符，VXLAN的标识符称为VNI(VXLAN Network Identifier)。另外，VLAN只能应用在一个二层网络中，而VXLAN通过将原始二层以太网帧封装在IP协议包中，在IP基础网络之上构建overlay的逻辑大二层网络。</p>
-<p>我们来看具体协议包结构。VXLAN将二层数据帧封装在UDP数据包中，构建隧道在不同节点间通信。包结构如图:</p>
-<img src="/images/2017-05-21/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/05/21/vxlan/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1093,7 +1093,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">118</span>
+          <span class="site-state-item-count">119</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1131,7 +1131,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2022</span>
+  <span itemprop="copyrightYear">2023</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>

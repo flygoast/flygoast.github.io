@@ -164,6 +164,86 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/08/11/client-uuid/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/08/11/client-uuid/" class="post-title-link" itemprop="url">C/S架构下UUID冲突处理方案简要说明</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-08-11 23:10:10 / 修改时间：23:16:32" itemprop="dateCreated datePublished" datetime="2022-08-11T23:10:10+08:00">2022-08-11</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在<code>C/S</code>架构中，<code>Server</code>端需要依赖<code>ID</code>来唯一标识<code>Client</code>，而客户端相关数据都由这个唯一标识来索引。</p>
+<p>这个标识可以由服务端分配，也可以由客户端自行生成再注册到服务端。</p>
+<p>服务端分配是一种中心化生成方式，可以保证唯一性。客户端自行生成方式可以采用<code>UUID</code>标准来生成，也可以保证唯一性。</p>
+<p>尽管在生成方式可以保证唯一性，但是由于客户端某些特性的改变，服务端依然会出现<code>ID</code>冲突的场景。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/08/11/client-uuid/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/08/05/tc/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -928,95 +1008,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/19/ebpf-bcc/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2022/03/19/ebpf-bcc/" class="post-title-link" itemprop="url">使用eBPF和BCC调查创建文件的进程</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2022-03-19 15:49:15 / 修改时间：21:06:22" itemprop="dateCreated datePublished" datetime="2022-03-19T15:49:15+08:00">2022-03-19</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在我们的一个<code>CentOS 7.8</code>系统上，<code>/tmp</code>目录下偶尔会有一些随机名称的文件产生。业务比较久远，已经不清楚这些文件的来源，需要确定是哪个进程在创建它们。</p>
-<p><code>Linux</code>以<code>VFS: Virtual File System</code>通用文件模型的方式在物理存储介质上的文件系统和用户接口之间建立一个虚拟文件系统的抽象层。其中最重要的两个结构是:</p>
-<ul>
-<li><code>inode</code>: 存放文件的一般信息，每个<code>inode</code>结构都有自己的编号，这个号码唯一标识了文件系统中的文件。</li>
-<li><code>dentry</code>: 存放文件名称信息，以及与对应文件进行链接的有关信息。</li>
-</ul>
-<p><code>VFS</code>创建文件的最主要的步骤是:</p>
-<ol>
-<li>为要创建的文件创建一个<code>dentry</code>结构</li>
-<li>为要创建的文件创建一个<code>inode</code>结构并分配<code>inode</code>编号</li>
-<li>将<code>inode</code>编号和文件名映射关系保存在所分配的<code>dentry</code>结构中</li>
-<li>将<code>dentry</code>写入到父目录的数据区</li>
-</ol>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2022/03/19/ebpf-bcc/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1087,7 +1078,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">118</span>
+          <span class="site-state-item-count">119</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1125,7 +1116,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2022</span>
+  <span itemprop="copyrightYear">2023</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>
