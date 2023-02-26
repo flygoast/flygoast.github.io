@@ -164,6 +164,93 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/17/security-boot/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/10/17/security-boot/" class="post-title-link" itemprop="url">Security Boot开启下CentOS8内核模块签名及加载</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-10-17 23:59:32" itemprop="dateCreated datePublished" datetime="2021-10-17T23:59:32+08:00">2021-10-17</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-11-21 16:00:47" itemprop="dateModified" datetime="2021-11-21T16:00:47+08:00">2021-11-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><code>Security Boot</code>机制是<code>UEFI</code>的一个特性，用于确保固件所加载的代码是可信的。它通过将<code>可信根</code>存放在固件中，在加载阶段校验所加载的二进制可信。当前实现主要是基于<code>X.509</code>证书的公私钥体系。固件使用可信的公钥来校验所加载的<code>bootloader</code>, <code>bootloader</code>再来校验内核或者第二阶段的<code>bootloader</code>, 内核校验所加载的内核模块，这样一级级完成校验。</p>
+<p>在开启了<code>Security Boot</code>机制的CentOS8上，加载我们未签名的内核模块会失败:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost virtualdev]# insmod .&#x2F;virtualdev.ko</span><br><span class="line">insmod: ERROR: could not insert module .&#x2F;virtualdev.ko: Required key not available</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们来通过签名我们的内核模块完成加载。要签名和校验我们的内核模块，我们需要一对公钥私钥。私钥用于签名，公钥需要加载到系统固件的<code>MOK: Machine Owner Key</code>列表中用于校验被签名的模块。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/10/17/security-boot/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/04/nfqueue-pod/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -979,97 +1066,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/05/05/emcp-ospf-cumulus/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2020/05/05/emcp-ospf-cumulus/" class="post-title-link" itemprop="url">基于Cumulus VX实验ECMP+OSPF负载均衡</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2020-05-05 09:16:30" itemprop="dateCreated datePublished" datetime="2020-05-05T09:16:30+08:00">2020-05-05</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:02:58" itemprop="dateModified" datetime="2021-11-21T16:02:58+08:00">2021-11-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>互联网服务为了保证高可用和可扩展性，在流量入口一般都需要部署负载均衡设备。负载均衡设备可分为4层(传输层)和7层(应用层)。L4负载均衡设备之前较为流行的方案是<code>LVS</code>，后来各大厂商又基于<code>DPDK</code>或<code>XDP</code>/<code>eBPF</code>等技术实现了性能更高的一些方案, 如:</p>
-<ul>
-<li>Google: <a href="https://research.google/pubs/pub44824.pdf" target="_blank" rel="noopener">Maglev</a></li>
-<li>Github: <a href="https://github.com/github/glb-director" target="_blank" rel="noopener">GLB</a></li>
-<li>Facebook: <a href="https://github.com/facebookincubator/katran" target="_blank" rel="noopener">Katran</a></li>
-</ul>
-<p>无论以上哪种实现，流量分发的部署方案都类似, 都是由LB集群中多个服务器通过<code>BGP</code>或者<code>OSPF</code>协议向网络设备宣告相同的IP地址(VIP)，网络设备通过<code>ECMP</code>路由将流量分散到这些服务器中。当其中某些LB服务器异常宕机或者维护下线时，网络设备会通过<code>OSPF</code>或者<code>BGP</code>协议的路由收敛机制检测到LB服务器下线，迅速将流量切走, 实现服务高可用。</p>
-<p>本文来实验基于<code>ECMP</code>和<code>OSPF</code>的负载均衡。<a href="https://cumulusnetworks.com/" target="_blank" rel="noopener">Cumulus</a>是一个基于Linux的网络操作系统(NOS:Network Operation System), 运行于白牌交换机上。<a href="https://cumulusnetworks.com/products/cumulus-vx/" target="_blank" rel="noopener">Cumulus VX</a>是Cumulus的免费虚拟设备，可以以虚拟机形式运行。本文就使用Vagrant, VirtualBox, Ubuntu, Cumulus VX来构建我们的实验拓扑。结构如图:</p>
-<img src="/images/2020-05-05/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2020/05/05/emcp-ospf-cumulus/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1140,7 +1136,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">119</span>
+          <span class="site-state-item-count">120</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

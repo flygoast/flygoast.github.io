@@ -164,6 +164,95 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/19/qemu-monitor/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2017/11/19/qemu-monitor/" class="post-title-link" itemprop="url">QEMU monitor机制实例分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-19 14:40:08" itemprop="dateCreated datePublished" datetime="2017-11-19T14:40:08+08:00">2017-11-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>QEMU实例运行时，用户可以通过monitor机制来与实例进行交互，通过它可以获取当前运行的虚拟机信息，处理热插拔设备，管理虚拟机快照等。要了解全部能力，可以参考文档:<br><a href="https://qemu.weilnetz.de/doc/qemu-doc.html#pcsys_005fmonitor" target="_blank" rel="noopener">https://qemu.weilnetz.de/doc/qemu-doc.html#pcsys_005fmonitor</a></p>
+<p>QEMU启动时，需要使用<code>-monitor</code>选项指定做为<code>console</code>设备，官方文档说明如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-monitor dev</span><br><span class="line">    Redirect the monitor to host device dev (same devices as the serial port). The default device is vc in graphical mode and stdio in non graphical mode. Use -monitor none to disable the default monitor.</span><br></pre></td></tr></table></figure>
+<p>下面首先以标准输入输出设备做为<code>console</code>来启动QEMU实例:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores&#x3D;2 -m 2G -vnc :20 -device virtio-net-pci,netdev&#x3D;net0 -netdev tap,id&#x3D;net0,ifname&#x3D;tap0,script&#x3D;no,downscript&#x3D;no -name vm0 -monitor stdio</span><br><span class="line"></span><br><span class="line">QEMU 2.0.0 monitor - type &#39;help&#39; for more information</span><br><span class="line">(qemu)</span><br></pre></td></tr></table></figure>
+<p>在<code>console</code>里可以输入相关命令来完成我们的操作，比如我们查看虚拟机网络设备状态:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(qemu) info network</span><br><span class="line">virtio-net-pci.0: index&#x3D;0,type&#x3D;nic,model&#x3D;virtio-net-pci,macaddr&#x3D;52:54:00:12:34:56</span><br><span class="line"> \ net0: index&#x3D;0,type&#x3D;tap,ifname&#x3D;tap0,script&#x3D;no,downscript&#x3D;no</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2017/11/19/qemu-monitor/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/09/timewait/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -938,91 +1027,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/06/10/vmware-westeast/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/06/10/vmware-westeast/" class="post-title-link" itemprop="url">VMware vSphere东西向网络防护</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-06-10 23:24:22" itemprop="dateCreated datePublished" datetime="2017-06-10T23:24:22+08:00">2017-06-10</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-17 12:00:23" itemprop="dateModified" datetime="2021-11-17T12:00:23+08:00">2021-11-17</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
-                    <span itemprop="name">Virtualization</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="http://www.just4coding.com/blog/2017/05/01/vmvare/" target="_blank" rel="noopener">VMware vSphere虚拟网络防护</a>&gt;&gt;介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vSphere提供的能力将流量引至虚拟安全设备实现东西向网络安全防护的思路。</p>
-<p>我们当前一台ESXi上的环境如图:</p>
-<img src="/images/2017-06-10/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/06/10/vmware-westeast/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1093,7 +1097,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">119</span>
+          <span class="site-state-item-count">120</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

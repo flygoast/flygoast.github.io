@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/</loc>
+    
+    <lastmod>2023-02-26T05:04:02.886Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>http://just4coding.com/2023/02/15/ct-fix/</loc>
     
     <lastmod>2023-02-15T11:13:37.247Z</lastmod>
