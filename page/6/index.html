@@ -164,6 +164,93 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/10/10/vmware-pvlan/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2018/10/10/vmware-pvlan/" class="post-title-link" itemprop="url">基于PVLAN实现VMware vSphere环境DVS东西向防护</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-10-10 16:57:45" itemprop="dateCreated datePublished" datetime="2018-10-10T16:57:45+08:00">2018-10-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章&lt;&lt;<a href="/blog/2017/06/10/vmware-westeast/">VMware vSphere东西向网络防护</a>&gt;&gt;介绍了基于不同VLAN来实现二层网络内虚拟机的东西向隔离防护技术。这种方法在每台ESXi主机上对VLAN ID的管理和分配较为烦琐，本文介绍基于PVLAN实现二层网络内东西向隔离防护的方法。由于VMware vSphere环境中只有<code>DVS</code>(Distributed Virtual Switch，分布式虚拟交换机)支持PVLAN，所以这种方法只能使用在DVS中。</p>
+<p>PVLAN(<code>Private VLAN</code>，专用VLAN)技术是为了解决网络内需要大量隔离而VLAN ID不足的情况。它采用两层VLAN隔离技术，即上行的主VLAN(<code>Primary VLAN</code>)和下行的辅助VLAN(<code>Secondary VLAN</code>)。对上行设备而言，只可见主VLAN,而不可见辅助VLAN。辅助VLAN包含两种类型:隔离VLAN(<code>isolated VLAN</code>)和团体VLAN(<code>community VLAN</code>)。支持PVLAN的交换机的端口对应有三种类型: 隔离端口(<code>isolated port</code>),团体端口(<code>community port</code>),混杂端口(<code>promiscuous port</code>)，它们分别对应隔离VLAN，团体VLAN和主VLAN。在隔离VLAN中，隔离端口之间不能通信，隔离端口只能和混杂端口通信。在团体VLAN中，团体端口之间以及团队端口与混杂端口之间都可以通信。</p>
+<p>可以看到，隔离端口的特性天生就满足二层网络完全隔离的要求，为了能使他们通信，我们需要虚拟网络设备完成隔离端口间的数据包中继。</p>
+<p>我们的测试环境由两台ESXi主机组成，通信双方虚拟机<code>t1</code>和<code>t2</code>位于同一台ESXi主机，属于同一个二层网络，IP分别为:<code>10.95.49.150</code>和<code>10.95.49.151</code>, 两台虚拟机的网络接口都接到分布式交换机<code>DSwitch</code>的<code>DPG-original</code>端口组中。此时拓扑如图:</p>
+<img src="/images/2018-10-10/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2018/10/10/vmware-pvlan/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/09/07/newt/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -955,103 +1042,11 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/25/qemu-hook/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/11/25/qemu-hook/" class="post-title-link" itemprop="url">Libvirt和QEMU hook机制介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-11-25 00:23:23" itemprop="dateCreated datePublished" datetime="2017-11-25T00:23:23+08:00">2017-11-25</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
-                    <span itemprop="name">Virtualization</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在我们的<code>QEMU/KVM</code>虚拟化环境中，当所有的虚拟机启动时需要自动添加一个<code>ivshmem</code>设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用<code>QEMU</code>时，添加上<code>ivshmem</code>设备的相关参数，例如:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,shm&#x3D;fg_i3,size&#x3D;8m,bus&#x3D;pci.0,addr&#x3D;0x1f</span><br></pre></td></tr></table></figure>
-
-<p><code>Libvirt</code>使用XML文件来定义虚拟机配置，并根据XML文件来生成<code>QEMU</code>命令行参数，进而执行<code>QEMU</code>程序来启动虚拟机实例。我们可以在所有虚拟机的XML文件的<code>&lt;devices&gt;</code>节点中添加上<code>&lt;shmem&gt;</code>配置，如:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">shmem</span> <span class="attr">name</span>=<span class="string">"fg_i3"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">model</span> <span class="attr">type</span>=<span class="string">"ivshmem"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">size</span> <span class="attr">unit</span>=<span class="string">'M'</span>&gt;</span>8<span class="tag">&lt;/<span class="name">size</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">address</span> <span class="attr">type</span>=<span class="string">'pci'</span> <span class="attr">domain</span>=<span class="string">'0x0000'</span> <span class="attr">bus</span>=<span class="string">'0x00'</span> <span class="attr">slot</span>=<span class="string">'0x1f'</span> <span class="attr">function</span>=<span class="string">'0x0'</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">shmem</span>&gt;</span></span><br></pre></td></tr></table></figure>
-<p>这样，<code>libvirt</code>启用<code>QEMU</code>实例时，则会添加如下参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,id&#x3D;shmem0,size&#x3D;8m,shm&#x3D;fg_i3,bus&#x3D;pci.0,addr&#x3D;0x1f</span><br></pre></td></tr></table></figure>
-
-<p>Guest启动后，登录查看PCI设备，可以看到相应的<code>ivshmem</code>设备:</p>
-<img src="/images/2017-11-25/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/11/25/qemu-hook/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
   <nav class="pagination">
-    <a class="extend prev" rel="prev" href="/page/5/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><span class="space">&hellip;</span><a class="page-number" href="/page/12/">12</a><a class="extend next" rel="next" href="/page/7/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
+    <a class="extend prev" rel="prev" href="/page/5/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><span class="space">&hellip;</span><a class="page-number" href="/page/13/">13</a><a class="extend next" rel="next" href="/page/7/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
   </nav>
 
 
@@ -1117,7 +1112,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">120</span>
+          <span class="site-state-item-count">121</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

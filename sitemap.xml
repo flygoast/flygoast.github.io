@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://just4coding.com/2023/06/19/netfiter-priority/</loc>
+    
+    <lastmod>2023-06-19T12:07:35.220Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/</loc>
     
     <lastmod>2023-02-26T05:09:27.715Z</lastmod>

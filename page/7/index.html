@@ -164,6 +164,98 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/25/qemu-hook/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2017/11/25/qemu-hook/" class="post-title-link" itemprop="url">Libvirt和QEMU hook机制介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-25 00:23:23" itemprop="dateCreated datePublished" datetime="2017-11-25T00:23:23+08:00">2017-11-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在我们的<code>QEMU/KVM</code>虚拟化环境中，当所有的虚拟机启动时需要自动添加一个<code>ivshmem</code>设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用<code>QEMU</code>时，添加上<code>ivshmem</code>设备的相关参数，例如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,shm&#x3D;fg_i3,size&#x3D;8m,bus&#x3D;pci.0,addr&#x3D;0x1f</span><br></pre></td></tr></table></figure>
+
+<p><code>Libvirt</code>使用XML文件来定义虚拟机配置，并根据XML文件来生成<code>QEMU</code>命令行参数，进而执行<code>QEMU</code>程序来启动虚拟机实例。我们可以在所有虚拟机的XML文件的<code>&lt;devices&gt;</code>节点中添加上<code>&lt;shmem&gt;</code>配置，如:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">shmem</span> <span class="attr">name</span>=<span class="string">"fg_i3"</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">model</span> <span class="attr">type</span>=<span class="string">"ivshmem"</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">size</span> <span class="attr">unit</span>=<span class="string">'M'</span>&gt;</span>8<span class="tag">&lt;/<span class="name">size</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">address</span> <span class="attr">type</span>=<span class="string">'pci'</span> <span class="attr">domain</span>=<span class="string">'0x0000'</span> <span class="attr">bus</span>=<span class="string">'0x00'</span> <span class="attr">slot</span>=<span class="string">'0x1f'</span> <span class="attr">function</span>=<span class="string">'0x0'</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">shmem</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>这样，<code>libvirt</code>启用<code>QEMU</code>实例时，则会添加如下参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,id&#x3D;shmem0,size&#x3D;8m,shm&#x3D;fg_i3,bus&#x3D;pci.0,addr&#x3D;0x1f</span><br></pre></td></tr></table></figure>
+
+<p>Guest启动后，登录查看PCI设备，可以看到相应的<code>ivshmem</code>设备:</p>
+<img src="/images/2017-11-25/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2017/11/25/qemu-hook/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/19/qemu-monitor/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -940,98 +1032,11 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/06/30/paste-deploy/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/06/30/paste-deploy/" class="post-title-link" itemprop="url">PasteDeploy介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-06-30 00:04:03" itemprop="dateCreated datePublished" datetime="2017-06-30T00:04:03+08:00">2017-06-30</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="http://www.just4coding.com/blog/2017/01/18/wsgi/" target="_blank" rel="noopener">WSGI介绍</a>&gt;&gt;简要介绍了WSGI中的<code>server</code>, <code>application</code>，<code>middleware</code>等概念。<code>WSGI Server</code>收到请求后调用<code>WSGI application</code>的入口点(一般为<code>callable</code>对象或者函数)来处理请求。比如，<code>uWSGI</code>和<code>mod_wsgi</code>默认调用名为application的入口点。</p>
-<p>PasteDeploy是一套发现和配置WSGI应用的系统。它根据指定的配置文件动态生成入口点和组织<code>WSGI application</code>间的逻辑关系。配置文件为INI格式。每个配置文件可以包含多个<code>section</code>, <code>section</code>以格式为<code>[type:name]</code>形式的段名开始，段名行之后为具体配置。示例如下:</p>
-<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[DEFAULT]</span></span><br><span class="line"><span class="attr">email</span> = alice@example.org</span><br><span class="line"></span><br><span class="line"><span class="section">[app:main]</span></span><br><span class="line"><span class="attr">use</span> = egg:BlogApp</span><br><span class="line"><span class="attr">database</span> = sqlite:/home/me/blog.db</span><br><span class="line">set email = bob@example.org</span><br><span class="line"></span><br><span class="line"><span class="section">[app:wiki]</span></span><br><span class="line"><span class="attr">use</span> = call:mywiki.main:application</span><br><span class="line"><span class="attr">database</span> = sqlite:/home/me/wiki.db</span><br></pre></td></tr></table></figure>
-
-<p>其中，<code>[DEFAULT]</code>段中为全局配置，各section中可以覆盖<code>[DEFAULT]</code>段中配置。如示例中的<code>set email</code>配置。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/06/30/paste-deploy/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
   <nav class="pagination">
-    <a class="extend prev" rel="prev" href="/page/6/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/6/">6</a><span class="page-number current">7</span><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/12/">12</a><a class="extend next" rel="next" href="/page/8/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
+    <a class="extend prev" rel="prev" href="/page/6/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/6/">6</a><span class="page-number current">7</span><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/13/">13</a><a class="extend next" rel="next" href="/page/8/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
   </nav>
 
 
@@ -1097,7 +1102,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">120</span>
+          <span class="site-state-item-count">121</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
