@@ -164,6 +164,84 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/03/seccomp/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/04/03/seccomp/" class="post-title-link" itemprop="url">Seccomp机制与seccomp notify介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2022-04-03 22:26:56 / 修改时间：22:29:03" itemprop="dateCreated datePublished" datetime="2022-04-03T22:26:56+08:00">2022-04-03</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><code>seccomp</code>代表<code>secure computing</code>，是早在<code>2.6.12</code>版本就引入到内核的特性，用来限制进程可以使用的<code>系统调用</code>。它作用于进程里的线程(<code>task</code>)。</p>
+<p>最初，<code>seccomp</code>只允许使用<code>read</code>, <code>write</code>, <code>_exit</code>, <code>sigreturn</code>4个系统调用，调用其他系统调用时，内核会发送<code>SIGKILL</code>信号终止进程。当时<code>seccomp</code>的提出主要是想用于出租空闲的CPU算力。这种模式叫做<code>STRICT</code>模式。它限制过于严格，在实际应用上并没有太多发展。<code>Linus Torvald</code>甚至建议把它从内核中砍掉。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/04/03/seccomp/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/22/totp/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -961,93 +1039,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/03/flannel/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/11/03/flannel/" class="post-title-link" itemprop="url">Kubernetes flannel网络分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-11-03 22:06:57" itemprop="dateCreated datePublished" datetime="2021-11-03T22:06:57+08:00">2021-11-03</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:09:22" itemprop="dateModified" datetime="2021-11-21T16:09:22+08:00">2021-11-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p><a href="https://github.com/flannel-io/flannel" target="_blank" rel="noopener"><code>flannel</code></a>是<code>coreos</code>开源的<code>Kubernetes CNI</code>实现。它使用<code>etcd</code>或者<code>Kubernetes API</code>存储整个集群的网络配置。每个<code>kubernetes</code>节点上运行<code>flanneld</code>组件，它从<code>etcd</code>或者<code>Kubernetes API</code>获取集群的网络地址空间，并在空间内获取一个<code>subnet</code>,该节点上的容器<code>IP</code>都从这个<code>subnet</code>中分配，从而保证不同节点上的<code>IP</code>不会冲突。<code>flannel</code>通过不同的<code>backend</code>来实现跨主机的容器网络通信，目前支持<code>udp</code>,<code>vxlan</code>,<code>host-gw</code>等一系列<code>backend</code>实现。本文介绍<code>vxlan backend</code>下的容器通信过程。</p>
-<p><code>flannel</code>在<code>v0.9.0</code>版本上对<code>vxlan</code>的实现作了改动。<a href="https://github.com/flannel-io/flannel/blob/v0.9.0/backend/vxlan/vxlan.go`" target="_blank" rel="noopener">源码</a>中有一段非常详细的注释介绍了不同版本的设计与实现:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; Some design notes and history:</span><br><span class="line">&#x2F;&#x2F; VXLAN encapsulates L2 packets (though flannel is L3 only so don&#39;t expect to be able to send L2 packets across hosts)</span><br><span class="line">&#x2F;&#x2F; The first versions of vxlan for flannel registered the flannel daemon as a handler for both &quot;L2&quot; and &quot;L3&quot; misses</span><br><span class="line">&#x2F;&#x2F; - When a container sends a packet to a new IP address on the flannel network (but on a different host) this generates</span><br><span class="line">&#x2F;&#x2F;   an L2 miss (i.e. an ARP lookup)</span><br><span class="line">&#x2F;&#x2F; - The flannel daemon knows which flannel host the packet is destined for so it can supply the VTEP MAC to use.</span><br><span class="line">&#x2F;&#x2F;   This is stored in the ARP table (with a timeout) to avoid constantly looking it up.</span><br><span class="line">&#x2F;&#x2F; - The packet can then be encapsulated but the host needs to know where to send it. This creates another callout from</span><br><span class="line">&#x2F;&#x2F;   the kernal vxlan code to the flannel daemon to get the public IP that should be used for that VTEP (this gets called</span><br><span class="line">&#x2F;&#x2F;   an L3 miss). The L2&#x2F;L3 miss hooks are registered when the vxlan device is created. At the same time a device route</span><br><span class="line">&#x2F;&#x2F;   is created to the whole flannel network so that non-local traffic is sent over the vxlan device.</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; In this scheme the scaling of table entries (per host) is:</span><br><span class="line">&#x2F;&#x2F;  - 1 route (for the configured network out the vxlan device)</span><br><span class="line">&#x2F;&#x2F;  - One arp entry for each remote container that this host has recently contacted</span><br><span class="line">&#x2F;&#x2F;  - One FDB entry for each remote host</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; The second version of flannel vxlan removed the need for the L3MISS callout. When a new remote host is found (either</span><br><span class="line">&#x2F;&#x2F; during startup or when it&#39;s created), flannel simply adds the required entries so that no further lookup&#x2F;callout is required.</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; The latest version of the vxlan backend  removes the need for the L2MISS too, which means that the flannel deamon is not</span><br><span class="line">&#x2F;&#x2F; listening for any netlink messages anymore. This improves reliability (no problems with timeouts if</span><br><span class="line">&#x2F;&#x2F; flannel crashes or restarts) and simplifies upgrades.</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; How it works:</span><br><span class="line">&#x2F;&#x2F; Create the vxlan device but don&#39;t register for any L2MISS or L3MISS messages</span><br><span class="line">&#x2F;&#x2F; Then, as each remote host is discovered (either on startup or when they are added), do the following</span><br><span class="line">&#x2F;&#x2F; 1) create routing table entry for the remote subnet. It goes via the vxlan device but also specifies a next hop (of the remote flannel host).</span><br><span class="line">&#x2F;&#x2F; 2) Create a static ARP entry for the remote flannel host IP address (and the VTEP MAC)</span><br><span class="line">&#x2F;&#x2F; 3) Create an FDB entry with the VTEP MAC and the public IP of the remote flannel daemon.</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; In this scheme the scaling of table entries is linear to the number of remote hosts - 1 route, 1 arp entry and 1 FDB entry per host</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; In this newest scheme, there is also the option of skipping the use of vxlan for hosts that are on the same subnet,</span><br><span class="line">&#x2F;&#x2F; this is called &quot;directRouting&quot;</span><br></pre></td></tr></table></figure>
-
-<p><code>v0.9.0</code>之前版本的实现主要依赖<code>vxlan</code>内核模块的<code>L2MISS</code>和<code>L3MISS</code>消息机制。<code>L2MISS</code>是指<code>vxlan</code>设备在<code>ARP</code>表中找不到内层<code>IP</code>对应的<code>MAC</code>地址时会给用户态程序发送<code>netlink</code>消息。<code>L3MISS</code>是指<code>vxlan</code>设备在<code>FDB</code>表中找不到<code>VXLAN</code>协议内层<code>MAC</code>地址所属的<code>VTEP</code>的<code>IP</code>地址时会给用户态程序发送<code>netlink</code>消息。之前的文章<a href="/2020/04/20/vxlan-fdb/">&lt;&lt;动态维护FDB表项实现VXLAN通信&gt;&gt;</a>介绍过相关概念和操作。本文主要分析<code>v0.9.0</code>版本上的实现方式。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/11/03/flannel/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1118,7 +1109,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">121</span>
+          <span class="site-state-item-count">122</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

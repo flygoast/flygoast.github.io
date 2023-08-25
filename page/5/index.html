@@ -164,6 +164,100 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/06/21/NSX/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/06/21/NSX/" class="post-title-link" itemprop="url">NSX分布式逻辑路由器介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-06-21 23:46:56" itemprop="dateCreated datePublished" datetime="2020-06-21T23:46:56+08:00">2020-06-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>NSX是VMware公司在vSphere平台上的网络虚拟化解决方案。从架构上分为四层, 如图:</p>
+<img src="/images/2020-06-21/1.png" class="">
+
+<ul>
+<li>消费平面: 云管平台<code>CMP(Cloud Management Platform)</code>不是NSX的组件，NSX提供了丰富的REST API, 可根据需要集成NSX。</li>
+<li>管理平面: NSX Manager是NSX的集中管理器，主要功能包括管理NSX Controller集群，管理EDGE节点，为上层消费平台提供管理和配置接口。NSX Manager自身实现了vSphere vCenter插件，可注册在vCenter中，通过GUI进行管理。</li>
+<li>控制平面: 控制平台主要包括NSX Controller集群，Controller负责维护所有ESXi主机、逻辑交换机(Logical Switch)和分布式逻辑路由器(DLR: Distributed Logical Router)的信息。实际上，控制平面还包括DLR的<code>Control VM</code>, 上图中没有体现。上图来自官方6.4版本的<a href="https://docs.vmware.com/cn/VMware-NSX-Data-Center-for-vSphere/6.4/com.vmware.nsx.install.doc/GUID-3BC07B7A-29F4-4F1B-9D5C-97154FF9C54B.html" target="_blank" rel="noopener">文档</a>。后文会再介绍它的作用。</li>
+<li>数据平面: 数据平面主要包括<code>NSX Virtual Switch</code>, <code>DLR</code>, 和<code>ESG: Edge Service Gateway</code>。按图中表示，<code>NSX Virtual Switch</code>是基于vSphere的分布式交换机并在内核中实现VXLAN、防火墙过滤、分布式路由等功能的逻辑交换机。我个人更倾向将<code>NSX Virtual Switch</code>理解为<code>VDS</code>+<code>VXLAN</code>实现，将<code>DLR</code>看成独立组件。<code>VDS</code>可以理解为基于<code>VLAN</code>隔离的虚拟交换机，<code>NSX Virtual Switch</code>是基于<code>VXLAN</code>隔离的虚拟交换机。NSX界面上，<code>NSX Virtual Switch</code>叫做<code>逻辑交换机: Logical Switch</code>。<code>DLR</code>和<code>ESG</code>都是路由器，<code>DLR</code>负责虚拟数据中心中东西向流量路由，<code>ESG</code>负责虚拟数据中心边缘的南北向流量路由。其他数据面组件都在ESXi主机内核中实现，而<code>ESG</code>是独立的虚拟机。 NSX的一个典型逻辑网络架构如下图:<img src="/images/2020-06-21/2.png" class="">
+
+
+</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/06/21/NSX/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/06/13/airflow/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -971,91 +1065,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/19/npyscreen/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/11/19/npyscreen/" class="post-title-link" itemprop="url">Python TUI库npyscreen简要介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-11-19 15:18:36" itemprop="dateCreated datePublished" datetime="2018-11-19T15:18:36+08:00">2018-11-19</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-07-21 18:57:41" itemprop="dateModified" datetime="2021-07-21T18:57:41+08:00">2021-07-21</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/MISC/" itemprop="url" rel="index">
-                    <span itemprop="name">MISC</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="/blog/2018/09/07/newt/">TUI库newt和snack简要介绍</a>&gt;&gt;介绍了如何使用<code>newt</code>库开发控制台应用程序。<code>newt</code>库是一个非常简单的库，只适合开发逻辑为顺序流程的程序，比如，典型的程序安装向导。当程序逻辑较为复杂时，可以直接使用<code>ncurses</code>来实现。但<code>ncurses</code>是一个较为底层的库，使用它开发工作量会较大。本文介绍一个使用更为简易但可实现复杂功能的TUI库:npyscreen。</p>
-<p>当前最新版本为4.10.5，如图:</p>
-<img src="/images/2018-11-19/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/11/19/npyscreen/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1126,7 +1135,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">121</span>
+          <span class="site-state-item-count">122</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
