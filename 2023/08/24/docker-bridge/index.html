@@ -32,7 +32,7 @@
 <meta property="og:image" content="http://just4coding.com/images/2023-08-24/3.png">
 <meta property="og:image" content="http://just4coding.com/images/2023-08-24/4.png">
 <meta property="article:published_time" content="2023-08-24T15:55:22.000Z">
-<meta property="article:modified_time" content="2023-08-24T15:59:31.221Z">
+<meta property="article:modified_time" content="2023-08-25T08:10:25.291Z">
 <meta property="article:author" content="flygoast">
 <meta property="article:tag" content="Kernel">
 <meta property="article:tag" content="Network">
@@ -197,10 +197,16 @@
                 <i class="fa fa-calendar-o"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              
 
-              <time title="创建时间：2023-08-24 23:55:22 / 修改时间：23:59:31" itemprop="dateCreated datePublished" datetime="2023-08-24T23:55:22+08:00">2023-08-24</time>
+              <time title="创建时间：2023-08-24 23:55:22" itemprop="dateCreated datePublished" datetime="2023-08-24T23:55:22+08:00">2023-08-24</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2023-08-25 16:10:25" itemprop="dateModified" datetime="2023-08-25T16:10:25+08:00">2023-08-25</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="fa fa-folder-o"></i>
@@ -290,7 +296,7 @@
 <p>回包的整体路径如下图:</p>
 <img src="/images/2023-08-24/4.png" class="">
 
-<p>本文介绍了从外部访问端口映射到宿主机的容器的数据包路径。而对于<br>相同网桥下的不同容器之间的网络访问路径，在<code>CentOS7</code>的<code>3.10.0</code>内核和<code>CentOS8</code>的<code>4.18</code>内核上表现不一致，后续可以再写文章分析一下。</p>
+<p>本文介绍了从外部访问端口映射到宿主机的容器的数据包路径。而对于相同网桥下的不同容器之间的网络访问路径，和参数<code>net.bridge.bridge-nf-call-iptables</code>有关，后续可以再写文章分析一下。</p>
 <h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
 <li><a href="https://jiansoft.net/2022/08/06/linux_source_code_netfilter.html" target="_blank" rel="noopener">https://jiansoft.net/2022/08/06/linux_source_code_netfilter.html</a></li>
 <li><a href="https://juejin.cn/post/7170653486793621511" target="_blank" rel="noopener">https://juejin.cn/post/7170653486793621511</a></li>
