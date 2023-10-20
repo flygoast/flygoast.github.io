@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
 <meta name="theme-color" content="#222">
-<meta name="generator" content="Hexo 4.2.1">
+<meta name="generator" content="Hexo 6.3.0">
   <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
@@ -164,6 +164,91 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/14/external-ip/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/11/14/external-ip/" class="post-title-link" itemprop="url">基于LVS DR模式的Kubernetes Service External-IP实现</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-14 22:34:27" itemprop="dateCreated datePublished" datetime="2021-11-14T22:34:27+08:00">2021-11-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章<a href="/2021/11/07/kubernetes-clusterip/">&lt;&lt;Kubernetes Service网络通信路径&gt;&gt;</a>介绍了<code>kubernetes</code>的几种<code>Service</code>。如果要暴露服务给<code>kubernetes</code>集群外使用，可以选择<code>NodePort</code>和<code>LoadBalancer</code>。但<code>LoadBalancer</code>现在主要在各大公有云厂商上能够原生支持。而使用<code>NodePort</code>暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如<code>mysql</code>的<code>3306</code>端口。</p>
+<p><code>Service</code>的<a href="https://kubernetes.io/docs/concepts/services-networking/service/#external-ips" target="_blank" rel="noopener">官方文档</a>中介绍了一种辅助方式, 叫<code>External-IP</code>, 可以在<code>worker</code>节点上会通过该<code>IP</code>来暴露服务，而且可以使用在任意类型的<code>service</code>上。集群外的用户就可以通过该<code>IP</code>来访问服务。但如果这个<code>IP</code>只存在于一个<code>worker</code>节点上，那么就不具备高可用的能力了，我们需要在多个<code>worker</code>节点上配置这个<code>VIP:Virtual IP</code>。我们可以使用<code>LVS</code>(也叫做<code>IPVS</code>)的<code>DR(Director Routing)</code>模式作为外部负载均衡器将流量分发到多个<code>worker</code>节点上，同时保持数据包的目的地址为该<code>VIP</code>。</p>
+<p><code>DR</code>模式只会修改数据包的目的<code>MAC</code>地址为后端<code>RealServer</code>的<code>MAC</code>地址，因而要求负载均衡器<code>Director</code>和<code>RealServer</code>在同一个二层网络，而且响应包不会经过<code>Director</code>。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/11/14/external-ip/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/07/kubernetes-clusterip/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -195,7 +280,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-15 01:11:58" itemprop="dateModified" datetime="2021-11-15T01:11:58+08:00">2021-11-15</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -294,7 +379,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:09:22" itemprop="dateModified" datetime="2021-11-21T16:09:22+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -381,7 +466,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:00:55" itemprop="dateModified" datetime="2021-11-21T16:00:55+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -467,7 +552,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:00:47" itemprop="dateModified" datetime="2021-11-21T16:00:47+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -554,7 +639,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 14:32:03" itemprop="dateModified" datetime="2021-11-21T14:32:03+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -647,7 +732,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:13:33" itemprop="dateModified" datetime="2021-11-21T16:13:33+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -733,7 +818,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:13:15" itemprop="dateModified" datetime="2021-11-21T16:13:15+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -834,7 +919,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 14:31:43" itemprop="dateModified" datetime="2021-11-21T14:31:43+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -929,7 +1014,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-11-21 16:00:33" itemprop="dateModified" datetime="2021-11-21T16:00:33+08:00">2021-11-21</time>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -969,94 +1054,6 @@
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2021/07/21/socket-to-pid/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/25/kubernetes-cni/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2020/07/25/kubernetes-cni/" class="post-title-link" itemprop="url">Kubernetes网络和CNI</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2020-07-25 10:40:57" itemprop="dateCreated datePublished" datetime="2020-07-25T10:40:57+08:00">2020-07-25</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-10-04 21:08:19" itemprop="dateModified" datetime="2021-10-04T21:08:19+08:00">2021-10-04</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p><a href="https://github.com/containernetworking/cni" target="_blank" rel="noopener"><code>CNI: Container Network Interface</code></a>是配置Linux容器网络接口的一种规范。它将<code>容器运行时</code>和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的<code>容器运行时</code>环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。</p>
-<p><code>CNI</code>规范主要涉及<code>容器运行时</code>和<code>CNI</code>插件两个角色，规范约定了二者的交互方式。<code>容器运行时</code>在容器实例创建时调用<code>CNI</code>插件的<code>ADD</code>接口以创建容器络连接所需的资源网络连接，当容器删除时调用<code>CNI</code>的<code>DEL</code>接口移除所创建的相应资源完成资源释放。不同的<code>CNI</code>插件按照规范所统一定义的接口、参数、响应实现不同的网络方案。</p>
-<p>官方提供了开发库<code>libcni</code>，<code>容器运行时</code>可以使用该库来集成<code>CNI</code>能力，并且还提供了一系列的<a href="https://github.com/containernetworking/plugins" target="_blank" rel="noopener">CNI插件参考实现</a>。</p>
-<p>目前<code>CNI</code>规范的最新版本为<code>0.4.0</code>。</p>
-<p>从具体实现上看，<code>容器运行时</code>会先创建好相应的<code>network namespace</code>, 然后<code>CNI</code>插件负责将网络接口插入到容器实例的<code>network namespace</code>、在宿主机上做必要的网络操作(如绑定IP到接口、建立路由等)以实现容器网络连通。</p>
-<p>一般设计中，主体模块与插件之间的交互会采用<code>RPC</code>、二进制兼容的动态库加载等手段。<code>CNI</code>规范则指定<code>CNI</code>插件实现为可执行程序，相应接口参数通过环境变量与标准输入流传给<code>CNI</code>插件，类似于早年WEB领域的<code>CGI</code>模式。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2020/07/25/kubernetes-cni/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -1146,7 +1143,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">123</span>
+          <span class="site-state-item-count">124</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1190,7 +1187,7 @@
   </span>
   <span class="author" itemprop="copyrightHolder">flygoast</span>
 </div>
-  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.2.1
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
   </div>
   <span class="post-meta-divider">|</span>
   <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1

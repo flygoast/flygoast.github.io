@@ -2,885 +2,1647 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://just4coding.com/2023/10/19/openbox/</loc>
+    
+    <lastmod>2023-10-19</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>http://just4coding.com/2023/09/03/locale/</loc>
     
-    <lastmod>2023-09-03T15:42:29.083Z</lastmod>
+    <lastmod>2023-09-03</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2023/08/24/docker-bridge/</loc>
     
-    <lastmod>2023-08-25T08:10:25.291Z</lastmod>
+    <lastmod>2023-08-25</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2023/06/19/netfiter-priority/</loc>
     
-    <lastmod>2023-06-19T12:07:35.220Z</lastmod>
+    <lastmod>2023-06-19</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/</loc>
     
-    <lastmod>2023-02-26T05:09:27.715Z</lastmod>
+    <lastmod>2023-02-26</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2023/02/15/ct-fix/</loc>
     
-    <lastmod>2023-02-15T11:13:37.247Z</lastmod>
+    <lastmod>2023-02-15</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/22/nsxt-vdrport/</loc>
     
-    <lastmod>2022-11-30T12:15:27.906Z</lastmod>
+    <lastmod>2022-11-30</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/30/udev/</loc>
     
-    <lastmod>2022-11-30T12:13:19.657Z</lastmod>
+    <lastmod>2022-11-30</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/22/linux-symbol/</loc>
     
-    <lastmod>2022-11-21T16:59:39.915Z</lastmod>
+    <lastmod>2022-11-21</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/20/vmware-iscsi-multipathing/</loc>
     
-    <lastmod>2022-11-20T12:01:07.479Z</lastmod>
+    <lastmod>2022-11-20</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/13/nsxt-vlan/</loc>
     
-    <lastmod>2022-11-13T06:42:25.312Z</lastmod>
+    <lastmod>2022-11-20</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/11/07/nsxt-named-teaming-policies/</loc>
     
-    <lastmod>2022-11-10T11:04:54.144Z</lastmod>
+    <lastmod>2022-11-10</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/10/22/tc-lo/</loc>
     
-    <lastmod>2022-10-22T11:08:31.738Z</lastmod>
+    <lastmod>2022-10-22</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/09/24/mktime/</loc>
     
-    <lastmod>2022-09-24T14:14:44.672Z</lastmod>
+    <lastmod>2022-09-24</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/09/09/console-gui/</loc>
     
-    <lastmod>2022-09-09T09:48:32.395Z</lastmod>
+    <lastmod>2022-09-09</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/08/11/client-uuid/</loc>
     
-    <lastmod>2022-08-11T15:16:32.036Z</lastmod>
+    <lastmod>2022-08-11</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/08/05/tc/</loc>
     
-    <lastmod>2022-08-05T10:38:19.536Z</lastmod>
+    <lastmod>2022-08-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2022/07/18/vmware-crash/</loc>
     
-    <lastmod>2022-07-18T14:47:33.661Z</lastmod>
+    <lastmod>2022-07-18</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/</loc>
-    
-    <lastmod>2022-06-25T10:43:57.160Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/06/12/ssh-portforward/</loc>
-    
-    <lastmod>2022-06-12T15:08:13.500Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/06/11/bash-test/</loc>
-    
-    <lastmod>2022-06-11T15:34:56.230Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/02/22/systemd-env/</loc>
-    
-    <lastmod>2022-06-11T15:23:33.630Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/04/20/fix-exit/</loc>
-    
-    <lastmod>2022-04-22T01:39:41.464Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/04/03/seccomp/</loc>
-    
-    <lastmod>2022-04-03T14:29:03.877Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/03/22/totp/</loc>
-    
-    <lastmod>2022-03-22T13:42:25.194Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/03/22/ebpf-c/</loc>
-    
-    <lastmod>2022-03-21T17:42:03.745Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/03/19/ebpf-bcc/</loc>
-    
-    <lastmod>2022-03-19T13:06:22.969Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2022/03/02/socks-dante/</loc>
-    
-    <lastmod>2022-03-02T15:28:59.333Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/12/29/nfqueue-dns/</loc>
-    
-    <lastmod>2021-12-30T01:43:22.875Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/09/25/ivshmem-pci/</loc>
-    
-    <lastmod>2021-11-21T08:13:33.774Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/09/12/qemu-ivshmem/</loc>
-    
-    <lastmod>2021-11-21T08:13:15.228Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/12/04/virtualnetworkdevice/</loc>
-    
-    <lastmod>2021-11-21T08:11:52.834Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/11/14/external-ip/</loc>
-    
-    <lastmod>2021-11-21T08:10:44.017Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/11/03/flannel/</loc>
-    
-    <lastmod>2021-11-21T08:09:22.735Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/11/06/xenserver-kernel-module/</loc>
-    
-    <lastmod>2021-11-21T08:07:59.689Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/01/20/twemproxy/</loc>
-    
-    <lastmod>2021-11-21T08:06:56.647Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2015/11/16/toa/</loc>
-    
-    <lastmod>2021-11-21T08:04:00.219Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2020/05/05/emcp-ospf-cumulus/</loc>
-    
-    <lastmod>2021-11-21T08:02:58.512Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/10/31/core-dump/</loc>
-    
-    <lastmod>2021-11-21T08:00:55.786Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/10/17/security-boot/</loc>
-    
-    <lastmod>2021-11-21T08:00:47.621Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/07/21/socket-to-pid/</loc>
-    
-    <lastmod>2021-11-21T08:00:33.419Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/11/21/custom-loadbalancer/</loc>
-    
-    <lastmod>2021-11-21T07:58:33.640Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2020/06/13/airflow/</loc>
-    
-    <lastmod>2021-11-21T07:52:20.423Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/10/04/nfqueue-pod/</loc>
-    
-    <lastmod>2021-11-21T06:32:03.243Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/09/05/nfqueue-mark/</loc>
-    
-    <lastmod>2021-11-21T06:31:43.233Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/06/10/vmware-westeast/</loc>
-    
-    <lastmod>2021-11-17T04:00:23.928Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2021/11/07/kubernetes-clusterip/</loc>
-    
-    <lastmod>2021-11-14T17:11:58.943Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/12/23/iptables-mark-and-polices-based-route/</loc>
-    
-    <lastmod>2021-11-07T13:53:35.984Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2020/07/25/kubernetes-cni/</loc>
-    
-    <lastmod>2021-10-04T13:08:19.219Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/index.html</loc>
     
-    <lastmod>2021-07-21T10:57:41.635Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2020/07/13/nsx-t/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.382Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/about/index.html</loc>
-    
-    <lastmod>2021-07-21T10:57:41.382Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/index.html</loc>
     
-    <lastmod>2021-07-21T10:57:41.382Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2020/04/26/vxlan-evpn/</loc>
+    <loc>http://just4coding.com/2022/06/12/ssh-portforward/</loc>
     
-    <lastmod>2021-07-21T10:57:41.381Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/06/11/bash-test/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/about/index.html</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/03/22/ebpf-c/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/03/22/totp/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/04/03/seccomp/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/04/20/fix-exit/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/02/22/systemd-env/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/03/02/socks-dante/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/12/29/nfqueue-dns/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2022/03/19/ebpf-bcc/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/11/07/kubernetes-clusterip/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/11/14/external-ip/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/11/21/custom-loadbalancer/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/10/17/security-boot/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/10/04/nfqueue-pod/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/10/31/core-dump/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/11/03/flannel/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/07/21/socket-to-pid/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/09/05/nfqueue-mark/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/09/12/qemu-ivshmem/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2021/09/25/ivshmem-pci/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2020/06/21/NSX/</loc>
     
-    <lastmod>2021-07-21T10:57:41.381Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2020/03/02/Kubernetes-CDR/</loc>
+    <loc>http://just4coding.com/2020/07/13/nsx-t/</loc>
     
-    <lastmod>2021-07-21T10:57:41.380Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2020/06/13/airflow/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2020/07/25/kubernetes-cni/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2020/03/13/vault-introduction/</loc>
     
-    <lastmod>2021-07-21T10:57:41.380Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2020/04/20/vxlan-fdb/</loc>
     
-    <lastmod>2021-07-21T10:57:41.380Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2018/11/19/npyscreen/</loc>
+    <loc>http://just4coding.com/2020/05/05/emcp-ospf-cumulus/</loc>
     
-    <lastmod>2021-07-21T10:57:41.379Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2020/02/13/open-policy-agent/</loc>
+    <loc>http://just4coding.com/2020/04/26/vxlan-evpn/</loc>
     
-    <lastmod>2021-07-21T10:57:41.379Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2018/10/10/vmware-pvlan/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.379Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2018/11/23/fabric/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.379Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2019/08/10/service-catalog/</loc>
     
-    <lastmod>2021-07-21T10:57:41.379Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2018/08/08/openstack-l2-vfw/</loc>
+    <loc>http://just4coding.com/2018/11/23/fabric/</loc>
     
-    <lastmod>2021-07-21T10:57:41.378Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2018/08/08/openstack-vfw/</loc>
+    <loc>http://just4coding.com/2020/02/13/open-policy-agent/</loc>
     
-    <lastmod>2021-07-21T10:57:41.378Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2018/08/14/celery/</loc>
+    <loc>http://just4coding.com/2020/03/02/Kubernetes-CDR/</loc>
     
-    <lastmod>2021-07-21T10:57:41.378Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2018/09/07/newt/</loc>
     
-    <lastmod>2021-07-21T10:57:41.378Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2018/01/11/meltdown-pcid/</loc>
+    <loc>http://just4coding.com/2018/10/10/vmware-pvlan/</loc>
     
-    <lastmod>2021-07-21T10:57:41.377Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2018/11/19/npyscreen/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2018/08/14/celery/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2018/07/31/dbus/</loc>
     
-    <lastmod>2021-07-21T10:57:41.377Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2017/12/19/vsphere-api/</loc>
+    <loc>http://just4coding.com/2018/08/08/openstack-vfw/</loc>
     
-    <lastmod>2021-07-21T10:57:41.377Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2018/08/08/openstack-l2-vfw/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2018/08/01/dbus-api/</loc>
     
-    <lastmod>2021-07-21T10:57:41.377Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/11/09/timewait/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.376Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/11/19/qemu-monitor/</loc>
     
-    <lastmod>2021-07-21T10:57:41.376Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/12/19/vsphere-api/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/11/25/qemu-hook/</loc>
     
-    <lastmod>2021-07-21T10:57:41.376Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/12/02/ovs-mirror/</loc>
     
-    <lastmod>2021-07-21T10:57:41.376Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2017/09/09/ping/</loc>
+    <loc>http://just4coding.com/2018/01/11/meltdown-pcid/</loc>
     
-    <lastmod>2021-07-21T10:57:41.375Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/08/26/tarantool/</loc>
     
-    <lastmod>2021-07-21T10:57:41.375Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/09/09/ping/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/09/14/ansible/</loc>
     
-    <lastmod>2021-07-21T10:57:41.375Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/10/12/vmware-find-mac/</loc>
     
-    <lastmod>2021-07-21T10:57:41.375Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/11/07/port-mirroring/</loc>
     
-    <lastmod>2021-07-21T10:57:41.375Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2017/07/07/websocket/</loc>
+    <loc>http://just4coding.com/2017/11/09/timewait/</loc>
     
-    <lastmod>2021-07-21T10:57:41.374Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/06/30/paste-deploy/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.374Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/08/19/traffic-broker/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.374Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/03/31/kernel-module/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.373Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/04/17/chracter-device/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.373Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/05/01/vmvare/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.373Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/05/21/vxlan/</loc>
     
-    <lastmod>2021-07-21T10:57:41.373Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2017/01/18/wsgi/</loc>
+    <loc>http://just4coding.com/2017/06/10/vmware-westeast/</loc>
     
-    <lastmod>2021-07-21T10:57:41.372Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/07/07/websocket/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/06/30/paste-deploy/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/08/19/traffic-broker/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/02/19/arp-proxy/</loc>
     
-    <lastmod>2021-07-21T10:57:41.372Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/02/22/arp-filter/</loc>
     
-    <lastmod>2021-07-21T10:57:41.372Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/01/24/keystone/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.372Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/03/27/nfqueue/</loc>
     
-    <lastmod>2021-07-21T10:57:41.372Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/03/31/kernel-module/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/04/17/chracter-device/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/05/01/vmvare/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/12/23/iptables-mark-and-polices-based-route/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2016/12/31/introducing-openflow/</loc>
     
-    <lastmod>2021-07-21T10:57:41.371Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2017/01/07/all-in-one-neutron/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.371Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2017/01/01/openflow-based-on-ovs/</loc>
     
-    <lastmod>2021-07-21T10:57:41.371Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2016/12/10/linux-route/</loc>
+    <loc>http://just4coding.com/2017/01/07/all-in-one-neutron/</loc>
     
-    <lastmod>2021-07-21T10:57:41.370Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2016/12/22/associating-multi-floatingip/</loc>
+    <loc>http://just4coding.com/2017/01/18/wsgi/</loc>
     
-    <lastmod>2021-07-21T10:57:41.370Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2017/01/24/keystone/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/12/04/virtualnetworkdevice/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2016/12/11/iptables/</loc>
     
-    <lastmod>2021-07-21T10:57:41.370Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/12/22/associating-multi-floatingip/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2016/12/17/arp/</loc>
     
-    <lastmod>2021-07-21T10:57:41.370Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/12/10/linux-route/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2016/06/10/lua-command/</loc>
     
-    <lastmod>2021-07-21T10:57:41.369Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/11/15/luajit-encrypt/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.369Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2016/06/10/lua-math/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.369Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2015/12/03/redis-cidr/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.368Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2016/05/03/thrift/</loc>
     
-    <lastmod>2021-07-21T10:57:41.368Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2015/09/13/libipvs/</loc>
+    <loc>http://just4coding.com/2016/01/20/twemproxy/</loc>
     
-    <lastmod>2021-07-21T10:57:41.367Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2015/09/13/ngx-http-limit-conn-module/</loc>
+    <loc>http://just4coding.com/2016/11/06/xenserver-kernel-module/</loc>
     
-    <lastmod>2021-07-21T10:57:41.367Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/06/10/lua-math/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2016/11/15/luajit-encrypt/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2015/09/08/ngx-http-limit-req-module/</loc>
     
-    <lastmod>2021-07-21T10:57:41.367Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2015/09/13/libipvs/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2015/10/11/vmod-lua/</loc>
     
-    <lastmod>2021-07-21T10:57:41.367Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2015/11/16/toa/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2015/12/03/redis-cidr/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2015/09/13/ngx-http-limit-conn-module/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2014/12/17/flashcache-init/</loc>
     
-    <lastmod>2021-07-21T10:57:41.366Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2015/04/27/ejabberd-acl/</loc>
     
-    <lastmod>2021-07-21T10:57:41.366Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2015/01/08/powerdns-packetcache/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.366Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2014/12/09/ejabberd-config/</loc>
     
-    <lastmod>2021-07-21T10:57:41.366Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/12/03/passenger-blocking/</loc>
+    <loc>http://just4coding.com/2015/01/08/powerdns-packetcache/</loc>
     
-    <lastmod>2021-07-21T10:57:41.365Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2014/12/03/passenger-helper-abnormal/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.365Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2014/12/07/ejabberd-hooks/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.365Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2014/12/03/tt-skeleton/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.365Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2014/12/03/opentracker/</loc>
     
-    <lastmod>2021-07-21T10:57:41.365Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/18/nginx-response-sending/</loc>
+    <loc>http://just4coding.com/2014/12/03/passenger-blocking/</loc>
     
-    <lastmod>2021-07-21T10:57:41.364Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/24/ejabberd-ping/</loc>
+    <loc>http://just4coding.com/2014/12/03/passenger-helper-abnormal/</loc>
     
-    <lastmod>2021-07-21T10:57:41.364Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2014/12/02/ejabberd-service/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.364Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>http://just4coding.com/2014/12/03/nginx-cache-time/</loc>
-    
-    <lastmod>2021-07-21T10:57:41.364Z</lastmod>
-    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2014/12/03/nginx-variables/</loc>
     
-    <lastmod>2021-07-21T10:57:41.364Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/01/nginx-purge-directory/</loc>
+    <loc>http://just4coding.com/2014/12/03/tt-skeleton/</loc>
     
-    <lastmod>2021-07-21T10:57:41.363Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/06/sasl/</loc>
+    <loc>http://just4coding.com/2014/12/07/ejabberd-hooks/</loc>
     
-    <lastmod>2021-07-21T10:57:41.363Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/01/powerdns-module-scheme/</loc>
+    <loc>http://just4coding.com/2014/11/18/nginx-response-sending/</loc>
     
-    <lastmod>2021-07-21T10:57:41.363Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>http://just4coding.com/2014/11/14/ejabberd-login/</loc>
+    <loc>http://just4coding.com/2014/11/24/ejabberd-ping/</loc>
     
-    <lastmod>2021-07-21T10:57:41.363Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/12/03/nginx-cache-time/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/12/02/ejabberd-service/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/2014/11/01/ejabberd-stanza-processing/</loc>
     
-    <lastmod>2021-07-21T10:57:41.362Z</lastmod>
+    <lastmod>2022-07-05</lastmod>
     
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/11/01/nginx-purge-directory/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/11/01/powerdns-module-scheme/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/11/06/sasl/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/2014/11/14/ejabberd-login/</loc>
+    
+    <lastmod>2022-07-05</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+
+  <url>
+    <loc>http://just4coding.com/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  
+  <url>
+    <loc>http://just4coding.com/tags/Kernel/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/LVS/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/IPVS/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Interface/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Network/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Tap/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Iptables/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Mark/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/CNCF/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Kubernetes/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/CloudNative/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/VXLAN/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/EMCP/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/OSPF/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Cumulus-VX/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/LoadBalance/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/NSX/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/NSX-T/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Airflow/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Workflow/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/CNI/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Daemonset/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Virtualization/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Ivshmem/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Qemu/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/PCI/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Nfqueue/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Kube-proxy/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/ExternalIP/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Flannel/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Docker/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Systemd/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/SOCKS5/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/eBPF/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/BCC/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/TOTP/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Seccomp/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Bash/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/gcc/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/kernel/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Crash/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/tc/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/TUI/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/VMware/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/iSCSI/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Linker/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/Loader/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/udev/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/tags/MISC/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+
+  
+  <url>
+    <loc>http://just4coding.com/categories/XMPP/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/NGINX/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/DNS/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Network/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/OPENTRACKER/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/PASSENGER/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Flashcache/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/TokyoCabinet-TokyoTyrant/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Keepalived/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/VARNISH/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Kernel/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Redis/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Lua/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Thrift/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Twemproxy/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Xen/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/OpenStack/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Virtualization/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Tarantool/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/MISC/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>http://just4coding.com/categories/Kubernetes/</loc>
+    <lastmod>2023-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
   </url>
   
 </urlset>
