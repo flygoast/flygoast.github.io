@@ -164,6 +164,104 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/12/ssh-portforward/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/06/12/ssh-portforward/" class="post-title-link" itemprop="url">SSH端口转发</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-06-12 23:02:27" itemprop="dateCreated datePublished" datetime="2022-06-12T23:02:27+08:00">2022-06-12</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><code>SSH</code>不仅可以使用远程管理主机，还可以利用<code>SSH</code>客户端和<code>SSH</code>服务器之间的加密连接为其他服务实际中继服务，这一般称为<code>SSH隧道(SSH Tunneling)</code>或者<code>SSH端口转发</code>。</p>
+<p><code>SSH</code>端口转发分为三种类型:</p>
+<ul>
+<li>动态端口转发</li>
+<li>本地端口转发</li>
+<li>远程端口转发</li>
+</ul>
+<p>无论是哪种端口转发，整个过程都涉及四个角色:</p>
+<ul>
+<li>业务客户端</li>
+<li>SSH客户端</li>
+<li>SSH服务器</li>
+<li>业务服务端</li>
+</ul>
+<p>这些角色进程并不要求都位于独立主机上，它们可以位于同一台主机上，使用<code>localhost</code>或者<code>127.0.0.1</code>进行网络访问。</p>
+<p>本文基于这4种角色来简要说明这三种端口转发的过程。三种端口转发都依赖<code>SSH客户端</code>和<code>SSH服务器</code>建立一个加密连接在二者之间转发数据。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/06/12/ssh-portforward/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/11/bash-test/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -983,95 +1081,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/21/custom-loadbalancer/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/11/21/custom-loadbalancer/" class="post-title-link" itemprop="url">本地环境Kubernetes LoadBalancer实现</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-11-21 14:04:59" itemprop="dateCreated datePublished" datetime="2021-11-21T14:04:59+08:00">2021-11-21</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p><code>Kubernetes</code>没有给本地环境(<code>Bare-metal</code>, <code>On-Premise</code>)提供负载均衡实现，<code>LoadBalancer</code>类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建<code>LoadBalancer</code>类型的服务后，服务的<code>EXTERNAL-IP</code>会一直处于<code>&lt;pending&gt;</code>状态。这是因为在本地环境没有相应的<code>controller</code>来处理这些<code>LoadBalancer</code>服务。比如:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl get svc</span></span><br><span class="line">NAME         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE</span><br><span class="line">kubernetes   ClusterIP      10.32.0.1     &lt;none&gt;        443/TCP        31d</span><br><span class="line">whoami       LoadBalancer   10.32.0.132   &lt;pending&gt;     80:31620/TCP   103s</span><br></pre></td></tr></table></figure>
-
-<p>之前的文章<a href="/2021/11/14/external-ip/">&lt;&lt;基于LVS DR模式的Kubernetes Service External-IP实现&gt;&gt;</a>介绍了手动设置<code>EXTERNAL-IP</code>的方式实现外部负载均衡。本文通过在本地环境实现一个简单的<code>controller</code>来处理<code>LoadBalancer</code>类型服务自动实现负载均衡器。架构示意如图:</p>
-<img src="/images/2021-11-21/1.png" class="">
-
-<p><code>LoadBalancer</code>是位于<code>Kubernetes</code>集群外的独立集群。可以通过<code>ECMP</code>将请求分散到不同的<code>LoaderBalancer</code>节点上，<code>LoadBalancer</code>再将请求分发到<code>Kubernetes</code>的<code>node</code>上。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/11/21/custom-loadbalancer/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1142,7 +1151,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">124</span>
+          <span class="site-state-item-count">125</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1155,7 +1164,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">49</span>
+        <span class="site-state-item-count">51</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
