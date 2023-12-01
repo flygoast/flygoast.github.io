@@ -164,6 +164,100 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/03/02/Kubernetes-CDR/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/03/02/Kubernetes-CDR/" class="post-title-link" itemprop="url">Kubernetes CDR和Custom Controller</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-03-02 22:19:18" itemprop="dateCreated datePublished" datetime="2020-03-02T22:19:18+08:00">2020-03-02</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><img src="/images/2020-03-02/1.jpg" alt="Photo by Lukas from Pexels" title="Photo by Lukas from Pexels"></p>
+<p>在<code>Kubernetes</code>中, 所有的功能实现都以资源(<code>Resource</code>)形式体现。简单来说，资源就是Kubernetes的API端点(<code>endpoint</code>)，用于存储某种类型的对象。用户通过对资源对象的<code>CRUD</code>操作完成相应功能管理。Kubernetes 1.7之后添加了自定义资源(<code>Custom Resource</code>)的扩展能力，允许使用者通过定义自己的资源类型来扩展Kubernetes API，大大增强扩展Kubernetes的灵活性。这些自定义资源和<code>Pod</code>、<code>Deployment</code>等原生资源对象的操作方法基本一样。</p>
+<p>用户使用<code>CRD(Custom Resource Definitions)</code>来定义自定义资源(<code>Custom Resource</code>)。<code>CRD</code>被创建后，<code>Kubernetes APIServer</code>会为<code>CRD</code>中指定的资源版本创建相应的RESTAPI端点。</p>
+<p><code>CRD</code>可以通过<code>YAML</code>文件来创建，<code>YAML</code>文件中指定<code>CRD</code>对象的规范，其中比较重要的字段有:</p>
+<ul>
+<li><strong>metadata.name</strong>: 要创建的<code>CRD</code>名称</li>
+<li><strong>spec.group</strong>: <code>CRD</code>对象所属的API组</li>
+<li><strong>spec.version</strong>: <code>CRD</code>对象所属的API版本</li>
+<li><strong>spec.names</strong>: 管理自定义资源所需要的名称描述，可以定义<code>plural</code>(复数名称), <code>singular</code>(单数名称)和<code>shortnames</code>(简称)等字段</li>
+<li><strong>spec.names.kind</strong>: 指定自定义资源的类型名称</li>
+<li><strong>spec.scope</strong>: 指明自定义资源有效范围，可以是整个集群有效(<code>clustered</code>)或命名空间内有效(<code>namespaced</code>)</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/03/02/Kubernetes-CDR/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/02/13/open-policy-agent/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -210,7 +304,7 @@
 
       
           <p>在应用开发中，应用程序往往需要跟据特定策略的决策结果来判断后续执行何种操作。比如，权限校验就是策略决策的一种典型场景，它需要判断哪些用户对哪些资源能够执行哪些操作。这些策略可能随着时间需要不断的动态更新。当前策略决策的逻辑往往硬编码实现在软件的业务逻辑中，当需要更新策略规则集时，还需要修改应用代码、重新部署应用，非常不灵活。同时，不同的应用服务也都需要重复实现类似的功能，因而策略决策逻辑非常适合做为独立的模块从业务逻辑中抽离出来。</p>
-<p><a href="https://www.openpolicyagent.org/" target="_blank" rel="noopener">Open Policy Agent</a>，官方简称<code>OPA</code>, 为这类策略决策需求提供了一个统一的框架与服务。它将策略决策从软件业务逻辑中解耦剥离，将策略定义、决策过程抽象为通用模型，实现为一个通用策略引擎，可适用于广泛的业务场景，比如:</p>
+<p><a target="_blank" rel="noopener" href="https://www.openpolicyagent.org/">Open Policy Agent</a>，官方简称<code>OPA</code>, 为这类策略决策需求提供了一个统一的框架与服务。它将策略决策从软件业务逻辑中解耦剥离，将策略定义、决策过程抽象为通用模型，实现为一个通用策略引擎，可适用于广泛的业务场景，比如:</p>
 <ul>
 <li>判断某用户可以访问哪些资源</li>
 <li>允许哪些子网对外访问</li>
@@ -304,7 +398,7 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a href="https://www.openservicebrokerapi.org/" target="_blank" rel="noopener"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
+          <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a target="_blank" rel="noopener" href="https://www.openservicebrokerapi.org/"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
 <p><code>OSBAPI</code>规范定义了高度抽象的应用平台与外部服务代理的交互逻辑，规范化外部服务的使用，主要包括:</p>
 <ul>
 <li>注册服务代理: 应用平台会获取服务代理提供的服务列表及相应规格，<code>OSBAPI</code>使用术语<code>Plan</code>来表示规格。</li>
@@ -395,9 +489,9 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>之前的文章&lt;&lt;<a href="/blog/2017/09/14/ansible/">Ansible入门</a>&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库<a href="http://www.fabfile.org/" target="_blank" rel="noopener">Fabric</a>。</p>
+          <p>之前的文章&lt;&lt;<a href="/blog/2017/09/14/ansible/">Ansible入门</a>&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库<a target="_blank" rel="noopener" href="http://www.fabfile.org/">Fabric</a>。</p>
 <p>Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Python程序中直接<code>import</code>，并基于它实现远程命令执行。此外，它还提供了一个<code>fab</code>命令行工具，使用它可以更简单地编写我们需要执行的任务。这种模式被使用的更为普遍，我们主要来介绍以<code>fab</code>命令来使用fabric。</p>
-<p>需要注意的是，Fabric的2.x版本并不兼容1.x版本，而且2.x版本很大程度上边缘化了fab命令行工具，因而我们还是来介绍1.x版本。当前最新1.x版本为1.14, 文档地址为:<a href="http://docs.fabfile.org/en/1.14/。" target="_blank" rel="noopener">http://docs.fabfile.org/en/1.14/。</a></p>
+<p>需要注意的是，Fabric的2.x版本并不兼容1.x版本，而且2.x版本很大程度上边缘化了fab命令行工具，因而我们还是来介绍1.x版本。当前最新1.x版本为1.14, 文档地址为:<a target="_blank" rel="noopener" href="http://docs.fabfile.org/en/1.14/%E3%80%82">http://docs.fabfile.org/en/1.14/。</a></p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2018/11/23/fabric/#more" rel="contents">
@@ -652,8 +746,8 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>大多数商业化软件产品一般会通过实现GUI(Graphical User Interface)或者TUI(Text-based User Interface/Textual User Interface/Terminal User Interface)来降低软件的使用难度。本文简要介绍一个TUI库: <a href="https://pagure.io/newt" target="_blank" rel="noopener"><code>newt</code></a>。</p>
-<p><code>newt</code>是由RedHat开发，主要用在RatHat的Linux发行版本(RHEL, Fedora和CentOS)的安装程序项目<a href="https://fedoraproject.org/wiki/Anaconda" target="_blank" rel="noopener"><code>Anaconda</code></a>中。<code>NEWT</code>的全称是: <code>Not Erik’s Windowing Toolkit</code>，它基于<a href="https://www.jedsoft.org/slang/index.html" target="_blank" rel="noopener"><code>S-Lang</code></a>库实现。</p>
+          <p>大多数商业化软件产品一般会通过实现GUI(Graphical User Interface)或者TUI(Text-based User Interface&#x2F;Textual User Interface&#x2F;Terminal User Interface)来降低软件的使用难度。本文简要介绍一个TUI库: <a target="_blank" rel="noopener" href="https://pagure.io/newt"><code>newt</code></a>。</p>
+<p><code>newt</code>是由RedHat开发，主要用在RatHat的Linux发行版本(RHEL, Fedora和CentOS)的安装程序项目<a target="_blank" rel="noopener" href="https://fedoraproject.org/wiki/Anaconda"><code>Anaconda</code></a>中。<code>NEWT</code>的全称是: <code>Not Erik’s Windowing Toolkit</code>，它基于<a target="_blank" rel="noopener" href="https://www.jedsoft.org/slang/index.html"><code>S-Lang</code></a>库实现。</p>
 <p>因为<code>newt</code>是用于Linux发行版本的安装程序中，因而它的运行空间非常有限，需要保证程序尽可能小，所以在设计时选择使用C语言进行开发，也尽量不支持多余特性。于是在设计之初就不支持事件驱动。在支持事件驱动的窗口库中，有一个事件循环监听事件发生，根据发生的事件展示不同的窗口。在<code>newt</code>中，窗口创建和销毁基于栈模式，新创建的窗口位于之前的窗口之上，且只能展示最上层窗口，当最上层窗口销毁之后才能展示下边的窗口。这也就是说所有窗口都为模态窗口(<code>model windows</code>)。这种特性限制了<code>newt</code>库本身只适合用于完成顺序的程序流程，一个典型的场景就是程序的安装向导。SHELL程序往往也是顺序的流程，从SHELL程序转换为<code>newt</code>窗口程序完全不涉及程序流程的改变，实现非常简单。</p>
           <!--noindex-->
             <div class="post-button">
@@ -737,8 +831,8 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p><a href="http://www.celeryproject.org/" target="_blank" rel="noopener">Celery</a>是一个基于消息传递的分布式任务队列。与单纯的消息队列相比较，队列中传递的消息为任务(Task/Job)信息，而不是数据类信息，Celery基于这些消息完成了任务信息的管理。实现这种任务管理的相似项目还有<a href="http://gearman.org/" target="_blank" rel="noopener">Gearman</a>，只不过这个项目已经很久未更新了，更推荐使用Celery。</p>
-<p>Celery支持同步和异步执行两种模式。同步模式为任务调用方等待任务执行完成，这种方式等同于RPC(Remote Procedure Call)， 异步方式为任务在后台执行，调用方调用后就去做其他工作，之后再根据需要来查看任务结果。Celery自己没有实现消息队列，而是直接已存在的消息队列作为Broker角色。官方推荐的Broker为<a href="http://www.rabbitmq.com/" target="_blank" rel="noopener">RabbitMQ</a>，除此之外，Redis、Beanstalkd、MongoDB等也都支持，具体可参考<a href="http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html" target="_blank" rel="noopener">官方文档</a>。</p>
+          <p><a target="_blank" rel="noopener" href="http://www.celeryproject.org/">Celery</a>是一个基于消息传递的分布式任务队列。与单纯的消息队列相比较，队列中传递的消息为任务(Task&#x2F;Job)信息，而不是数据类信息，Celery基于这些消息完成了任务信息的管理。实现这种任务管理的相似项目还有<a target="_blank" rel="noopener" href="http://gearman.org/">Gearman</a>，只不过这个项目已经很久未更新了，更推荐使用Celery。</p>
+<p>Celery支持同步和异步执行两种模式。同步模式为任务调用方等待任务执行完成，这种方式等同于RPC(Remote Procedure Call)， 异步方式为任务在后台执行，调用方调用后就去做其他工作，之后再根据需要来查看任务结果。Celery自己没有实现消息队列，而是直接已存在的消息队列作为Broker角色。官方推荐的Broker为<a target="_blank" rel="noopener" href="http://www.rabbitmq.com/">RabbitMQ</a>，除此之外，Redis、Beanstalkd、MongoDB等也都支持，具体可参考<a target="_blank" rel="noopener" href="http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html">官方文档</a>。</p>
 <p>Celery整体架构可以理解为下图:</p>
 <img src="/images/2018-08-14/1.png" class="">
           <!--noindex-->
@@ -933,99 +1027,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/01/dbus-api/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/08/01/dbus-api/" class="post-title-link" itemprop="url">D-BUS API查找与调用</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-08-01 11:07:51" itemprop="dateCreated datePublished" datetime="2018-08-01T11:07:51+08:00">2018-08-01</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>上篇文章&lt;&lt;<a href="http://www.just4coding.com/blog/2018/07/31/dbus/" target="_blank" rel="noopener">D-Bus实例介绍</a>&gt;&gt;中简要介绍了<code>D-Bus</code>的基本概念，其中提到<code>systemd</code>、<code>NetworkManager</code>等系统服务导出了<code>D-Bus API</code>供其他程序来调用。本文通过示例来说明这些API的查找与调用。</p>
-<p><a href="http://www.just4coding.com/blog/2018/07/31/dbus/" target="_blank" rel="noopener">上篇文章</a>我们提到<code>D-Bus</code>的<code>object</code>可以实现多个<code>Interface</code>。<a href="https://dbus.freedesktop.org/doc/dbus-specification.html" target="_blank" rel="noopener"><code>D-Bus</code>规范</a>中标准化了一些接口，这些接口对于我们调用其他服务提供的D-Bus API非常有帮助。</p>
-<p>我们主要来看其中的两个:</p>
-<ul>
-<li><a href="https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable" target="_blank" rel="noopener">org.freedesktop.DBus.Introspectable</a></li>
-</ul>
-<p>它有一个方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">org.freedesktop.DBus.Introspectable.Introspect (out STRING xml_data)</span><br></pre></td></tr></table></figure>
-
-<p>它会返回一个包含有对象(object), 接口(interface), 方法(methods), 信号(signals)，属性(properties)等信息的XML字符串。对象如果实现这个接口, 我们就可以通过调用该方法了解这个对象对外提供的所有信息。</p>
-<p>XML字符串的解析方法可以参考官方文档:<br><a href="https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format" target="_blank" rel="noopener">https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format</a></p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/08/01/dbus-api/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1096,7 +1097,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

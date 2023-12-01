@@ -239,13 +239,10 @@
 <ul>
 <li>消费平面: 云管平台<code>CMP(Cloud Management Platform)</code>不是NSX的组件，NSX提供了丰富的REST API, 可根据需要集成NSX。</li>
 <li>管理平面: NSX Manager是NSX的集中管理器，主要功能包括管理NSX Controller集群，管理EDGE节点，为上层消费平台提供管理和配置接口。NSX Manager自身实现了vSphere vCenter插件，可注册在vCenter中，通过GUI进行管理。</li>
-<li>控制平面: 控制平台主要包括NSX Controller集群，Controller负责维护所有ESXi主机、逻辑交换机(Logical Switch)和分布式逻辑路由器(DLR: Distributed Logical Router)的信息。实际上，控制平面还包括DLR的<code>Control VM</code>, 上图中没有体现。上图来自官方6.4版本的<a href="https://docs.vmware.com/cn/VMware-NSX-Data-Center-for-vSphere/6.4/com.vmware.nsx.install.doc/GUID-3BC07B7A-29F4-4F1B-9D5C-97154FF9C54B.html" target="_blank" rel="noopener">文档</a>。后文会再介绍它的作用。</li>
-<li>数据平面: 数据平面主要包括<code>NSX Virtual Switch</code>, <code>DLR</code>, 和<code>ESG: Edge Service Gateway</code>。按图中表示，<code>NSX Virtual Switch</code>是基于vSphere的分布式交换机并在内核中实现VXLAN、防火墙过滤、分布式路由等功能的逻辑交换机。我个人更倾向将<code>NSX Virtual Switch</code>理解为<code>VDS</code>+<code>VXLAN</code>实现，将<code>DLR</code>看成独立组件。<code>VDS</code>可以理解为基于<code>VLAN</code>隔离的虚拟交换机，<code>NSX Virtual Switch</code>是基于<code>VXLAN</code>隔离的虚拟交换机。NSX界面上，<code>NSX Virtual Switch</code>叫做<code>逻辑交换机: Logical Switch</code>。<code>DLR</code>和<code>ESG</code>都是路由器，<code>DLR</code>负责虚拟数据中心中东西向流量路由，<code>ESG</code>负责虚拟数据中心边缘的南北向流量路由。其他数据面组件都在ESXi主机内核中实现，而<code>ESG</code>是独立的虚拟机。 NSX的一个典型逻辑网络架构如下图:<img src="/images/2020-06-21/2.png" class="">
-
-
-</li>
+<li>控制平面: 控制平台主要包括NSX Controller集群，Controller负责维护所有ESXi主机、逻辑交换机(Logical Switch)和分布式逻辑路由器(DLR: Distributed Logical Router)的信息。实际上，控制平面还包括DLR的<code>Control VM</code>, 上图中没有体现。上图来自官方6.4版本的<a target="_blank" rel="noopener" href="https://docs.vmware.com/cn/VMware-NSX-Data-Center-for-vSphere/6.4/com.vmware.nsx.install.doc/GUID-3BC07B7A-29F4-4F1B-9D5C-97154FF9C54B.html">文档</a>。后文会再介绍它的作用。</li>
+<li>数据平面: 数据平面主要包括<code>NSX Virtual Switch</code>, <code>DLR</code>, 和<code>ESG: Edge Service Gateway</code>。按图中表示，<code>NSX Virtual Switch</code>是基于vSphere的分布式交换机并在内核中实现VXLAN、防火墙过滤、分布式路由等功能的逻辑交换机。我个人更倾向将<code>NSX Virtual Switch</code>理解为<code>VDS</code>+<code>VXLAN</code>实现，将<code>DLR</code>看成独立组件。<code>VDS</code>可以理解为基于<code>VLAN</code>隔离的虚拟交换机，<code>NSX Virtual Switch</code>是基于<code>VXLAN</code>隔离的虚拟交换机。NSX界面上，<code>NSX Virtual Switch</code>叫做<code>逻辑交换机: Logical Switch</code>。<code>DLR</code>和<code>ESG</code>都是路由器，<code>DLR</code>负责虚拟数据中心中东西向流量路由，<code>ESG</code>负责虚拟数据中心边缘的南北向流量路由。其他数据面组件都在ESXi主机内核中实现，而<code>ESG</code>是独立的虚拟机。 NSX的一个典型逻辑网络架构如下图:<img src="/images/2020-06-21/2.png" class=""></li>
 </ul>
-<a id="more"></a>
+<span id="more"></span>
 
 <p>从逻辑架构上看，与OpenStack等其他的虚拟化网络方案没有太大差别。但NSX比较独特的地方在于<code>DLR</code>的实现。<code>DLR</code>的主要作用是完成虚拟数据中心内东西向流量路由。为了避免同一台ESXi主机的两个<code>VM</code>之间的流量需要先出宿主机经过虚拟路由再回到宿主机，如下图所示：</p>
 <img src="/images/2020-06-21/3.png" class="">
@@ -267,19 +264,19 @@
 <p><code>DLR Controll VM</code>将信息发送给本地ESXi主机上的<code>netcpad</code>进程, 该进程通过ESXi的管理接口将信息再发送给<code>NSX Controller</code>, <code>NSX Controller</code>再推送到所有其他的ESXi主机的<code>netcpad</code>进程，<code>netcpad</code>进程再将路由信息写入DLR实例。</p>
 <p>要彻底弄懂NSX需要大量实践。Google上关于NSX的资料非常多，关于NSX部署安装可以参考:</p>
 <ul>
-<li><p><a href="http://www.vmwarearena.com/vmware-nsx-installation-part-1-nsx-overview-installation-prerequistes/" target="_blank" rel="noopener">http://www.vmwarearena.com/vmware-nsx-installation-part-1-nsx-overview-installation-prerequistes/</a></p>
+<li><p><a target="_blank" rel="noopener" href="http://www.vmwarearena.com/vmware-nsx-installation-part-1-nsx-overview-installation-prerequistes/">http://www.vmwarearena.com/vmware-nsx-installation-part-1-nsx-overview-installation-prerequistes/</a></p>
 </li>
-<li><p><a href="http://blog.bertello.org/2015/01/nsx-for-newbies-series/" target="_blank" rel="noopener">http://blog.bertello.org/2015/01/nsx-for-newbies-series/</a></p>
+<li><p><a target="_blank" rel="noopener" href="http://blog.bertello.org/2015/01/nsx-for-newbies-series/">http://blog.bertello.org/2015/01/nsx-for-newbies-series/</a></p>
 </li>
 </ul>
 <p>默认情况下，部署完的<code>ESG</code>包含一个内置的防火墙规则，会阻断所有要从<code>ESG</code>的<code>uplink</code>口进入的流量。我们需要在防火墙规则中去自定义规则去放开我们想要的流量。但6.4.5的NSX Manager插件GUI在HTML5和Flex版本上的防火墙操作是不一致的，HTML5版本上都需要到<code>防火墙</code>页面中去操作而不是在<code>ESG</code>自身的设置页面来配置。</p>
 <p>参考链接:</p>
 <ul>
-<li><a href="http://www.vexpertconsultancy.com/2018/05/nsx-v-distributed-logical-router-with-or-without-control-vm/" target="_blank" rel="noopener">http://www.vexpertconsultancy.com/2018/05/nsx-v-distributed-logical-router-with-or-without-control-vm/</a></li>
-<li><a href="https://www.routetocloud.com/2014/06/nsx-distributed-logical-router/" target="_blank" rel="noopener">https://www.routetocloud.com/2014/06/nsx-distributed-logical-router/</a></li>
-<li><a href="http://bradhedlund.com/2013/11/20/distributed-virtual-and-physical-routing-in-vmware-nsx-for-vsphere/" target="_blank" rel="noopener">http://bradhedlund.com/2013/11/20/distributed-virtual-and-physical-routing-in-vmware-nsx-for-vsphere/</a></li>
-<li><a href="http://chansblog.com/6-nsx-distributed-logical-router/" target="_blank" rel="noopener">http://chansblog.com/6-nsx-distributed-logical-router/</a></li>
-<li><a href="https://networkinferno.net/nsx-compendium" target="_blank" rel="noopener">https://networkinferno.net/nsx-compendium</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.vexpertconsultancy.com/2018/05/nsx-v-distributed-logical-router-with-or-without-control-vm/">http://www.vexpertconsultancy.com/2018/05/nsx-v-distributed-logical-router-with-or-without-control-vm/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.routetocloud.com/2014/06/nsx-distributed-logical-router/">https://www.routetocloud.com/2014/06/nsx-distributed-logical-router/</a></li>
+<li><a target="_blank" rel="noopener" href="http://bradhedlund.com/2013/11/20/distributed-virtual-and-physical-routing-in-vmware-nsx-for-vsphere/">http://bradhedlund.com/2013/11/20/distributed-virtual-and-physical-routing-in-vmware-nsx-for-vsphere/</a></li>
+<li><a target="_blank" rel="noopener" href="http://chansblog.com/6-nsx-distributed-logical-router/">http://chansblog.com/6-nsx-distributed-logical-router/</a></li>
+<li><a target="_blank" rel="noopener" href="https://networkinferno.net/nsx-compendium">https://networkinferno.net/nsx-compendium</a></li>
 </ul>
 
     </div>
@@ -379,7 +376,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

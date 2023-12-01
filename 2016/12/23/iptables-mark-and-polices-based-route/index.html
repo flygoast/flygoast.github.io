@@ -233,9 +233,9 @@
 <li><code>--or-mark value</code>: 将mark值与value做位或运算后设置为新mark值</li>
 </ul>
 <p>比如，将从网络接口tun0进入的、目标端口为5222的TCP数据包设置mark值为1:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t mangle -A PREROUTING -j MARK --<span class="built_in">set</span>-mark 1 -i tun0 -p tcp --dport 5222</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t mangle -A PREROUTING -j MARK --set-mark 1 -i tun0 -p tcp --dport 5222</span><br></pre></td></tr></table></figure>
 
-<a id="more"></a>
+<span id="more"></span>
 
 <p>设置的mark值可用来设定策略路由。</p>
 <p>比如，我们想把mark值为1的数据包交由网关<code>192.168.0.1</code>转发。</p>
@@ -349,7 +349,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

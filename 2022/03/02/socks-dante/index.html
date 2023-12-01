@@ -229,7 +229,7 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <p><code>SOCKS</code>是一个比较简单的通用代理协议，用于在客户端与服务器之间代理网络数据包。最新的版本是<code>5</code>, 所以一般叫做<code>SOCKS5</code>，协议规范是<a href="https://datatracker.ietf.org/doc/html/rfc1928" target="_blank" rel="noopener">RFC1928</a>。但<code>SOCKS5</code>并不兼容之前的<code>SOCKS4</code>和<code>SOCKS4A</code>。<code>SOCKS5</code>在<code>SOCKS4</code>的基础上添加了<code>UDP</code>转发功能和<code>校验</code>机制。</p>
+        <p><code>SOCKS</code>是一个比较简单的通用代理协议，用于在客户端与服务器之间代理网络数据包。最新的版本是<code>5</code>, 所以一般叫做<code>SOCKS5</code>，协议规范是<a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1928">RFC1928</a>。但<code>SOCKS5</code>并不兼容之前的<code>SOCKS4</code>和<code>SOCKS4A</code>。<code>SOCKS5</code>在<code>SOCKS4</code>的基础上添加了<code>UDP</code>转发功能和<code>校验</code>机制。</p>
 <p><code>SOCKS5</code>的工作过程简单可以归纳为协商、请求、和转发三个阶段。以<code>TCP</code>代理场景来看, 一般流程是:</p>
 <ol>
 <li>客户端建立TCP连接</li>
@@ -243,17 +243,17 @@
 <li>服务端在客户端和目的地址之间转发应用层信息。</li>
 </ol>
 <p>其中，2-4完成协商阶段，5-7完成请求阶段，之后进入转发阶段。</p>
-<p>当前常用的校验方法是<code>USERNAME/PASSWORD</code>(<a href="https://datatracker.ietf.org/doc/html/rfc1929" target="_blank" rel="noopener">RFC1929</a>)和<code>GSS-API</code>(<a href="https://datatracker.ietf.org/doc/html/rfc1961" target="_blank" rel="noopener">RFC1961</a>)，具体的校验过程是由不同校验方法来自定义的。</p>
+<p>当前常用的校验方法是<code>USERNAME/PASSWORD</code>(<a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1929">RFC1929</a>)和<code>GSS-API</code>(<a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1961">RFC1961</a>)，具体的校验过程是由不同校验方法来自定义的。</p>
 <p>使用<code>USERNAME/PASSWORD</code>校验方法的<code>TCP</code>代理时序图如下:</p>
 <img src="/images/2022-03-02/1.png" class="">
 
-<a id="more"></a>
+<span id="more"></span>
 
-<p><a href="https://www.inet.no/dante/index.html" target="_blank" rel="noopener">Dante</a>是个较为成熟的<code>SOCKS</code>服务器开源实现，一些高级模块的代码没有开源，需要购买商业支持。但<code>Dante</code>的整体代码逻辑比较清晰，还是比较容易扩展的。</p>
+<p><a target="_blank" rel="noopener" href="https://www.inet.no/dante/index.html">Dante</a>是个较为成熟的<code>SOCKS</code>服务器开源实现，一些高级模块的代码没有开源，需要购买商业支持。但<code>Dante</code>的整体代码逻辑比较清晰，还是比较容易扩展的。</p>
 <p><code>Dante</code>的进程结构比较有意思，以一种类似流水线的方式在多个进程间传递并处理请求, 而且会根据请求量对相应进程数量进行调节，相应进程的处理量会通过修改进程名称来体现。</p>
 <p>请求传递具体实现上依赖通过<code>UNIX Socket</code>在进程间传递<code>文件描述符</code>，机制可以参考这篇文章:</p>
 <ul>
-<li><a href="https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec" target="_blank" rel="noopener">https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec</a></li>
+<li><a target="_blank" rel="noopener" href="https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec">https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec</a></li>
 </ul>
 <p><code>Dante</code>包括<code>5</code>种不同角色的进程:<br><code>mother</code>: 初始启动的主进程，其他的进程都由<code>mother</code>进程创建。但在<code>fork</code>其他进程前，<code>mother</code>会建立两对<code>UNIX Socket</code>通道，一个用于在父子进程之间发送数据和文件描述符，另一个用于监控进程的存活状态。创建完其他进程后，<code>mother</code>开始循环处理客户端的TCP连接的<code>accept</code>。<br><code>monitor</code>: 基于超时时间处理其他进程的共享内存数据。<br><code>negotiate</code>: 处理<code>SOCKS</code>协议的协商。<br><code>request</code>: 建立到远端服务器的请求。<br><code>io</code>: 在客户端和远端服器之间转发数据。</p>
 <p>整体的进程架构图如下:</p>
@@ -276,34 +276,34 @@
 <p>整体流程如图:</p>
 <img src="/images/2022-03-02/3.png" class="">
 
-<p>每个角色进程的逻辑主体都是基于<code>select</code>实现的事件驱动模型。众所周知，<code>select</code>有最大支持<code>1024</code>个文件描述符的限制。而在一些操作系统具体实现上，实际并不会真的去检查该限制。<code>Dante</code>的实现就利用这一点来突破<code>1024</code>的限制。这篇文章介绍了这种方法:<br><a href="https://blog.csdn.net/dog250/article/details/105896693" target="_blank" rel="noopener">https://blog.csdn.net/dog250/article/details/105896693</a></p>
+<p>每个角色进程的逻辑主体都是基于<code>select</code>实现的事件驱动模型。众所周知，<code>select</code>有最大支持<code>1024</code>个文件描述符的限制。而在一些操作系统具体实现上，实际并不会真的去检查该限制。<code>Dante</code>的实现就利用这一点来突破<code>1024</code>的限制。这篇文章介绍了这种方法:<br><a target="_blank" rel="noopener" href="https://blog.csdn.net/dog250/article/details/105896693">https://blog.csdn.net/dog250/article/details/105896693</a></p>
 <p>但实际上这里还是存在一个BUG。<code>Dante</code>默认的编译情况下，会定义<code>_FORTIFY_SOURCE</code>, 这会导致<code>FD_SET</code>中会去检查<code>1024</code>的限制。当代理请求较多时，子进程越来越多，<code>mother</code>的<code>fd</code>数量就会超过<code>1024</code>而导致进程崩溃。</p>
 <p>可以通过不再定义这个宏来修复问题，也可以通过另外的方法来绕过这个问题。</p>
 <p><code>Dante</code>支持创建多个<code>mother</code>进程，每个<code>mother</code>都会再创建自己的一系列<code>negotiate</code>,<code>request</code>, <code>io</code>等进程，但<code>monitor</code>进程只是最初的<code>mother</code>(叫做<code>main mother</code>)会创建。因为<code>main mother</code>是在开始<code>listen</code>之后再<code>fork</code>其他进程，因而多个<code>mother</code>进程都监听在同一端口上，它们会调用<code>accept</code>来抢夺客户端连接。抢夺到连接的<code>mother</code>会在自己的一系列子进程中进行处理。这样我们可以限制每个<code>mother</code>的文件描述符小于<code>1024</code>,而启动若干个<code>mother</code>。<code>mother</code>的数量可以通过命令行参数<code>-N</code>来指定。这种情况的进程架构如图:</p>
 <img src="/images/2022-03-02/4.png" class="">
 
 <p><code>Dante</code>里很多实现细节不太考虑性能, 大量使用数组和遍历。举例来说，<code>negotiate</code>进程每次循环会调用<code>neg_gettimedout</code>函数获取一个超时的协商请求:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (<span class="number">1</span> <span class="comment">/* CONSTCOND */</span>) &#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> HAVE_NEGOTIATE_PHASE</span></span><br><span class="line">    gettimeofday_monotonic(&amp;tnow);</span><br><span class="line">    <span class="keyword">while</span> ((neg = neg_gettimedout(&amp;tnow)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (<span class="number">1</span> <span class="comment">/* CONSTCOND */</span>) &#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">if</span> HAVE_NEGOTIATE_PHASE</span></span><br><span class="line">    gettimeofday_monotonic(&amp;tnow);</span><br><span class="line">    <span class="keyword">while</span> ((neg = neg_gettimedout(&amp;tnow)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>而<code>neg_gettimedout</code>的实现里依然是一个遍历:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">sockd_negotiate_t</span> *</span><br><span class="line">neg_gettimedout(<span class="keyword">const</span> struct timeval *tnow)</span><br><span class="line">&#123;</span><br><span class="line">   <span class="keyword">size_t</span> i;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; negc; ++i) &#123;</span><br><span class="line">      <span class="keyword">if</span> (!negv[i].allocated</span><br><span class="line">      || CRULE_OR_HRULE(&amp;negv[i])-&gt;timeout.negotiate == <span class="number">0</span>)</span><br><span class="line">         <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (socks_difftime(tnow-&gt;tv_sec, negv[i].state.time.negotiatestart.tv_sec)</span><br><span class="line">      &gt;= CRULE_OR_HRULE(&amp;negv[i])-&gt;timeout.negotiate)</span><br><span class="line">         <span class="keyword">return</span> &amp;negv[i];</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">sockd_negotiate_t</span> *</span><br><span class="line"><span class="title function_">neg_gettimedout</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> timeval *tnow)</span></span><br><span class="line">&#123;</span><br><span class="line">   <span class="type">size_t</span> i;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; negc; ++i) &#123;</span><br><span class="line">      <span class="keyword">if</span> (!negv[i].allocated</span><br><span class="line">      || CRULE_OR_HRULE(&amp;negv[i])-&gt;timeout.negotiate == <span class="number">0</span>)</span><br><span class="line">         <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (socks_difftime(tnow-&gt;tv_sec, negv[i].state.time.negotiatestart.tv_sec)</span><br><span class="line">      &gt;= CRULE_OR_HRULE(&amp;negv[i])-&gt;timeout.negotiate)</span><br><span class="line">         <span class="keyword">return</span> &amp;negv[i];</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>当协商请求很多时，<code>negv</code>这个数组基本被分配完，如果有一个请求超时，<code>neg_gettimedout</code>返回超时请求，下一次依然从数组第一个元素开始遍历。</p>
 <p>如果对于<code>SOCKS</code>服务器性能有比较强的需求，<code>Dante</code>还是有很多优化空间的。比如使用<code>epoll</code>替换<code>select</code>, 使用其他结构替换数组等等。</p>
 <p>参考:</p>
 <ul>
-<li><a href="https://p0lycarp.github.io/2019/fortify/" target="_blank" rel="noopener">https://p0lycarp.github.io/2019/fortify/</a></li>
-<li><a href="https://en.wikipedia.org/wiki/SOCKS" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/SOCKS</a></li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc1928" target="_blank" rel="noopener">https://datatracker.ietf.org/doc/html/rfc1928</a></li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc1929" target="_blank" rel="noopener">https://datatracker.ietf.org/doc/html/rfc1929</a></li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc1961" target="_blank" rel="noopener">https://datatracker.ietf.org/doc/html/rfc1961</a></li>
-<li><a href="https://blog.csdn.net/dog250/article/details/105896693" target="_blank" rel="noopener">https://blog.csdn.net/dog250/article/details/105896693</a></li>
-<li><a href="https://www.inet.no/dante/index.html" target="_blank" rel="noopener">https://www.inet.no/dante/index.html</a></li>
-<li><a href="https://securityintelligence.com/posts/socks-proxy-primer-what-is-socks5-and-why-should-you-use-it/" target="_blank" rel="noopener">https://securityintelligence.com/posts/socks-proxy-primer-what-is-socks5-and-why-should-you-use-it/</a></li>
-<li><a href="https://zhuanlan.zhihu.com/p/65094630" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/65094630</a></li>
-<li><a href="https://blog.csdn.net/JassFuchang/article/details/7170321" target="_blank" rel="noopener">https://blog.csdn.net/JassFuchang/article/details/7170321</a></li>
-<li><a href="https://wiyi.org/socks5-protocol-in-deep.html" target="_blank" rel="noopener">https://wiyi.org/socks5-protocol-in-deep.html</a></li>
-<li><a href="https://www.rapidseedbox.com/blog/guide-to-socks5-proxy" target="_blank" rel="noopener">https://www.rapidseedbox.com/blog/guide-to-socks5-proxy</a></li>
-<li><a href="https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec" target="_blank" rel="noopener">https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec</a></li>
-<li><a href="https://cybarrior.com/blog/2019/03/07/dante-socks5-proxy-server-setup/" target="_blank" rel="noopener">https://cybarrior.com/blog/2019/03/07/dante-socks5-proxy-server-setup/</a></li>
+<li><a target="_blank" rel="noopener" href="https://p0lycarp.github.io/2019/fortify/">https://p0lycarp.github.io/2019/fortify/</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/SOCKS">https://en.wikipedia.org/wiki/SOCKS</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1928">https://datatracker.ietf.org/doc/html/rfc1928</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1929">https://datatracker.ietf.org/doc/html/rfc1929</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc1961">https://datatracker.ietf.org/doc/html/rfc1961</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/dog250/article/details/105896693">https://blog.csdn.net/dog250/article/details/105896693</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.inet.no/dante/index.html">https://www.inet.no/dante/index.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://securityintelligence.com/posts/socks-proxy-primer-what-is-socks5-and-why-should-you-use-it/">https://securityintelligence.com/posts/socks-proxy-primer-what-is-socks5-and-why-should-you-use-it/</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/65094630">https://zhuanlan.zhihu.com/p/65094630</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/JassFuchang/article/details/7170321">https://blog.csdn.net/JassFuchang/article/details/7170321</a></li>
+<li><a target="_blank" rel="noopener" href="https://wiyi.org/socks5-protocol-in-deep.html">https://wiyi.org/socks5-protocol-in-deep.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.rapidseedbox.com/blog/guide-to-socks5-proxy">https://www.rapidseedbox.com/blog/guide-to-socks5-proxy</a></li>
+<li><a target="_blank" rel="noopener" href="https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec">https://copyconstruct.medium.com/file-descriptor-transfer-over-unix-domain-sockets-dcbbf5b3b6ec</a></li>
+<li><a target="_blank" rel="noopener" href="https://cybarrior.com/blog/2019/03/07/dante-socks5-proxy-server-setup/">https://cybarrior.com/blog/2019/03/07/dante-socks5-proxy-server-setup/</a></li>
 </ul>
 
     </div>
@@ -402,7 +402,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

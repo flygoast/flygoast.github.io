@@ -235,10 +235,10 @@
 <img src="/images/2016-12-31/1.png" class="">
 
 <p>OpenFlow是一种南向API协议，并且定义了交换机规范。实现OpenFlow规范的交换机称为OpenFlow交换机。</p>
-<a id="more"></a>
+<span id="more"></span>
 
-<p>OpenFlow相关规范可以从官网下载:<br><a href="https://www.opennetworking.org/sdn-resources/technical-library" target="_blank" rel="noopener">https://www.opennetworking.org/sdn-resources/technical-library</a></p>
-<p>OpenFlow规范还在不停改进，本文基于OpenFlow-1.3.5进行说明，规范下载地址:<br><a href="https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-switch-v1.3.5.pdf" target="_blank" rel="noopener">https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-switch-v1.3.5.pdf</a></p>
+<p>OpenFlow相关规范可以从官网下载:<br><a target="_blank" rel="noopener" href="https://www.opennetworking.org/sdn-resources/technical-library">https://www.opennetworking.org/sdn-resources/technical-library</a></p>
+<p>OpenFlow规范还在不停改进，本文基于OpenFlow-1.3.5进行说明，规范下载地址:<br><a target="_blank" rel="noopener" href="https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-switch-v1.3.5.pdf">https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-switch-v1.3.5.pdf</a></p>
 <p>OpenFlow交换机基于多个流表(FlowTable)和一个组表(GroupTable)转发数据包，通过OpenFlow Channel与控制器通信。控制器可以向交换机下发配置来添加、删除、更新流表中的流表项(flow entry)，交换机也可以将数据包转发至控制器，由控制器来判断如何处理数据包。</p>
 <p>整体架构如图:</p>
 <img src="/images/2016-12-31/2.png" class="">
@@ -252,7 +252,7 @@
 <img src="/images/2016-12-31/4.png" class="">
 
 <ul>
-<li>match fields: 匹配项，交换机使用这些项来匹配数据包，主要包括收包端口，各协议包头(如Ethernet包头，IP包头，TCP/UDP包头，VLAN ID等），以及用于流表之间传输数据的metadata</li>
+<li>match fields: 匹配项，交换机使用这些项来匹配数据包，主要包括收包端口，各协议包头(如Ethernet包头，IP包头，TCP&#x2F;UDP包头，VLAN ID等），以及用于流表之间传输数据的metadata</li>
 <li>preority: 匹配优先级，0表示优先级最低，交换机依据优先级从大到小匹配流表项</li>
 <li>counters: 用于统计匹配该表项的数据包和字节数</li>
 <li>instructions: 匹配表项后，需要执行的指令集。指令集可以修改数据包的action set，可以直接对数据包进行修改，也可以跳至更高的流表进行处理</li>
@@ -290,7 +290,7 @@
 <li>apply-actions actions: 直接执行actions, 而不是放到action set中最后再执行</li>
 <li>clear-actions: 清空action set</li>
 <li>write-actions actions: 将action添加到action set中</li>
-<li>write-metadata metadata/mask: 将使用掩码处理的metadata写入metadata field中</li>
+<li>write-metadata metadata&#x2F;mask: 将使用掩码处理的metadata写入metadata field中</li>
 <li>goto-table next-table-id: 跳至指定的表来处理数据包</li>
 </ul>
 <p>指令集中只能有一种同类型的指令，这些指令依照上述列出的顺序来执行。</p>
@@ -299,7 +299,7 @@
 <li>output port_no: 将数据包转发到指定的PORT</li>
 <li>group group_id: 使用指定的group来处理数据包</li>
 <li>drop: 丢弃数据包</li>
-<li>push-tag/pop-tag ethertype: 添加和去除协议标签</li>
+<li>push-tag&#x2F;pop-tag ethertype: 添加和去除协议标签</li>
 <li>set-field field_type value: 修改数据包头</li>
 </ul>
 <p>本文简要介绍了OpenFlow-1.3.5版本的交换机规范，说明了OpenFlow交换机如何处理数据包，后续其他文章再来介绍交换机与控制器之间的交互协议。</p>
@@ -397,7 +397,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

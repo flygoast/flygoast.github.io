@@ -226,26 +226,26 @@
       
         <p><code>VMware vSphere</code>的很多高级特性都依赖于共享存储, 如<code>vMotion</code>, <code>HA: High Availability</code>, <code>DRS: Distributed Resource Schedule</code>等, 它们要生效都需要虚拟机的存储位于共享存储中. <code>vSphere</code>支持的共享存储除了自家的<code>vSAN</code>, 还包括: <code>NFS</code>, <code>iSCSI</code>, <code>光纤通道: Fibre Channel</code>等. </p>
 <p><code>iSCSI</code>是一个标准协议, 全称为:<code>Internet Small Computer System Interface</code>, 它在<code>以太网</code>上基于<code>TCP/IP</code>协议来传输<code>SCSI</code>协议. <code>SCSI</code>协议是计算机上的<code>I/O</code>传输协议, <code>SCSI</code>控制器通过<code>SCSI</code>总线与硬盘等设备以块为单位传输数据. <code>iSCSI</code>服务器称为<code>target</code>, 客户端称为<code>initiator</code>. <code>iSCSI initiator</code>能够以纯软件实现运行在标准网络适配器上, 也可以以硬件形式实现为专用的<code>HBA</code>卡:(<code>Host Bus Adaptor</code>), 也有带有<code>iSCSCI offload</code>硬件支持的网卡可以来加速<code>iSCSI</code>协议处理. </p>
-<p><code>iSCSI</code>协议层次如图(来自: <a href="https://www.snia.org/education/what-is-iscsi" target="_blank" rel="noopener">https://www.snia.org/education/what-is-iscsi</a>):</p>
+<p><code>iSCSI</code>协议层次如图(来自: <a target="_blank" rel="noopener" href="https://www.snia.org/education/what-is-iscsi">https://www.snia.org/education/what-is-iscsi</a>):</p>
 <img src="/images/2022-11-20/1.png" class="">
 
-<a id="more"></a>
+<span id="more"></span>
 
 <p>几乎所有的企业级存储产品都支持<code>iSCSI</code>协议. 在<code>Windows</code>和<code>Linux</code>等操作系统上也都有成熟稳定的<code>iSCSI</code>实现. 在<code>CentOS</code>上配置<code>iSCSI</code>也非常简单, 有大量的文章介绍, 可以参考:</p>
 <ul>
-<li><a href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/" target="_blank" rel="noopener">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
-<li><a href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html" target="_blank" rel="noopener">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
-<li><a href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/" target="_blank" rel="noopener">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
 </ul>
 <p>由于<code>iSCSI</code>存储数据是基于网络传输, 为了提升性能, 可以采用<code>多路径: Multipathing</code>机制来传输数据, 其中的一种实现方式是一个<code>iSCSI session</code>使用多个连接, 叫做<code>MC/S: Multiple Connections per Session</code>. </p>
 <p><code>VMware vSphere</code>支持<code>iSCSI</code>协议. 介绍在<code>vSphere</code>上配置<code>iSCSI</code>的文章也非常多, 可以参考:</p>
 <ul>
-<li><a href="https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/" target="_blank" rel="noopener">https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/</a></li>
-<li><a href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/" target="_blank" rel="noopener">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
-<li><a href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/" target="_blank" rel="noopener">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
-<li><a href="https://www.unixmen.com/how-to-create-an-iscsi-target/" target="_blank" rel="noopener">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
-<li><a href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/" target="_blank" rel="noopener">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
-<li><a href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support" target="_blank" rel="noopener">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
+<li><a target="_blank" rel="noopener" href="https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/">https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/</a></li>
+<li><a target="_blank" rel="noopener" href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
+<li><a target="_blank" rel="noopener" href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.unixmen.com/how-to-create-an-iscsi-target/">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
 </ul>
 <p><code>VMware vSphere</code>的<code>iSCSI initiator</code>实现也支持<code>Multipathing</code>, 是基于<code>端口绑定: Port Binding</code>实现, 如图:</p>
 <img src="/images/2022-11-20/2.png" class="">
@@ -258,38 +258,38 @@
 
 <p>可以参考:</p>
 <ul>
-<li><a href="https://kb.vmware.com/s/article/2045040" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2045040</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2045040">https://kb.vmware.com/s/article/2045040</a></li>
 </ul>
-<p>但是, 实际使用<code>Port binding</code>时是有一些注意事项的, 请参考<a href="https://kb.vmware.com/s/article/2038869?lang=zh_cn" target="_blank" rel="noopener"><code>VMware</code>官方KB</a></p>
+<p>但是, 实际使用<code>Port binding</code>时是有一些注意事项的, 请参考<a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2038869?lang=zh_cn"><code>VMware</code>官方KB</a></p>
 <p><code>Port binding</code>本质上是指定使用哪个<code>VMKernel</code>建立<code>iSCSI</code>网络连接. 当多个<code>VMKernel</code>接口位于相同广播域时, 默认<code>ESXi</code>只会使用第一个接口的路由表, 当需要使用多个连接时, 需要配置<code>Port binding</code>.</p>
 <p>参考链接里说, 当多个<code>VMKernel</code>位于不同子网时, 不需要配置<code>Port binding</code>, 但个人感觉, 如果想使用<code>load balance</code>模式去利用多条连接而不是<code>fail over</code>模式, 也是需要配置的. 后续有时间可以再实验一下.</p>
 <p>参考:</p>
 <ul>
-<li><a href="http://www.open-iscsi.com/" target="_blank" rel="noopener">http://www.open-iscsi.com/</a></li>
-<li><a href="https://dusays.com/304/" target="_blank" rel="noopener">https://dusays.com/304/</a></li>
-<li><a href="https://www.snia.org/education/what-is-iscsi" target="_blank" rel="noopener">https://www.snia.org/education/what-is-iscsi</a></li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc3720" target="_blank" rel="noopener">https://datatracker.ietf.org/doc/html/rfc3720</a></li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc7143" target="_blank" rel="noopener">https://datatracker.ietf.org/doc/html/rfc7143</a></li>
-<li><a href="https://www.thomas-krenn.com/en/wiki/ISCSI_Basics" target="_blank" rel="noopener">https://www.thomas-krenn.com/en/wiki/ISCSI_Basics</a></li>
-<li><a href="https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi" target="_blank" rel="noopener">https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi</a></li>
-<li><a href="https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/" target="_blank" rel="noopener">https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/</a></li>
-<li><a href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/" target="_blank" rel="noopener">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
-<li><a href="https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/" target="_blank" rel="noopener">https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/</a></li>
-<li><a href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html" target="_blank" rel="noopener">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
-<li><a href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/" target="_blank" rel="noopener">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
-<li><a href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/" target="_blank" rel="noopener">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
-<li><a href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/" target="_blank" rel="noopener">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
-<li><a href="https://www.unixmen.com/how-to-create-an-iscsi-target/" target="_blank" rel="noopener">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
-<li><a href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/" target="_blank" rel="noopener">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
-<li><a href="https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B" target="_blank" rel="noopener">https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B</a></li>
-<li><a href="https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding" target="_blank" rel="noopener">https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding</a></li>
-<li><a href="https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/" target="_blank" rel="noopener">https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/</a></li>
-<li><a href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support" target="_blank" rel="noopener">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
-<li><a href="https://kb.vmware.com/s/article/2010877" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2010877</a></li>
-<li><a href="https://kb.vmware.com/s/article/2038869?lang=zh_cn" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2038869?lang=zh_cn</a></li>
-<li><a href="https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/" target="_blank" rel="noopener">https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/</a></li>
-<li><a href="https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/" target="_blank" rel="noopener">https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/</a></li>
-<li><a href="https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/" target="_blank" rel="noopener">https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.open-iscsi.com/">http://www.open-iscsi.com/</a></li>
+<li><a target="_blank" rel="noopener" href="https://dusays.com/304/">https://dusays.com/304/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.snia.org/education/what-is-iscsi">https://www.snia.org/education/what-is-iscsi</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc3720">https://datatracker.ietf.org/doc/html/rfc3720</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc7143">https://datatracker.ietf.org/doc/html/rfc7143</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thomas-krenn.com/en/wiki/ISCSI_Basics">https://www.thomas-krenn.com/en/wiki/ISCSI_Basics</a></li>
+<li><a target="_blank" rel="noopener" href="https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi">https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/">https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/">https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
+<li><a target="_blank" rel="noopener" href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.unixmen.com/how-to-create-an-iscsi-target/">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B">https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B</a></li>
+<li><a target="_blank" rel="noopener" href="https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding">https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/">https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2010877">https://kb.vmware.com/s/article/2010877</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2038869?lang=zh_cn">https://kb.vmware.com/s/article/2038869?lang=zh_cn</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/">https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/">https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/">https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/</a></li>
 </ul>
 
     </div>
@@ -389,7 +389,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

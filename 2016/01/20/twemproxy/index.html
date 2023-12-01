@@ -223,9 +223,9 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <p>twemproxy(<a href="https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool" target="_blank" rel="noopener">https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool</a>, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。</p>
+        <p>twemproxy(<a target="_blank" rel="noopener" href="https://github.com/twitter/twemproxy)%E6%98%AFTwitter%E5%BC%80%E6%BA%90%E7%9A%84Redis%E5%92%8CMemcached%E4%BB%A3%E7%90%86%E7%A8%8B%E5%BA%8F%EF%BC%8C%E5%AE%83%E5%8F%AF%E4%BB%A5%E5%B0%86%E5%A4%9A%E4%B8%AA%E5%90%8E%E7%AB%AFserver%E7%BB%84%E7%BB%87%E6%88%90%E4%B8%80%E4%B8%AAServerPool">https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool</a>, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。</p>
 <p>twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而主线程进入事件循环处理访问所有ServerPool的Redis或Memcached请求。</p>
-<a id="more"></a>
+<span id="more"></span>
 <p>下面分析一下请求的处理过程:</p>
 <p>客户端建立到ServerPool的TCP连接后，该ServerPool的监听fd的读事件被触发，回调函数proxy_recv()调用proxy_accept()来处理请求。</p>
 <p>首先，调用accept()接受连接:</p>
@@ -250,7 +250,7 @@
 <p>接来来看req_forward()。<br>req_forward()将上述解析出的请求放入client connection的outstanding queue中，</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">c_conn-&gt;enqueue_outq(ctx, c_conn, msg);</span><br></pre></td></tr></table></figure>
 <p>然后调用server_pool_conn()来选取一个server connection,</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">kpos = array_get(msg-&gt;keys, <span class="number">0</span>);</span><br><span class="line">key = kpos-&gt;start;</span><br><span class="line">keylen = (<span class="keyword">uint32_t</span>)(kpos-&gt;<span class="built_in">end</span> - kpos-&gt;start);</span><br><span class="line"></span><br><span class="line">s_conn = server_pool_conn(ctx, c_conn-&gt;owner, key, keylen);</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">kpos = array_get(msg-&gt;keys, <span class="number">0</span>);</span><br><span class="line">key = kpos-&gt;start;</span><br><span class="line">keylen = (<span class="type">uint32_t</span>)(kpos-&gt;end - kpos-&gt;start);</span><br><span class="line"></span><br><span class="line">s_conn = server_pool_conn(ctx, c_conn-&gt;owner, key, keylen);</span><br></pre></td></tr></table></figure>
 <p>server_pool_conn()函数会调用到server_pool_idx(), 该函数会根据配置的分发模式来选取server:</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">switch</span> (pool-&gt;dist_type) &#123;</span><br><span class="line"><span class="keyword">case</span> DIST_KETAMA:</span><br><span class="line">    hash = server_pool_hash(pool, key, keylen);</span><br><span class="line">    idx = ketama_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, hash);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> DIST_MODULA:</span><br><span class="line">    hash = server_pool_hash(pool, key, keylen);</span><br><span class="line">    idx = modula_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, hash);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> DIST_RANDOM:</span><br><span class="line">    idx = random_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">default</span>:</span><br><span class="line">    NOT_REACHED();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
@@ -364,7 +364,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

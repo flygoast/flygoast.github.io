@@ -225,12 +225,12 @@
       
         <p>Citrix提供了DDK(Driver Development Kit)来支持在XenServer中要构建自定义的内核模块或硬件驱动。DDK是一个OVA格式的虚拟机镜像，包含了内核头文件和编译器等开发工具。</p>
 <p>下面介绍使用DDK构建内核模块的步骤。</p>
-<p>首先从官方下载相应版本DDK，这里选择6.5:<br><a href="http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso" target="_blank" rel="noopener">http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso</a></p>
+<p>首先从官方下载相应版本DDK，这里选择6.5:<br><a target="_blank" rel="noopener" href="http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso">http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso</a></p>
 <p>将下载的ISO文件上传到XenServer宿主机上</p>
 <p>挂载ISO</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">mkdir /mnt/tmp</span><br><span class="line">mount &lt;path_to_DDK&gt;/ddk.iso /mnt/tmp -o loop</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> /mnt/tmp</span><br><span class="line">mount &lt;path_to_DDK&gt;/ddk.iso /mnt/tmp -o loop</span><br></pre></td></tr></table></figure>
 
-<a id="more"></a>
+<span id="more"></span>
 
 <p>使用DDK镜像创建虚拟机</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xe vm-import filename=/mnt/tmp/ova.xml</span><br></pre></td></tr></table></figure>
@@ -240,9 +240,9 @@
 <p>接下来找到eth0关联的网络UUID。<br>首先列出所有网络:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xe network-list</span><br></pre></td></tr></table></figure>
 <p>输出如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">uuid ( RO)                : e0f9ba3d-f27b-7380-413a-0491db9e0ec4</span><br><span class="line">          name-label ( RW): Pool-wide network associated with eth1</span><br><span class="line">    name-description ( RW):</span><br><span class="line">              bridge ( RO): xenbr1</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">uuid ( RO)                : 46fb28dd-4c35-5755-160b-f6389e09c54a</span><br><span class="line">          name-label ( RW): Pool-wide network associated with eth0</span><br><span class="line">    name-description ( RW):</span><br><span class="line">              bridge ( RO): xenbr0</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">uuid ( RO)                : 0ecf8369-5469-1327-2195-f3cc28a1b3bd</span><br><span class="line">          name-label ( RW): Host internal management network</span><br><span class="line">    name-description ( RW): Network on which guests will be assigned a private link-local IP address which can be used to talk XenAPI</span><br><span class="line">              bridge ( RO): xenapi</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">uuid ( RO)                : e0f9ba3d-f27b-7380-413a-0491db9e0ec4</span><br><span class="line">          name-label ( RW): Pool-wide network associated with eth1</span><br><span class="line">    name-description ( RW):</span><br><span class="line">              bridge ( RO): xenbr1</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">uuid ( RO)                : 46fb28dd-4c35-5755-160b-f6389e09c54a</span><br><span class="line">          name-label ( RW): Pool-wide network associated with eth0</span><br><span class="line">    name-description ( RW):</span><br><span class="line">              bridge ( RO): xenbr0</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">uuid ( RO)                : 0ecf8369-5469-1327-2195-f3cc28a1b3bd</span><br><span class="line">          name-label ( RW): Host internal management network</span><br><span class="line">    name-description ( RW): Network on which guests will be assigned a private link-local IP address which can be used to talk XenAPI</span><br><span class="line">              bridge ( RO): xenapi</span><br></pre></td></tr></table></figure>
 <p>从中找到eth0关联的网络UUID，为:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">46fb28dd-4c35-5755-160b-f6389e09c54a</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">46fb28dd-4c35-5755-160b-f6389e09c54a</span><br></pre></td></tr></table></figure>
 
 <p>使用上面得到的网络UUID和虚拟机UUID创建虚拟接口:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xe vif-create network-uuid=46fb28dd-4c35-5755-160b-f6389e09c54a  vm-uuid=69a2356e-5f7f-0fd8-a609-234a28b59fc5 device=0</span><br></pre></td></tr></table></figure>
@@ -255,7 +255,7 @@
 <p>获取domain ID</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@xenserver-iryatlxz ~]<span class="comment"># xe vm-list params=dom-id uuid=69a2356e-5f7f-0fd8-a609-234a28b59fc5 --minimal</span></span><br><span class="line">14</span><br></pre></td></tr></table></figure>
 
-<p>从console连接该虚拟机<br>/usr/lib64/xen/bin/xenconsole 14</p>
+<p>从console连接该虚拟机<br>&#x2F;usr&#x2F;lib64&#x2F;xen&#x2F;bin&#x2F;xenconsole 14</p>
 <p>登录到DDK VM后，就可以在该虚拟机中构建自定义的内核模块或硬件驱动了。内核开发包位于<code>/usr/src/kernels/3.10.0+2-x86_64/</code>。</p>
 <p>需要退出时，按<code>CTRL-]</code>退出。</p>
 
@@ -352,7 +352,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

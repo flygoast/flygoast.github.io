@@ -223,24 +223,24 @@
         <p>很多业务场景都需要在后台定期执行任务，如数据ETL(Extract-Transform-Load)操作。简单处理可通过crontab来管理。当任务需要在多台机器上执行，或者任务之间有依赖关系时，crontab便不太能满足需求。这种场景下需要分布式任务调度系统来组织任务编排，管理任务依赖，调度任务工作流和监视任务执行状态。</p>
 <p>比较优秀的开源解决方案有:</p>
 <ul>
-<li><a href="https://airflow.apache.org/" target="_blank" rel="noopener">Apache Airflow</a></li>
-<li><a href="https://azkaban.github.io/" target="_blank" rel="noopener">LinkedIn Azkaban</a></li>
-<li><a href="https://oozie.apache.org/" target="_blank" rel="noopener">Apache Oozie</a></li>
+<li><a target="_blank" rel="noopener" href="https://airflow.apache.org/">Apache Airflow</a></li>
+<li><a target="_blank" rel="noopener" href="https://azkaban.github.io/">LinkedIn Azkaban</a></li>
+<li><a target="_blank" rel="noopener" href="https://oozie.apache.org/">Apache Oozie</a></li>
 </ul>
 <p>Azkaban和Oozie都更聚集在大数据处理平台上的任务调度，Airflow的应用场景更为通用。本文简单介绍Airflow。</p>
 <p>Airflow使用Python开发，它通过<code>DAGs(Directed Acyclic Graph, 有向无环图)</code>来表达一个工作流中所要执行的任务，以及任务之间的关系和依赖。比如，如下的工作流中，任务<code>T1</code>执行完成，<code>T2</code>和<code>T3</code>才能开始执行，<code>T2</code>和<code>T3</code>都执行完成，<code>T4</code>才能开始执行。</p>
 <img src="/images/2020-06-13/1.png" class="">
 
-<a id="more"></a>
+<span id="more"></span>
 
 <p>Airflow使用<code>Code as Configuration</code>的理念，<code>DAG</code>由Python源码文件来定义, 如:</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> datetime <span class="keyword">import</span> datetime, timedelta</span><br><span class="line"><span class="keyword">from</span> airflow <span class="keyword">import</span> DAG</span><br><span class="line"><span class="keyword">from</span> airflow.operators.dummy_operator <span class="keyword">import</span> DummyOperator</span><br><span class="line"></span><br><span class="line">dag = DAG(</span><br><span class="line">        dag_id=<span class="string">'dummy_dag'</span>,</span><br><span class="line">        schedule_interval=dt.timedelta(days=<span class="number">1</span>),</span><br><span class="line">        start_date=days_ago(<span class="number">1</span>)</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">t1 = DummyOperator(task_id=<span class="string">'task1'</span>, dag=dag)</span><br><span class="line">t2 = DummyOperator(task_id=<span class="string">'task2'</span>, dag=dag)</span><br><span class="line">t3 = DummyOperator(task_id=<span class="string">'task3'</span>, dag=dag)</span><br><span class="line">t4 = DummyOperator(task_id=<span class="string">'task4'</span>, dag=dag)</span><br><span class="line"></span><br><span class="line">t1 &gt;&gt; [t2, t3] &gt;&gt; t4</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> datetime <span class="keyword">import</span> datetime, timedelta</span><br><span class="line"><span class="keyword">from</span> airflow <span class="keyword">import</span> DAG</span><br><span class="line"><span class="keyword">from</span> airflow.operators.dummy_operator <span class="keyword">import</span> DummyOperator</span><br><span class="line"></span><br><span class="line">dag = DAG(</span><br><span class="line">        dag_id=<span class="string">&#x27;dummy_dag&#x27;</span>,</span><br><span class="line">        schedule_interval=dt.timedelta(days=<span class="number">1</span>),</span><br><span class="line">        start_date=days_ago(<span class="number">1</span>)</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">t1 = DummyOperator(task_id=<span class="string">&#x27;task1&#x27;</span>, dag=dag)</span><br><span class="line">t2 = DummyOperator(task_id=<span class="string">&#x27;task2&#x27;</span>, dag=dag)</span><br><span class="line">t3 = DummyOperator(task_id=<span class="string">&#x27;task3&#x27;</span>, dag=dag)</span><br><span class="line">t4 = DummyOperator(task_id=<span class="string">&#x27;task4&#x27;</span>, dag=dag)</span><br><span class="line"></span><br><span class="line">t1 &gt;&gt; [t2, t3] &gt;&gt; t4</span><br></pre></td></tr></table></figure>
 
 <p>Etsy提供了一个工具，可以从YAML文件来生成DAG文件，如果不习惯使用Python来定义DAG文件，可以使用该工具。</p>
 <ul>
-<li><a href="https://github.com/etsy/boundary-layer" target="_blank" rel="noopener">https://github.com/etsy/boundary-layer</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/etsy/boundary-layer">https://github.com/etsy/boundary-layer</a></li>
 </ul>
-<p>DAG的一次执行叫做<code>DAG run</code>, 包括了本次工作流执行中的任务执行实例。DAG文件定义了工作流逻辑，任务本身的实现由Operator定义。Operator一般是原子任务，两个Operator之间一般不共享资源。DAG保证他们之间的执行顺序，而他们实际完全有可能在不同的机器上运行。如果两个Operator之间确实共享信息，可以使用airflow的<a href="http://airflow.apache.org/docs/stable/concepts.html#concepts-xcom" target="_blank" rel="noopener">XComs机制</a>。</p>
+<p>DAG的一次执行叫做<code>DAG run</code>, 包括了本次工作流执行中的任务执行实例。DAG文件定义了工作流逻辑，任务本身的实现由Operator定义。Operator一般是原子任务，两个Operator之间一般不共享资源。DAG保证他们之间的执行顺序，而他们实际完全有可能在不同的机器上运行。如果两个Operator之间确实共享信息，可以使用airflow的<a target="_blank" rel="noopener" href="http://airflow.apache.org/docs/stable/concepts.html#concepts-xcom">XComs机制</a>。</p>
 <p>Airflow提供了各种Operator实现，可以完成各种任务实现:</p>
 <ul>
 <li>BashOperator: 执行Bash命令</li>
@@ -254,7 +254,7 @@
 
 <p>这种需求可以使用<code>BranchPythonOperator</code>来实现。参考:</p>
 <ul>
-<li><a href="http://airflow.apache.org/docs/stable/concepts.html#branching" target="_blank" rel="noopener">http://airflow.apache.org/docs/stable/concepts.html#branching</a></li>
+<li><a target="_blank" rel="noopener" href="http://airflow.apache.org/docs/stable/concepts.html#branching">http://airflow.apache.org/docs/stable/concepts.html#branching</a></li>
 </ul>
 <p>Airflow的整体架构主要由三部分:</p>
 <ul>
@@ -266,8 +266,8 @@
 <ul>
 <li>SequentialExecutor: 单进程顺序执行，一般只用来测试</li>
 <li>LocalExecutor: 本地多进程执行</li>
-<li>CeleryExecutor: 使用<a href="https://docs.celeryproject.org/en/stable/" target="_blank" rel="noopener">Celery</a>进行分布式任务调度</li>
-<li>DaskExecutor：使用<a href="https://distributed.dask.org/en/latest/" target="_blank" rel="noopener">Dask</a>进行分布式任务调度</li>
+<li>CeleryExecutor: 使用<a target="_blank" rel="noopener" href="https://docs.celeryproject.org/en/stable/">Celery</a>进行分布式任务调度</li>
+<li>DaskExecutor：使用<a target="_blank" rel="noopener" href="https://distributed.dask.org/en/latest/">Dask</a>进行分布式任务调度</li>
 <li>KubernetesExecutor: 1.10.0新增, 创建临时POD执行每次任务</li>
 </ul>
 <p>生产环境一般使用<code>CeleryExecutor</code>和<code>KubernetesExecutor</code>。</p>
@@ -279,7 +279,7 @@
 
 <p>可以根据实际任务的执行环境要求来进行选择，当然<code>kubernetes</code>平台已经非常成熟和便捷，资源使用弹性更加具备优势。但目前<code>KubernetesExecutor</code>还不太稳定，简单场景可以通过使用LocalExecutor执行kubectl相关操作或者使用<code>KubernetesPodOperator</code>来变相实现在Kubernetes集群中运行任务的需求。</p>
 <p>下面介绍在Kubernetes环境中使用Helm来安装Airflow.</p>
-<p>Bitnami提供了<a href="https://github.com/bitnami/charts/tree/master/bitnami/airflow" target="_blank" rel="noopener">Apache Airflow Helm Chart</a>。</p>
+<p>Bitnami提供了<a target="_blank" rel="noopener" href="https://github.com/bitnami/charts/tree/master/bitnami/airflow">Apache Airflow Helm Chart</a>。</p>
 <p>它需要一个GIT仓库地址来拉取DAG文件，需要提前准备好:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REPOSITORY_URL=https://github.com/flygoast/airflow-dag-examples</span><br></pre></td></tr></table></figure>
 
@@ -287,13 +287,13 @@
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">helm install airflow bitnami/airflow \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.enabled=<span class="literal">true</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.repository=<span class="variable">$REPOSITORY_URL</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.branch=master \</span><br><span class="line">--<span class="built_in">set</span> airflow.baseUrl=http://127.0.0.1:8080</span><br></pre></td></tr></table></figure>
 
 <p>等待安装完成:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % kubectl get pods</span><br><span class="line">NAME                                 READY   STATUS    RESTARTS   AGE</span><br><span class="line">airflow-postgresql-0                 1&#x2F;1     Running   0          16m</span><br><span class="line">airflow-redis-master-0               1&#x2F;1     Running   0          16m</span><br><span class="line">airflow-redis-slave-0                1&#x2F;1     Running   0          16m</span><br><span class="line">airflow-redis-slave-1                1&#x2F;1     Running   0          15m</span><br><span class="line">airflow-scheduler-8557d55695-wlkd9   2&#x2F;2     Running   0          16m</span><br><span class="line">airflow-web-766bb56d6d-8fl7l         2&#x2F;2     Running   0          16m</span><br><span class="line">airflow-worker-0                     2&#x2F;2     Running   0          16m</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % kubectl get pods</span><br><span class="line">NAME                                 READY   STATUS    RESTARTS   AGE</span><br><span class="line">airflow-postgresql-0                 1/1     Running   0          16m</span><br><span class="line">airflow-redis-master-0               1/1     Running   0          16m</span><br><span class="line">airflow-redis-slave-0                1/1     Running   0          16m</span><br><span class="line">airflow-redis-slave-1                1/1     Running   0          15m</span><br><span class="line">airflow-scheduler-8557d55695-wlkd9   2/2     Running   0          16m</span><br><span class="line">airflow-web-766bb56d6d-8fl7l         2/2     Running   0          16m</span><br><span class="line">airflow-worker-0                     2/2     Running   0          16m</span><br></pre></td></tr></table></figure>
 
 <p>配置端口映射:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl port-forward --namespace default svc/airflow 8080:8080</span><br></pre></td></tr></table></figure>
 
 <p>获取密码:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % echo Password: $(kubectl get secret --namespace default airflow -o jsonpath&#x3D;&quot;&#123;.data.airflow-password&#125;&quot; | base64 --decode)</span><br><span class="line">Password: c9Yq6z17tk</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % echo Password: $(kubectl get secret --namespace default airflow -o jsonpath=&quot;&#123;.data.airflow-password&#125;&quot; | base64 --decode)</span><br><span class="line">Password: c9Yq6z17tk</span><br></pre></td></tr></table></figure>
 
 <p>使用<code>user</code>和密码登录<code>http://127.0.0.1:8080</code>, airflow安装完成:</p>
 <img src="/images/2020-06-13/5.png" class="">
@@ -303,7 +303,7 @@
 
 <p>参考链接:</p>
 <ul>
-<li><a href="https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/" target="_blank" rel="noopener">https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/">https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/</a></li>
 </ul>
 
     </div>
@@ -403,7 +403,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

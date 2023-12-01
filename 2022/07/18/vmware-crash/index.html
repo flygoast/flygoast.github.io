@@ -228,7 +228,7 @@
 <li>发送<code>NMI: Non-Maskable Interupt</code>给虚拟机</li>
 <li>VMware内存快照</li>
 </ul>
-<a id="more"></a>
+<span id="more"></span>
 
 <h4 id="发送NMI给虚拟机"><a href="#发送NMI给虚拟机" class="headerlink" title="发送NMI给虚拟机"></a>发送NMI给虚拟机</h4><p><code>NMI</code>是不可屏蔽的硬件中断。在虚拟化环境中，<code>Hypervisor</code>可以向<code>Guest</code>虚拟机发送<code>NMI</code>中断。<code>Guest</code>虚拟机收到<code>NMI</code>后产生<code>dump</code>文件, 继而从<code>dump</code>文件中分析系统状态。</p>
 <p>只是<code>Linux</code>系统对于<code>NMI</code>中断的默认处理行为是发送到<code>stdout</code>，并不会<code>panic</code>并产生<code>dump</code>文件。为了在接收到<code>NMI</code>时产生<code>dump</code>文件，我们需要在<code>Guest</code>的<code>Linux</code>系统中完成这些配置:</p>
@@ -237,9 +237,7 @@
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl start kdump.service</span><br></pre></td></tr></table></figure>
 </li>
 <li><p>配置<code>sysctl</code>参数，令<code>Linux</code>系统接收到<code>NMI</code>时<code>panic</code>:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w kernel.panic_on_unrecovered_nmi=1</span><br><span class="line">sysctl -w kernel.unknown_nmi_panic=1</span><br></pre></td></tr></table></figure>
-
-</li>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w kernel.panic_on_unrecovered_nmi=1</span><br><span class="line">sysctl -w kernel.unknown_nmi_panic=1</span><br></pre></td></tr></table></figure></li>
 </ul>
 <p>在<code>VCenter</code>的<code>GUI</code>界面中, 可以在相应<code>Guest</code>虚拟机的<code>导出系统日志</code>操作中向虚拟机发送<code>NMI</code>, 如图:</p>
 <img src="/images/2022-07-18/1.png" class="">
@@ -250,41 +248,41 @@
 
 <p>可以参考官方KB:</p>
 <ul>
-<li><a href="https://kb.vmware.com/s/article/2149185" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2149185</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2149185">https://kb.vmware.com/s/article/2149185</a></li>
 </ul>
 <p>如果是<code>RHEV</code>和<code>oVirt</code>环境, 可以使用<code>virsh</code>命令发送<code>NMI</code>:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">virsh inject-nmi guest1</span><br></pre></td></tr></table></figure>
 
 <p>具体可以参考链接:</p>
 <ul>
-<li><a href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi" target="_blank" rel="noopener">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
 </ul>
 <h4 id="内存快照"><a href="#内存快照" class="headerlink" title="内存快照"></a>内存快照</h4><p>另外一种方法就是基于VMware的快照。VMware官方提供了一个工具可以将快照文件转换成<code>crash</code>工具可以读取的<code>dump</code>文件。</p>
 <p>工具使用说明:</p>
 <ul>
-<li><a href="https://kb.vmware.com/s/article/2003941" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2003941</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2003941">https://kb.vmware.com/s/article/2003941</a></li>
 </ul>
 <p>工具下载地址:</p>
 <ul>
-<li><a href="https://flings.vmware.com/vmss2core" target="_blank" rel="noopener">https://flings.vmware.com/vmss2core</a></li>
+<li><a target="_blank" rel="noopener" href="https://flings.vmware.com/vmss2core">https://flings.vmware.com/vmss2core</a></li>
 </ul>
 <p>但经过尝试，发现转换完成的<code>dump</code>文件使用<code>crash</code>并不能正常读取。</p>
 <p>和<code>Redhat</code>这篇<code>KB</code>上描述的错误一致:</p>
 <ul>
-<li><a href="https://access.redhat.com/solutions/3622951" target="_blank" rel="noopener">https://access.redhat.com/solutions/3622951</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/3622951">https://access.redhat.com/solutions/3622951</a></li>
 </ul>
 <p><code>crash</code>无法读取的根本原因是从<code>7.5</code>版本开始，<code>RHEL</code>内核默认启用了<code>KASLR</code>特性:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Starting 7.5, RHEL kernels feature KASLR (Kernel Address Space Linear Randomization) enabled by default. KASLR is a security feature that enables the kernel to relocate itself to a random location on each boot, making writing exploits that depend on local resources significantly harder.</span><br><span class="line"></span><br><span class="line">The side effect of this feature is debugging tools like crash may encounter some trouble trying to open vmcores from KASLR-enabled kernels.</span><br><span class="line"></span><br><span class="line">For more information about this, please refer to this article.</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Starting 7.5, RHEL kernels feature KASLR (Kernel Address Space Linear Randomization) enabled by default. KASLR is a security feature that enables the kernel to relocate itself to a random location on each boot, making writing exploits that depend on local resources significantly harder.</span><br><span class="line"></span><br><span class="line">The side effect of this feature is debugging tools like crash may encounter some trouble trying to open vmcores from KASLR-enabled kernels.</span><br><span class="line"></span><br><span class="line">For more information about this, please refer to this article.</span><br></pre></td></tr></table></figure>
 
 <p>可以参考这里:</p>
 <ul>
-<li><a href="https://access.redhat.com/articles/3402021" target="_blank" rel="noopener">https://access.redhat.com/articles/3402021</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/articles/3402021">https://access.redhat.com/articles/3402021</a></li>
 </ul>
 <p>但它也提到，<code>crash</code>可以直接读取VMware的快照文件，步骤如下:</p>
 <ul>
-<li>复制<code>ESXi</code>主机上<code>Guest</code>所在目录下的<code>.vmss</code>/<code>.vmsn</code>和<code>.vmem</code>文件到一个目录</li>
+<li>复制<code>ESXi</code>主机上<code>Guest</code>所在目录下的<code>.vmss</code>&#x2F;<code>.vmsn</code>和<code>.vmem</code>文件到一个目录</li>
 <li>保持文件名称不变</li>
-<li>使用<code>crash</code>工具打开<code>.vmsn</code>/<code>.vmss</code>文件，<code>crash</code>会自动加载相应的<code>.vmem</code>文件</li>
+<li>使用<code>crash</code>工具打开<code>.vmsn</code>&#x2F;<code>.vmss</code>文件，<code>crash</code>会自动加载相应的<code>.vmem</code>文件</li>
 </ul>
 <p>如:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># crash &lt;NAME&gt;.vmsn  /cores/retrace/repos/kernel/x86_64/usr/lib/debug/lib/modules/&lt;kernel version&gt;/vmlinux</span></span><br></pre></td></tr></table></figure>
@@ -294,20 +292,20 @@
 
 <p>有时侯系统可能会连<code>NMI</code>也无法响应，这种场景下就只能使用快照方式。但快照方式本身需要从<code>ESXi</code>主机上获取快照文件，也不是很方便。总之各有利弊，看情况选择使用哪种方法。</p>
 <p>因为使用<code>crash</code>工具分析<code>dump</code>文件，需要对应内核版本的<code>debuginfo</code>包。有时我们拿到<code>dump</code>文件，却不知道内核版本。我们可以从<code>dump</code>文件中直接查找字符串来搜索, 如:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost centos76-Snapshot1]<span class="comment"># strings vmss.core  |grep -i 'BOOT_IMAGE'</span></span><br><span class="line">BOOT_IMAGE=/vmlinuz-3.10.0-957.el7.x86_64 root=/dev/mapper/centos-root ro crashkernel=auto rd.lvm.lv=centos/root rd.lvm.lv=centos/swap rhgb quiet LANG=en_US.UTF-8</span><br><span class="line">$(cat /proc/cmdline| grep <span class="string">"BOOT_IMAGE"</span> | cut -d<span class="string">' '</span> -f1)</span><br><span class="line">KDUMP_BOOTDIR=<span class="string">"/boot"</span>$(dirname <span class="variable">$BOOT_IMAGE</span>)</span><br><span class="line">BOOT_IMAGE</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost centos76-Snapshot1]<span class="comment"># strings vmss.core  |grep -i &#x27;BOOT_IMAGE&#x27;</span></span><br><span class="line">BOOT_IMAGE=/vmlinuz-3.10.0-957.el7.x86_64 root=/dev/mapper/centos-root ro crashkernel=auto rd.lvm.lv=centos/root rd.lvm.lv=centos/swap rhgb quiet LANG=en_US.UTF-8</span><br><span class="line">$(<span class="built_in">cat</span> /proc/cmdline| grep <span class="string">&quot;BOOT_IMAGE&quot;</span> | <span class="built_in">cut</span> -d<span class="string">&#x27; &#x27;</span> -f1)</span><br><span class="line">KDUMP_BOOTDIR=<span class="string">&quot;/boot&quot;</span>$(<span class="built_in">dirname</span> <span class="variable">$BOOT_IMAGE</span>)</span><br><span class="line">BOOT_IMAGE</span><br></pre></td></tr></table></figure>
 
 <h4 id="参考"><a href="#参考" class="headerlink" title="参考:"></a>参考:</h4><ul>
-<li><a href="https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)" target="_blank" rel="noopener">https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)</a></li>
-<li><a href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi" target="_blank" rel="noopener">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
-<li><a href="https://kb.vmware.com/s/article/1015180" target="_blank" rel="noopener">https://kb.vmware.com/s/article/1015180</a></li>
-<li><a href="https://kb.vmware.com/s/article/2149185" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2149185</a></li>
-<li><a href="https://kb.vmware.com/s/article/67438" target="_blank" rel="noopener">https://kb.vmware.com/s/article/67438</a></li>
-<li><a href="https://kb.vmware.com/s/article/2003941" target="_blank" rel="noopener">https://kb.vmware.com/s/article/2003941</a></li>
-<li><a href="https://flings.vmware.com/vmss2core" target="_blank" rel="noopener">https://flings.vmware.com/vmss2core</a></li>
-<li><a href="https://access.redhat.com/articles/3587631" target="_blank" rel="noopener">https://access.redhat.com/articles/3587631</a></li>
-<li><a href="https://access.redhat.com/solutions/210063" target="_blank" rel="noopener">https://access.redhat.com/solutions/210063</a></li>
-<li><a href="https://access.redhat.com/solutions/3622951" target="_blank" rel="noopener">https://access.redhat.com/solutions/3622951</a></li>
-<li><a href="https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html" target="_blank" rel="noopener">https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)">https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/1015180">https://kb.vmware.com/s/article/1015180</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2149185">https://kb.vmware.com/s/article/2149185</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/67438">https://kb.vmware.com/s/article/67438</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2003941">https://kb.vmware.com/s/article/2003941</a></li>
+<li><a target="_blank" rel="noopener" href="https://flings.vmware.com/vmss2core">https://flings.vmware.com/vmss2core</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/articles/3587631">https://access.redhat.com/articles/3587631</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/210063">https://access.redhat.com/solutions/210063</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/3622951">https://access.redhat.com/solutions/3622951</a></li>
+<li><a target="_blank" rel="noopener" href="https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html">https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html</a></li>
 </ul>
 
     </div>
@@ -408,7 +406,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

@@ -224,7 +224,7 @@
 <p>这个标识可以由服务端分配，也可以由客户端自行生成再注册到服务端。</p>
 <p>服务端分配是一种中心化生成方式，可以保证唯一性。客户端自行生成方式可以采用<code>UUID</code>标准来生成，也可以保证唯一性。</p>
 <p>尽管在生成方式可以保证唯一性，但是由于客户端某些特性的改变，服务端依然会出现<code>ID</code>冲突的场景。</p>
-<a id="more"></a>
+<span id="more"></span>
 
 <p>比如，客户端在虚拟机中安装完成并已生成好<code>UUID</code>, 此时克隆虚拟机，克隆机中的客户端启动并使用原<code>UUID</code>与服务端通信。此时，如果服务端不使用客户端的属性进行校验，那么两个客户端在服务端就会被识别为一个客户端，从而可能造成数据混乱和覆盖。</p>
 <p>于是，服务端需要对客户端的某些属性进行校验来检测<code>UUID</code>冲突，常用的属性如<code>MAC</code>地址，<code>IP</code>地址等信息。如果已经正常运行的客户端所在的机器属性发生变化时，比如，更换网卡，<code>MAC</code>地址发生变化，更改<code>IP</code>地址，由于服务端会校验这些属性，在服务端看来这些变化的属性也造成<code>UUID</code>冲突。</p>
@@ -255,10 +255,10 @@
 
 <p>参考:</p>
 <ul>
-<li><a href="https://www.uwintech.cn/blog/easyops-cmdb" target="_blank" rel="noopener">https://www.uwintech.cn/blog/easyops-cmdb</a></li>
-<li><a href="https://liuzehe.top/archives/2021083101" target="_blank" rel="noopener">https://liuzehe.top/archives/2021083101</a></li>
-<li><a href="https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy" target="_blank" rel="noopener">https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy</a></li>
-<li><a href="https://en.wikipedia.org/wiki/Universally_unique_identifier" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/Universally_unique_identifier</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.uwintech.cn/blog/easyops-cmdb">https://www.uwintech.cn/blog/easyops-cmdb</a></li>
+<li><a target="_blank" rel="noopener" href="https://liuzehe.top/archives/2021083101">https://liuzehe.top/archives/2021083101</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy">https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Universally_unique_identifier">https://en.wikipedia.org/wiki/Universally_unique_identifier</a></li>
 </ul>
 
     </div>
@@ -354,7 +354,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

@@ -241,7 +241,7 @@
 <img src="/images/2022-11-07/1.png" class="">
 
 <p><code>逻辑交换机(logical switch)</code>也叫<code>分段(segment)</code>为虚拟机提供网络接入点，它需要附着于<code>NSX虚拟交换机</code>之上。有些场景下，<code>逻辑交换机</code>并不需要在所有<code>传输节点</code>上都存在，<code>NSX-T</code>使用<code>传输区域</code>来表示<code>传输节点</code>的范围。<code>NSX虚拟交换机</code>在创建时，需要配置所关联的<code>传输区域</code>。</p>
-<a id="more"></a>
+<span id="more"></span>
 
 <p>下图中，<code>传输节点: ESXi-TN1</code>上创建的<code>NSX虚拟交换机</code>关联了<code>传输区域: tz1</code>，<code>传输节点: ESXi-TN2</code>上创建的<code>NSX虚拟交换机</code>关联了<code>传输区域: tz1和tz2</code>, <code>传输节点: ESXi-TN3</code>关联了<code>传输区域: tz2</code>。这样，<code>传输区域: tz1</code>就由<code>TN1</code>和<code>TN2</code>上的<code>NSX虚拟交换机</code>构成，而<code>传输区域: tz2</code>就由<code>TN2</code>和<code>TN3</code>上的<code>NSX虚拟交换机</code>构成。</p>
 <img src="/images/2022-11-07/2.png" class="">
@@ -263,12 +263,12 @@
 <img src="/images/2022-11-07/5.png" class="">
 
 <p><code>上行链路配置文件(uplink profile)</code>定义了<code>NSX虚拟交换机</code>使用<code>uplink</code>的策略，这叫做<code>绑定策略(Teaming Policies)</code>。默认的策略为<code>负载均衡源(Load Balance Source)</code>, 表示根据虚拟机ID均衡分散到不同的<code>uplink</code>，也可以修改为<code>故障切换顺序(Failover Order)</code>实现主备模式, 或者是<code>负载均衡源MAC(Load Balance Source MAC)</code>,表示基于虚拟机网卡的<code>MAC</code>地址进行负载均衡。</p>
-<p>这种场景下，一个<code>NSX虚拟交换机</code>所承载的<code>逻辑交换机/分段</code>的<code>绑定策略</code>都是<code>NSX虚拟交换机</code>创建时所设置的默认<code>绑定策略</code>。但有些场景下，不同的<code>逻辑交换机/分段</code>需要配置不同的<code>绑定策略</code>。比如，一个<code>NSX虚拟交换机</code>有<code>4</code>个<code>uplink</code>，业务网络使用前两个<code>uplink</code>构成的<code>负载均衡源</code>模式, 而<code>vMotion</code>/<code>vSAN</code>等管理流量使用另外两个<code>uplink</code>构成的<code>故障切换顺序</code>模式。</p>
+<p>这种场景下，一个<code>NSX虚拟交换机</code>所承载的<code>逻辑交换机/分段</code>的<code>绑定策略</code>都是<code>NSX虚拟交换机</code>创建时所设置的默认<code>绑定策略</code>。但有些场景下，不同的<code>逻辑交换机/分段</code>需要配置不同的<code>绑定策略</code>。比如，一个<code>NSX虚拟交换机</code>有<code>4</code>个<code>uplink</code>，业务网络使用前两个<code>uplink</code>构成的<code>负载均衡源</code>模式, 而<code>vMotion</code>&#x2F;<code>vSAN</code>等管理流量使用另外两个<code>uplink</code>构成的<code>故障切换顺序</code>模式。</p>
 <p>这个需求在<code>VDS</code>上配置比较简单，可以针对不同的<code>端口组</code>配置不同的<code>绑定和故障切换</code>设置:</p>
 <img src="/images/2022-11-07/6.png" class="">
 
 <p>在<code>NSX-T</code>的<code>逻辑交换机/分段</code>上实现该需求步骤则略为复杂一些。</p>
-<p><code>uplink profile</code>的<code>绑定策略</code>支持配置多个，第一条为默认策略，其他策略则需要指定策略名称，这个机制叫做<code>命名绑定策略(Named Teaming Polices)</code>, 该特性在<code>NSX-T 2.3</code>中引入，从<code>2.4</code>版本开始，一个<code>NSX虚拟交换机</code>可以配置多个<code>命名绑定策略</code>, 如图:</p>
+<p><code>uplink profile</code>的<code>绑定策略</code>支持配置多个，第一条为默认策略，其他策略则需要指定策略名称，这个机制叫做<code> 命名绑定策略(Named Teaming Polices)</code>, 该特性在<code>NSX-T 2.3</code>中引入，从<code>2.4</code>版本开始，一个<code>NSX虚拟交换机</code>可以配置多个<code>命名绑定策略</code>, 如图:</p>
 <img src="/images/2022-11-07/7.png" class="">
 
 <p>创建<code>传输区域</code>时可以关联多个<code>命名绑定策略</code>, 如图:</p>
@@ -291,14 +291,14 @@
 <p>可以确定<code>逻辑交换机</code>的<code>上行链路绑定策略</code>的确已经生效。</p>
 <p>参考:</p>
 <ul>
-<li><a href="https://wesleygeelhoed.nl/2019/12/16/named-teaming-policy-in-nsx-t-2-5-load-balancing-deep-dive/" target="_blank" rel="noopener">https://wesleygeelhoed.nl/2019/12/16/named-teaming-policy-in-nsx-t-2-5-load-balancing-deep-dive/</a></li>
-<li><a href="https://virtualrove.com/2020/05/28/nsx-t-3-0-series-part4-create-transport-zones-uplink-profiles/" target="_blank" rel="noopener">https://virtualrove.com/2020/05/28/nsx-t-3-0-series-part4-create-transport-zones-uplink-profiles/</a></li>
-<li><a href="https://greatwhitetec.com/2016/11/01/esxtop-not-displaying-properly/" target="_blank" rel="noopener">https://greatwhitetec.com/2016/11/01/esxtop-not-displaying-properly/</a></li>
-<li><a href="https://esxsi.com/2016/07/10/esxtop/" target="_blank" rel="noopener">https://esxsi.com/2016/07/10/esxtop/</a></li>
-<li><a href="https://tomaskalabis.com/wordpress/vmware-esxi-how-shutdown-vmnic-interface/" target="_blank" rel="noopener">https://tomaskalabis.com/wordpress/vmware-esxi-how-shutdown-vmnic-interface/</a></li>
-<li><a href="https://vxplanet.com/2019/09/25/achieving-deterministic-peering-using-nsx-t-named-teaming-policies/" target="_blank" rel="noopener">https://vxplanet.com/2019/09/25/achieving-deterministic-peering-using-nsx-t-named-teaming-policies/</a></li>
-<li><a href="http://www.cloudxtreme.info/nsx-t-uplink-profile/" target="_blank" rel="noopener">http://www.cloudxtreme.info/nsx-t-uplink-profile/</a></li>
-<li><a href="https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html" target="_blank" rel="noopener">https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://wesleygeelhoed.nl/2019/12/16/named-teaming-policy-in-nsx-t-2-5-load-balancing-deep-dive/">https://wesleygeelhoed.nl/2019/12/16/named-teaming-policy-in-nsx-t-2-5-load-balancing-deep-dive/</a></li>
+<li><a target="_blank" rel="noopener" href="https://virtualrove.com/2020/05/28/nsx-t-3-0-series-part4-create-transport-zones-uplink-profiles/">https://virtualrove.com/2020/05/28/nsx-t-3-0-series-part4-create-transport-zones-uplink-profiles/</a></li>
+<li><a target="_blank" rel="noopener" href="https://greatwhitetec.com/2016/11/01/esxtop-not-displaying-properly/">https://greatwhitetec.com/2016/11/01/esxtop-not-displaying-properly/</a></li>
+<li><a target="_blank" rel="noopener" href="https://esxsi.com/2016/07/10/esxtop/">https://esxsi.com/2016/07/10/esxtop/</a></li>
+<li><a target="_blank" rel="noopener" href="https://tomaskalabis.com/wordpress/vmware-esxi-how-shutdown-vmnic-interface/">https://tomaskalabis.com/wordpress/vmware-esxi-how-shutdown-vmnic-interface/</a></li>
+<li><a target="_blank" rel="noopener" href="https://vxplanet.com/2019/09/25/achieving-deterministic-peering-using-nsx-t-named-teaming-policies/">https://vxplanet.com/2019/09/25/achieving-deterministic-peering-using-nsx-t-named-teaming-policies/</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.cloudxtreme.info/nsx-t-uplink-profile/">http://www.cloudxtreme.info/nsx-t-uplink-profile/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html">https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html</a></li>
 </ul>
 
     </div>
@@ -397,7 +397,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

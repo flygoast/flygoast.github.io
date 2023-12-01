@@ -164,6 +164,97 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/22/associating-multi-floatingip/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2016/12/22/associating-multi-floatingip/" class="post-title-link" itemprop="url">OpenStack虚拟机实例关联多个浮动IP</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-12-22 16:43:37" itemprop="dateCreated datePublished" datetime="2016-12-22T16:43:37+08:00">2016-12-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>许多场景下我们的OpenStack虚拟机实例需要关联多个浮动IP。Horizon Dashboard不支持这样的操作，但是我们可以通过命令行和API完成。</p>
+<p>可以以两种形式关联:</p>
+<ul>
+<li>实例配置多个NIC，每个NIC关联一个浮动IP</li>
+<li>实例只配置一个NIC，NIC上配置多个fixed IP, 每个浮动IP关联一个fixed IP</li>
+</ul>
+<p>首先看第一种形式:</p>
+<p>列出所有网络，找到实例所在网络和子网:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_admin)]# neutron net-list</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br><span class="line">| id                                   | name    | subnets                                              |</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br><span class="line">| 1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca | private | f805a609-da7c-4a79-98a4-1aefb6aca2a2 10.0.0.0/24     |</span><br><span class="line">| 467b92e0-540d-4cac-86a6-999354c6b6c8 | 1       | 216fa519-973f-493f-a8ef-1b5f9e30335f 10.0.1.0/24     |</span><br><span class="line">| 65bdc2e1-d3ba-4b20-912c-6f0a29aef5de | public  | 189e9999-4295-45a4-b6b2-438225249654 172.24.4.224/28 |</span><br><span class="line">| 73569655-f522-4e3d-b2f3-f1a1fd83cc5e | 2       | c9015487-e913-4a31-bc14-ef3cb549c895 10.0.2.0/24     |</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2016/12/22/associating-multi-floatingip/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/17/arp/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -479,11 +570,11 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>更新(2020-05-06):<br>Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:<br><a href="https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking" target="_blank" rel="noopener">https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking</a></p>
+          <p>更新(2020-05-06):<br>Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:<br><a target="_blank" rel="noopener" href="https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking">https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking</a></p>
 <p>OpenStack虚拟化网络实现中大量应用了多种虚拟网络设备，了解这些设备是理解OpenStack虚拟网络实现的基础，本文来简单介绍这些虚拟网络设备。</p>
-<h2 id="TUN-TAP设备"><a href="#TUN-TAP设备" class="headerlink" title="TUN/TAP设备"></a>TUN/TAP设备</h2><p>TUN/TAP设备是Linux内核中实现的虚拟网卡。物理网卡是从物理线路上收发数据包，而TUN/TAP设备是从用户态应用程序上收发以太网帧或IP包。用户态进程对<code>/dev/net/tun</code>文件调用<code>open()</code>获取一个文件描述符，并调用<code>ioctl()</code>挂接到该设备上，接着通过读写该文件描述符从TUN/TAP设备的收发数据包。收发的数据包由用户态进程构造好。TUN和TAP设备的区别在于TUN设备收发的是IP包，而TAP设备收发的是以太网帧。</p>
-<p>在进程中创建及使用TUN/TAP设备可以参考官方文档:<br><a href="https://www.kernel.org/doc/Documentation/networking/tuntap.txt" target="_blank" rel="noopener">https://www.kernel.org/doc/Documentation/networking/tuntap.txt</a></p>
-<p>可以使用iproute2工具包中的ip命令创建TUN/TAP设备, 如:</p>
+<h2 id="TUN-TAP设备"><a href="#TUN-TAP设备" class="headerlink" title="TUN&#x2F;TAP设备"></a>TUN&#x2F;TAP设备</h2><p>TUN&#x2F;TAP设备是Linux内核中实现的虚拟网卡。物理网卡是从物理线路上收发数据包，而TUN&#x2F;TAP设备是从用户态应用程序上收发以太网帧或IP包。用户态进程对<code>/dev/net/tun</code>文件调用<code>open()</code>获取一个文件描述符，并调用<code>ioctl()</code>挂接到该设备上，接着通过读写该文件描述符从TUN&#x2F;TAP设备的收发数据包。收发的数据包由用户态进程构造好。TUN和TAP设备的区别在于TUN设备收发的是IP包，而TAP设备收发的是以太网帧。</p>
+<p>在进程中创建及使用TUN&#x2F;TAP设备可以参考官方文档:<br><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/networking/tuntap.txt">https://www.kernel.org/doc/Documentation/networking/tuntap.txt</a></p>
+<p>可以使用iproute2工具包中的ip命令创建TUN&#x2F;TAP设备, 如:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip tuntap add dev tap0 mode tap</span><br><span class="line">ip tuntap add dev tun0 mode tun</span><br></pre></td></tr></table></figure>
           <!--noindex-->
             <div class="post-button">
@@ -658,10 +749,10 @@
       
           <p>Citrix提供了DDK(Driver Development Kit)来支持在XenServer中要构建自定义的内核模块或硬件驱动。DDK是一个OVA格式的虚拟机镜像，包含了内核头文件和编译器等开发工具。</p>
 <p>下面介绍使用DDK构建内核模块的步骤。</p>
-<p>首先从官方下载相应版本DDK，这里选择6.5:<br><a href="http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso" target="_blank" rel="noopener">http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso</a></p>
+<p>首先从官方下载相应版本DDK，这里选择6.5:<br><a target="_blank" rel="noopener" href="http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso">http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso</a></p>
 <p>将下载的ISO文件上传到XenServer宿主机上</p>
 <p>挂载ISO</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">mkdir /mnt/tmp</span><br><span class="line">mount &lt;path_to_DDK&gt;/ddk.iso /mnt/tmp -o loop</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> /mnt/tmp</span><br><span class="line">mount &lt;path_to_DDK&gt;/ddk.iso /mnt/tmp -o loop</span><br></pre></td></tr></table></figure>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2016/11/06/xenserver-kernel-module/#more" rel="contents">
@@ -744,12 +835,12 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>Lua通过标准库实现了核心之外的功能，如math库，I/O库等。本文来分析math标准库的实现, 代码位于<code>lmathlib.c</code>。</p>
+          <p>Lua通过标准库实现了核心之外的功能，如math库，I&#x2F;O库等。本文来分析math标准库的实现, 代码位于<code>lmathlib.c</code>。</p>
 <p>math库提供了一组标准的数学函数，如绝对值函数, 三角函数，随机数函数等。调用方式为:</p>
 <figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">a = <span class="built_in">math</span>.<span class="built_in">abs</span>(<span class="number">-1</span>)</span><br></pre></td></tr></table></figure>
 <p>标准库由C语言函数实现，提供给Lua程序使用。Lua程序与C函数通过虚拟栈交互。Lua将参数压入栈中，C函数从栈中获取参数，并将结果压入栈中，C函数返回入栈的结果数量。C函数无需在压入结果前清空栈，Lua会在函数执行完成后从栈中获取结果并自动清空结果下的内容。</p>
 <p>Lua调用的C函数的格式是固定的，定义在lua.h中:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">typedef</span> <span class="title">int</span> <span class="params">(*lua_CFunction)</span> <span class="params">(lua_State *L)</span></span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="title function_">int</span> <span class="params">(*lua_CFunction)</span> <span class="params">(lua_State *L)</span>;</span><br></pre></td></tr></table></figure>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2016/06/10/lua-math/#more" rel="contents">
@@ -924,94 +1015,10 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          <p>Thrift(<a href="https://thrift.apache.org/)是一个轻量级、语言无关的RPC框架。它定义了一套简单直观的IDL" target="_blank" rel="noopener">https://thrift.apache.org/)是一个轻量级、语言无关的RPC框架。它定义了一套简单直观的IDL</a>(Interface Definition Language)用于描述服务接口规范。 通过代码生成引擎将IDL描述的接口规范生成各种目标语言(如C++<br>，JAVA等)的源码文件。应用开发者基于这些源码构建服务端和客户端。通过这种方式，Thrift屏蔽了不同语言间的数据序列化/反序列化、数据传输、网络通信等与业务逻辑不相关的部分，使开发者只需关心业务逻辑实现。</p>
+          <p>Thrift(<a target="_blank" rel="noopener" href="https://thrift.apache.org/)%E6%98%AF%E4%B8%80%E4%B8%AA%E8%BD%BB%E9%87%8F%E7%BA%A7%E3%80%81%E8%AF%AD%E8%A8%80%E6%97%A0%E5%85%B3%E7%9A%84RPC%E6%A1%86%E6%9E%B6%E3%80%82%E5%AE%83%E5%AE%9A%E4%B9%89%E4%BA%86%E4%B8%80%E5%A5%97%E7%AE%80%E5%8D%95%E7%9B%B4%E8%A7%82%E7%9A%84IDL">https://thrift.apache.org/)是一个轻量级、语言无关的RPC框架。它定义了一套简单直观的IDL</a>(Interface Definition Language)用于描述服务接口规范。 通过代码生成引擎将IDL描述的接口规范生成各种目标语言(如C++<br>，JAVA等)的源码文件。应用开发者基于这些源码构建服务端和客户端。通过这种方式，Thrift屏蔽了不同语言间的数据序列化&#x2F;反序列化、数据传输、网络通信等与业务逻辑不相关的部分，使开发者只需关心业务逻辑实现。</p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2016/05/03/thrift/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/01/20/twemproxy/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2016/01/20/twemproxy/" class="post-title-link" itemprop="url">twemproxy实现分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2016-01-20 00:36:43" itemprop="dateCreated datePublished" datetime="2016-01-20T00:36:43+08:00">2016-01-20</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Twemproxy/" itemprop="url" rel="index">
-                    <span itemprop="name">Twemproxy</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>twemproxy(<a href="https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool" target="_blank" rel="noopener">https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool</a>, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。</p>
-<p>twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而主线程进入事件循环处理访问所有ServerPool的Redis或Memcached请求。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2016/01/20/twemproxy/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -1101,7 +1108,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

@@ -226,14 +226,14 @@
         <p><code>Meltdown</code>漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级<code>Guest</code>是否有较大的性能影响, 是否应该升级<code>Guest</code>虚拟机等问题又困扰着云租户们。</p>
 <p>本文基于实例来分析<code>Guest</code>虚拟机的性能影响。</p>
 <p>首先来看<code>Meltdown</code>的原理。现代CPU架构在不同的安全等级运行指令。内核需要直接操作硬件，运行于最高权限，而几乎所有的应用程序都运行于各低权限上。用户态进程通过系统调用访问内核数据。一般情况下，CPU在执行时使用虚拟内存地址，内核使用页表来控制虚拟内存与物理内存的映射。用户态进程不能访问映射给内核的内存页。这些映射关系的计算较为耗时，因而CPU使用<code>TLB(Translation lookaside buffer)</code>来存储计算后的映射关系。从<code>TLB</code>中移除这些映射再重新计算并缓存会消耗性能，因而内核实现上会尽可能减少刷新TLB，于是内核将用户态和内核的数据都映射进用户态页表中。正常情况下，这不存在安全风险，页表的权限可以阻止用户态进程访问内核数据。</p>
-<a id="more"></a>
+<span id="more"></span>
 
 <p>现代CPU追求运行速度，会从所有的内存映射关系中预取数据，而CPU本身会乱序执行，且乱序执行时不会验证是否有权限访问内存，且CPU缓存不会被恢复，因而<code>Meltdown</code>的研究者构造乱序执行的场景将内核内存地址的内容获取到CPU缓存中，再通过侧信道攻击获取到相应内容。</p>
 <p>Linux内核采用<code>KPTI(Kernel Page Table Isolation)</code>机制，将内核页表和用户空间页表隔离开，避免CPU在预取和乱序执行时用户态进程时获取到内核页表中的数据，从而缓解<code>Meltdown</code>利用。</p>
 <p>这样当进程用户在用户空间时，使用用户态页表，发生中断或者异常陷入内核时，将切换到内核页表。页表的切换将导致性能下降。</p>
 <p>Intel在<code>Haswell</code>架构后增加了一个特性叫做<code>PCID(Process-Context Identifiers)</code>。在没有该特性时，切换页表时将需要刷新整个<code>TLB</code>，而在CPU支持PCID时，内核用不同ID来区分两个页表将其关联PCID不再需要刷新整个TLB，这样会大大减小页表切换带来的性能损失。</p>
 <p>在Linux中查看<code>PCID</code>的方法:</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cat /proc/cpuinfo |grep pcid</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> /proc/cpuinfo |grep pcid</span><br></pre></td></tr></table></figure>
 <p>根据上述分析，如果<code>Guest</code>虚拟机的CPU支持<code>PCID</code>，则<code>KPTI</code>引发的性能下降应会更小一些。。<code>VMware ESXi</code>平台上的<code>Guest</code>虚拟机CPU支持<code>PCID</code>，而KVM平台上<code>Guest</code>虚拟机CPU是否支持<code>PCID</code>由<code>QEMU/KVM</code>进程的<code>-cpu</code>选项决定。</p>
 <p>查看KVM支持的CPU选项:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">root@dummy:~<span class="comment"># /usr/bin/kvm -cpu help</span></span><br><span class="line">x86           qemu64  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86           phenom  AMD Phenom(tm) 9550 Quad-Core Processor</span><br><span class="line">x86         core2duo  Intel(R) Core(TM)2 Duo CPU     T7700  @ 2.40GHz</span><br><span class="line">x86            kvm64  Common KVM processor</span><br><span class="line">x86           qemu32  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86            kvm32  Common 32-bit KVM processor</span><br><span class="line">x86          coreduo  Genuine Intel(R) CPU           T2600  @ 2.16GHz</span><br><span class="line">x86              486</span><br><span class="line">x86          pentium</span><br><span class="line">x86         pentium2</span><br><span class="line">x86         pentium3</span><br><span class="line">x86           athlon  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86             n270  Intel(R) Atom(TM) CPU N270   @ 1.60GHz</span><br><span class="line">x86           Conroe  Intel Celeron_4x0 (Conroe/Merom Class Core 2)</span><br><span class="line">x86           Penryn  Intel Core 2 Duo P9xxx (Penryn Class Core 2)</span><br><span class="line">x86          Nehalem  Intel Core i7 9xx (Nehalem Class Core i7)</span><br><span class="line">x86         Westmere  Westmere E56xx/L56xx/X56xx (Nehalem-C)</span><br><span class="line">x86      SandyBridge  Intel Xeon E312xx (Sandy Bridge)</span><br><span class="line">x86          Haswell  Intel Core Processor (Haswell)</span><br><span class="line">x86        Broadwell  Intel Core Processor (Broadwell)</span><br><span class="line">x86       Opteron_G1  AMD Opteron 240 (Gen 1 Class Opteron)</span><br><span class="line">x86       Opteron_G2  AMD Opteron 22xx (Gen 2 Class Opteron)</span><br><span class="line">x86       Opteron_G3  AMD Opteron 23xx (Gen 3 Class Opteron)</span><br><span class="line">x86       Opteron_G4  AMD Opteron 62xx class CPU</span><br><span class="line">x86       Opteron_G5  AMD Opteron 63xx class CPU</span><br><span class="line">x86             host  KVM processor with all supported host features (only available <span class="keyword">in</span> KVM mode)</span><br><span class="line"></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
@@ -247,18 +247,19 @@
 </ul>
 <p>在虚拟机CPU不支持<code>PCID</code>的情况下测试结果如下:</p>
 <p>1）原生内核:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       10m10.618s</span><br><span class="line">user       9m10.398s</span><br><span class="line">sys        0m55.487s</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       10m10.618s</span><br><span class="line">user       9m10.398s</span><br><span class="line">sys        0m55.487s</span><br></pre></td></tr></table></figure>
 
-<p>2) <code>KPTI</code>内核:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       11m10.861s</span><br><span class="line">user       9m51.371s</span><br><span class="line">sys        1m22.248s</span><br></pre></td></tr></table></figure>
-<p>升级后性能下降约9.8%。</p>
+<ol start="2">
+<li><code>KPTI</code>内核:<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       11m10.861s</span><br><span class="line">user       9m51.371s</span><br><span class="line">sys        1m22.248s</span><br></pre></td></tr></table></figure>
+升级后性能下降约9.8%。</li>
+</ol>
 <p>在虚拟机CPU支持<code>PCID</code>的情况下测试结果如下:</p>
 <p>1）原生内核:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m24.469s</span><br><span class="line">user    9m12.507s</span><br><span class="line">sys     0m59.281s</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m24.469s</span><br><span class="line">user    9m12.507s</span><br><span class="line">sys     0m59.281s</span><br></pre></td></tr></table></figure>
 
-<p>2) <code>KPTI</code>内核:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m40.750s</span><br><span class="line">user    9m19.495s</span><br><span class="line">sys     1m11.286s</span><br></pre></td></tr></table></figure>
-
+<ol start="2">
+<li><code>KPTI</code>内核:<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m40.750s</span><br><span class="line">user    9m19.495s</span><br><span class="line">sys     1m11.286s</span><br></pre></td></tr></table></figure></li>
+</ol>
 <p>升级后性能下降约2.5%</p>
 <p>从我们的实例可以看到，<code>Guest</code>虚拟机CPU是否支持<code>PCID</code>对于性能下降有较大影响。</p>
 <p>若用户的<code>Guest</code>虚拟机CPU不支持<code>PCID</code>可与云提供方沟通，并根据实际业务负载进行性能影响评估，综合考虑安全与性能决定是否升级更新Guest虚拟机。</p>
@@ -357,7 +358,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
