@@ -11,15 +11,6 @@
   </url>
   
   <url>
-    <loc>http://just4coding.com/2022/10/22/tc-lo/</loc>
-    
-    <lastmod>2023-12-01</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>http://just4coding.com/2023/12/01/lsm-hook/</loc>
     
     <lastmod>2023-12-01</lastmod>
@@ -1165,7 +1156,7 @@
 
   <url>
     <loc>http://just4coding.com/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -1173,357 +1164,357 @@
   
   <url>
     <loc>http://just4coding.com/tags/Kernel/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/LVS/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/IPVS/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Interface/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Network/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Tap/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Iptables/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Mark/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/CNCF/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Kubernetes/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/CloudNative/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/VXLAN/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/EMCP/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/OSPF/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Cumulus-VX/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/LoadBalance/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Airflow/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Workflow/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/NSX/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/NSX-T/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/CNI/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Daemonset/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Virtualization/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Ivshmem/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Qemu/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/PCI/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Nfqueue/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Flannel/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Kube-proxy/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/ExternalIP/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Docker/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Systemd/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/SOCKS5/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/eBPF/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/BCC/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/TOTP/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/gcc/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Bash/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Seccomp/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Crash/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/tc/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/TUI/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/VMware/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/iSCSI/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Linker/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/Loader/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/udev/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/MISC/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/UEFI/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/BIOS/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/tags/LSM/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
@@ -1532,147 +1523,147 @@
   
   <url>
     <loc>http://just4coding.com/categories/NGINX/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/XMPP/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/DNS/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Network/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/OPENTRACKER/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/PASSENGER/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/TokyoCabinet-TokyoTyrant/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Flashcache/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/VARNISH/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Kernel/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Twemproxy/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Redis/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Lua/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Thrift/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Xen/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/OpenStack/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Keepalived/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Virtualization/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Tarantool/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/MISC/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>http://just4coding.com/categories/Kubernetes/</loc>
-    <lastmod>2023-12-01</lastmod>
+    <lastmod>2024-06-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>

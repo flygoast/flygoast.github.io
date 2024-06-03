@@ -164,90 +164,6 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2022/06/25/nf-ct-deliver-cached-events/" class="post-title-link" itemprop="url">nf_ct_deliver_cached_events崩溃分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2022-06-25 18:20:44" itemprop="dateCreated datePublished" datetime="2022-06-25T18:20:44+08:00">2022-06-25</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kernel/" itemprop="url" rel="index">
-                    <span itemprop="name">Kernel</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>最近<code>CentOS7</code>服务器上遇到一个系统崩溃:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">[92957.332974] BUG: unable to handle kernel NULL pointer dereference at 0000000000000a30</span><br><span class="line">[92957.332981] IP: [&lt;ffffffffc086077d&gt;] nf_ct_deliver_cached_events+0x2d/0x110 [nf_conntrack]</span><br><span class="line"></span><br><span class="line">......</span><br><span class="line"></span><br><span class="line">[92957.333112] CPU: 1 PID: 5027 Comm: Verdict3 Kdump: loaded Tainted: G           OE  ------------ T 3.10.0-1160.el7.x86_64 #1</span><br><span class="line">[92957.333114] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 12/12/2018</span><br><span class="line">[92957.333116] task: ffff893cad135280 ti: ffff893c4f524000 task.ti: ffff893c4f524000</span><br><span class="line">[92957.333118] RIP: 0010:[&lt;ffffffffc086077d&gt;]  [&lt;ffffffffc086077d&gt;] nf_ct_deliver_cached_events+0x2d/0x110 [nf_conntrack]</span><br><span class="line">[92957.333125] RSP: 0018:ffff893c4f527810  EFLAGS: 00010246</span><br><span class="line">[92957.333127] RAX: 0000000000000000 RBX: ffff893ca41e5140 RCX: ffffffffa035de80</span><br><span class="line">[92957.333128] RDX: ffff893c4f527fd8 RSI: 0000000000000200 RDI: ffff893ca41e5140</span><br><span class="line">[92957.333130] RBP: ffff893c4f527850 R08: 0000000000000000 R09: ffff893ca41e5178</span><br><span class="line">[92957.333131] R10: 0000000000000001 R11: ffff893ca41e5140 R12: ffff893ca41e5140</span><br><span class="line">[92957.333132] R13: ffff893c9491a500 R14: ffffffffa0367e40 R15: 0000000000000000</span><br><span class="line">[92957.333135] FS:  00007fbda1d78700(0000) GS:ffff893d3fd00000(0000) knlGS:0000000000000000</span><br><span class="line">[92957.333137] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033</span><br><span class="line">[92957.333138] CR2: 0000000000000a30 CR3: 000000007fda4000 CR4: 00000000001607e0</span><br><span class="line">[92957.333202] Call Trace:</span><br><span class="line">[92957.333221]  [&lt;ffffffffc08372ce&gt;] ipv4_confirm+0x4e/0x100 [nf_conntrack_ipv4]</span><br><span class="line">[92957.333227]  [&lt;ffffffff9fc94e38&gt;] nf_iterate+0x98/0xe0</span><br><span class="line">[92957.333231]  [&lt;ffffffff9fc96240&gt;] nf_reinject+0x160/0x1b0</span><br><span class="line">[92957.333239]  [&lt;ffffffffc0a48566&gt;] nfqnl_recv_verdict+0x216/0x310 [nfnetlink_queue]</span><br><span class="line">[92957.333244]  [&lt;ffffffff9f9b4716&gt;] ? nla_parse+0xb6/0x120</span><br><span class="line">[92957.333247]  [&lt;ffffffffc09b03a2&gt;] nfnetlink_rcv_msg+0x162/0x270 [nfnetlink]</span><br><span class="line">[92957.333251]  [&lt;ffffffffc09b0240&gt;] ? nfnetlink_net_exit_batch+0x70/0x70 [nfnetlink]</span><br><span class="line">[92957.333254]  [&lt;ffffffff9fc9249b&gt;] netlink_rcv_skb+0xab/0xc0</span><br><span class="line">[92957.333257]  [&lt;ffffffffc09b089f&gt;] nfnetlink_rcv+0x28f/0x575 [nfnetlink]</span><br><span class="line">[92957.333260]  [&lt;ffffffff9fc90773&gt;] ? __netlink_lookup+0xd3/0x130</span><br><span class="line">[92957.333263]  [&lt;ffffffff9fc91e20&gt;] netlink_unicast+0x170/0x210</span><br><span class="line">[92957.333267]  [&lt;ffffffff9f99ca72&gt;] ? memcpy_fromiovec+0x62/0xb0</span><br><span class="line">[92957.333269]  [&lt;ffffffff9fc921c8&gt;] netlink_sendmsg+0x308/0x420</span><br><span class="line">[92957.333272]  [&lt;ffffffff9fc343a6&gt;] sock_sendmsg+0xb6/0xf0</span><br><span class="line">[92957.333277]  [&lt;ffffffff9fd86c8f&gt;] ? __schedule+0x3af/0x860</span><br><span class="line">[92957.333279]  [&lt;ffffffff9fc35269&gt;] ___sys_sendmsg+0x3e9/0x400</span><br><span class="line">[92957.333284]  [&lt;ffffffff9f712040&gt;] ? futex_wake+0x90/0x180</span><br><span class="line">[92957.333287]  [&lt;ffffffff9f714d2a&gt;] ? do_futex+0x12a/0x5a0</span><br><span class="line">[92957.333289]  [&lt;ffffffff9fc36921&gt;] __sys_sendmsg+0x51/0x90</span><br><span class="line">[92957.333292]  [&lt;ffffffff9fc36972&gt;] SyS_sendmsg+0x12/0x20</span><br><span class="line">[92957.333296]  [&lt;ffffffff9fd93f92&gt;] system_call_fastpath+0x25/0x2a</span><br></pre></td></tr></table></figure>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2022/06/25/nf-ct-deliver-cached-events/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/12/ssh-portforward/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1069,6 +985,102 @@
   
   
 
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/12/29/nfqueue-dns/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/12/29/nfqueue-dns/" class="post-title-link" itemprop="url">NFQUEUE机制导致DNS请求5秒超时分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-12-29 15:14:56" itemprop="dateCreated datePublished" datetime="2021-12-29T15:14:56+08:00">2021-12-29</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在一台<code>CentOS 7.0</code>服务器(内核版本号:<code>3.10.0-123.el7.x86_64</code>)上安装我们的安全防护程序后，会出现<code>curl</code>访问网址超时5秒的情况。现象如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># time curl -s www.baidu.com -o /dev/null</span></span><br><span class="line"></span><br><span class="line">real	0m5.120s</span><br><span class="line">user	0m0.002s</span><br><span class="line">sys	0m0.009s</span><br></pre></td></tr></table></figure>
+
+<p>通过<code>strace</code>分析程序调用的过程:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">strace -f -tt -o curl.strace curl -s www.baidu.com -o /dev/null</span><br></pre></td></tr></table></figure>
+<p>从<code>strace</code>输出可以看到, 第一次<code>curl</code>调用<code>sendmmsg</code>同时发送了两个<code>DNS</code>数据包，分别是<code>A</code>记录和<code>AAAA</code>记录请求，但是只收到了<code>A</code>记录响应包:</p>
+<img src="/images/2021-12-29/1.png" class="">
+
+<p>然后等待5秒超时后，依次调用<code>sendto</code>和<code>recvfrom</code>串行处理两个<code>DNS</code>请求, 这次两个<code>DNS</code>响应全部收到后，继续向下执行:</p>
+<img src="/images/2021-12-29/2.png" class="">
+
+
+<p>而从抓包结果分析，<code>tcpdump</code>只能看到第一次同时发送的两个<code>DNS</code>请求中的<code>A</code>记录请求，<code>AAAA</code>记录请求数据包被内核协议栈丢弃了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">17:04:24.772049 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:24.773693 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3/0/0 CNAME www.a.shifen.com., A 180.101.49.12, A 180.101.49.11 (90)</span><br><span class="line">17:04:29.776474 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:29.778694 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3/0/0 CNAME www.a.shifen.com., A 180.101.49.11, A 180.101.49.12 (90)</span><br><span class="line">17:04:29.778925 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 42471+ AAAA? www.baidu.com. (31)</span><br><span class="line">17:04:29.780523 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 42471 1/1/0 CNAME www.a.shifen.com. (115)</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/12/29/nfqueue-dns/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
   </div>
 
   
@@ -1139,7 +1151,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">126</span>
+          <span class="site-state-item-count">125</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1177,7 +1189,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2023</span>
+  <span itemprop="copyrightYear">2024</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>

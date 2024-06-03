@@ -164,97 +164,6 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/22/associating-multi-floatingip/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2016/12/22/associating-multi-floatingip/" class="post-title-link" itemprop="url">OpenStack虚拟机实例关联多个浮动IP</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2016-12-22 16:43:37" itemprop="dateCreated datePublished" datetime="2016-12-22T16:43:37+08:00">2016-12-22</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>许多场景下我们的OpenStack虚拟机实例需要关联多个浮动IP。Horizon Dashboard不支持这样的操作，但是我们可以通过命令行和API完成。</p>
-<p>可以以两种形式关联:</p>
-<ul>
-<li>实例配置多个NIC，每个NIC关联一个浮动IP</li>
-<li>实例只配置一个NIC，NIC上配置多个fixed IP, 每个浮动IP关联一个fixed IP</li>
-</ul>
-<p>首先看第一种形式:</p>
-<p>列出所有网络，找到实例所在网络和子网:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_admin)]# neutron net-list</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br><span class="line">| id                                   | name    | subnets                                              |</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br><span class="line">| 1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca | private | f805a609-da7c-4a79-98a4-1aefb6aca2a2 10.0.0.0/24     |</span><br><span class="line">| 467b92e0-540d-4cac-86a6-999354c6b6c8 | 1       | 216fa519-973f-493f-a8ef-1b5f9e30335f 10.0.1.0/24     |</span><br><span class="line">| 65bdc2e1-d3ba-4b20-912c-6f0a29aef5de | public  | 189e9999-4295-45a4-b6b2-438225249654 172.24.4.224/28 |</span><br><span class="line">| 73569655-f522-4e3d-b2f3-f1a1fd83cc5e | 2       | c9015487-e913-4a31-bc14-ef3cb549c895 10.0.2.0/24     |</span><br><span class="line">+--------------------------------------+---------+------------------------------------------------------+</span><br></pre></td></tr></table></figure>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2016/12/22/associating-multi-floatingip/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/17/arp/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1038,6 +947,90 @@
   
   
 
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/01/20/twemproxy/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2016/01/20/twemproxy/" class="post-title-link" itemprop="url">twemproxy实现分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-01-20 00:36:43" itemprop="dateCreated datePublished" datetime="2016-01-20T00:36:43+08:00">2016-01-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Twemproxy/" itemprop="url" rel="index">
+                    <span itemprop="name">Twemproxy</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>twemproxy(<a target="_blank" rel="noopener" href="https://github.com/twitter/twemproxy)%E6%98%AFTwitter%E5%BC%80%E6%BA%90%E7%9A%84Redis%E5%92%8CMemcached%E4%BB%A3%E7%90%86%E7%A8%8B%E5%BA%8F%EF%BC%8C%E5%AE%83%E5%8F%AF%E4%BB%A5%E5%B0%86%E5%A4%9A%E4%B8%AA%E5%90%8E%E7%AB%AFserver%E7%BB%84%E7%BB%87%E6%88%90%E4%B8%80%E4%B8%AAServerPool">https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool</a>, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。</p>
+<p>twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而主线程进入事件循环处理访问所有ServerPool的Redis或Memcached请求。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2016/01/20/twemproxy/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
   </div>
 
   
@@ -1108,7 +1101,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">126</span>
+          <span class="site-state-item-count">125</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1146,7 +1139,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2023</span>
+  <span itemprop="copyrightYear">2024</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>

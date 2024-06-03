@@ -1,5 +1,4 @@
 http://just4coding.com/2022/04/20/fix-exit/
-http://just4coding.com/2022/10/22/tc-lo/
 http://just4coding.com/2023/12/01/lsm-hook/
 http://just4coding.com/2023/11/01/boot-iso/
 http://just4coding.com/2023/10/19/openbox/
