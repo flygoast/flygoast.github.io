@@ -164,6 +164,104 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/18/nginx-response-sending/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2014/11/18/nginx-response-sending/" class="post-title-link" itemprop="url">NGINX发送响应分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-18 15:09:53" itemprop="dateCreated datePublished" datetime="2014-11-18T15:09:53+08:00">2014-11-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>NGINX中使用<code>ngx_http_output_filter()</code>向一个请求发送响应。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_output_filter</span><span class="params">(<span class="type">ngx_http_request_t</span> *r, <span class="type">ngx_chain_t</span> *in)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_int_t</span>          rc;</span><br><span class="line">    <span class="type">ngx_connection_t</span>  *c;</span><br><span class="line"></span><br><span class="line">    c = r-&gt;connection;</span><br><span class="line"></span><br><span class="line">    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c-&gt;<span class="built_in">log</span>, <span class="number">0</span>,</span><br><span class="line">                   <span class="string">&quot;http output filter &quot;</span>%V?%V<span class="string">&quot;&quot;</span>, &amp;r-&gt;uri, &amp;r-&gt;args);</span><br><span class="line"></span><br><span class="line">    rc = ngx_http_top_body_filter(r, in);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (rc == NGX_ERROR) &#123;</span><br><span class="line">        <span class="comment">/* NGX_ERROR may be returned by any filter */</span></span><br><span class="line">        c-&gt;error = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> rc;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中，<code>r</code>是请求结构体，<code>in</code>为以<code>ngx_chain_t</code>结构链接起来的需要发送的内容。<code>ngx_http_output_filter()</code>会调用<code>ngx_http_top_body_filter()</code>。NGINX采用filter机制对响应进行处理。filter分为<code>header filter</code>和<code>body filter</code>。NGINX分别将两种filter各构建成一个链表。全局变量<code>ngx_http_top_header_filter</code>指向<code>header filter</code>链表的头结点，而全局变量<code>ngx_http_top_body_filter</code>指向<code>body filter</code>链表的头结点。每个filter中用一个变量记录下一个filter，依据情况决定是调用下一个filter，还是直接返回。</p>
+<p>body filter链表顺序如下图:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">+--------------------------+</span><br><span class="line">|ngx_http_range_body_filter|</span><br><span class="line">+----------+---------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+---------+</span><br><span class="line">|ngx_http_copy_filter|</span><br><span class="line">+----------+---------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_charset_body_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------+</span><br><span class="line">|ngx_http_ssi_body_filter|</span><br><span class="line">+----------+-------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------+</span><br><span class="line">|ngx_http_postpone_filter|</span><br><span class="line">+----------+-------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+--------------+</span><br><span class="line">|ngx_http_gzip_body_filter|</span><br><span class="line">+----------+--------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_chunked_body_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+---------------------+</span><br><span class="line">|ngx_http_write_filter|</span><br><span class="line">+---------------------+</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>header filter链表顺序如图:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">+----------------------------+</span><br><span class="line">|ngx_http_not_modified_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+------------+</span><br><span class="line">|ngx_http_headers_filter|</span><br><span class="line">+----------+------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------+</span><br><span class="line">|ngx_http_userid_filter|</span><br><span class="line">+----------+-----------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------------+</span><br><span class="line">|ngx_http_charset_header_filter|</span><br><span class="line">+----------+-------------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+---------------+</span><br><span class="line">|ngx_http_ssi_header_filter|</span><br><span class="line">+----------+---------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+----------------+</span><br><span class="line">|ngx_http_gzip_header_filter|</span><br><span class="line">+----------+----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_range_header_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------------+</span><br><span class="line">|ngx_http_chunked_header_filter|</span><br><span class="line">+----------+-------------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------+</span><br><span class="line">|ngx_http_header_filter|</span><br><span class="line">+----------------------+</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p><code>ngx_http_write_filter()</code>是最后一个被调用的<code>body filter</code>，它进行真正的网络I&#x2F;O操作，将响应发送给客户端。实际上, <code>ngx_http_header_filter()</code>也是调用<code>ngx_http_write_filter()</code>来发送响应中的headers。</p>
+<p><code>ngx_http_write_filter()</code>的简化流程如下:</p>
+<ul>
+<li>检查之前是否有错误发生(c-&gt;error被置位)。如果有错误发生，则没有必要再进行网络I&#x2F;O操作，直接返回NGX_ERROR。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (c-&gt;error) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>计算之前没有发送完成的内容大小并检查是否存在特殊标志。为了优化性能，当没有必要立即发送响应且响应内容大小没有达到设置的阀值时，NGINX可以暂时推迟发送该部分响应。参看:<code>postpone_output</code>指令。<code>flush</code>标志表示需要立即发送响应。<code>recycled</code>表示该buffer需要循环使用，因而需要立即发送以释放该buffer被重新使用。<code>last</code>标志表示该buffer是响应的最后一部分内容，因而也需要立即发送。</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (cl = r-&gt;out; cl; cl = cl-&gt;next) &#123;</span><br><span class="line">    ll = &amp;cl-&gt;next;</span><br><span class="line"></span><br><span class="line">    ......</span><br><span class="line"></span><br><span class="line">    size += ngx_buf_size(cl-&gt;buf);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;flush || cl-&gt;buf-&gt;recycled) &#123;</span><br><span class="line">        flush = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;last_buf) &#123;</span><br><span class="line">        last = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>计算本次将发送的内容大小，检查是否存在特殊标志，并将内容链接到r-&gt;out上。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (ln = in; ln; ln = ln-&gt;next) &#123;</span><br><span class="line">    cl = ngx_alloc_chain_link(r-&gt;pool);</span><br><span class="line">    <span class="keyword">if</span> (cl == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    cl-&gt;buf = ln-&gt;buf;</span><br><span class="line">    *ll = cl;</span><br><span class="line">    ll = &amp;cl-&gt;next;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    size += ngx_buf_size(cl-&gt;buf);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;flush || cl-&gt;buf-&gt;recycled) &#123;</span><br><span class="line">        flush = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;last_buf) &#123;</span><br><span class="line">        last = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>根据情况决定是需要真正进行网络I&#x2F;O操作, 还是直接返回。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (!last &amp;&amp; !flush &amp;&amp; in &amp;&amp; size &lt; (<span class="type">off_t</span>) clcf-&gt;postpone_output) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>真正进行网络I&#x2F;O操作，发送内容。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chain = c-&gt;send_chain(c, r-&gt;out, limit);</span><br></pre></td></tr></table></figure></li>
+<li>回收发送完成内容的buffer和chain结构, 将没有发送完成的内容存入<code>r-&gt;out</code><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (cl = r-&gt;out; cl &amp;&amp; cl != chain; <span class="comment">/* void */</span>) &#123;</span><br><span class="line">    ln = cl;</span><br><span class="line">    cl = cl-&gt;next;</span><br><span class="line">    ngx_free_chain(r-&gt;pool, ln);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">r-&gt;out = chain;</span><br></pre></td></tr></table></figure></li>
+<li>根据发送是否完成，返回<code>NGX_OK</code>或<code>NGX_AGAIN</code>。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (chain) &#123;</span><br><span class="line">    c-&gt;buffered |= NGX_HTTP_WRITE_BUFFERED;</span><br><span class="line">    <span class="keyword">return</span> NGX_AGAIN;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">c-&gt;buffered &amp;= ~NGX_HTTP_WRITE_BUFFERED;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> ((c-&gt;buffered &amp; NGX_LOWLEVEL_BUFFERED) &amp;&amp; r-&gt;postponed == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_AGAIN;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> NGX_OK;</span><br></pre></td></tr></table></figure>
+此外，<code>ngx_http_write_filter()</code>中也处理了限速发送的逻辑，本文不详述。</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/14/ejabberd-login/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -825,7 +923,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">125</span>
+          <span class="site-state-item-count">126</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
