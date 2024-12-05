@@ -164,6 +164,103 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/04/20/vxlan-fdb/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/04/20/vxlan-fdb/" class="post-title-link" itemprop="url">动态维护FDB表项实现VXLAN通信</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-04-20 16:45:48" itemprop="dateCreated datePublished" datetime="2020-04-20T16:45:48+08:00">2020-04-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章&lt;&lt;<a href="/2017/05/21/vxlan/">VXLAN原理介绍与实例分析</a>&gt;&gt;简要介绍了VXLAN的基本概念和基于组播的通信过程实例。其中控制面是混合在数据面中的，由洪泛(flood)和源地址学习实现。本文通过实例将控制面从数据面中分离，手动维护<code>FDB</code>及<code>ARP</code>表项实现通信过程。</p>
+<p>对于大规模的VXLAN网络中，最核心的问题一般有两个:</p>
+<ol>
+<li>如何发现网络中其他VTEP</li>
+<li>如何降低BUM（Broadcast, Unknown unicast, Multicast)流量</li>
+</ol>
+<p>在对于问题一来说，之前的文章中的解决方法是洪泛，对于问题二，则通过源地址学习来确定MAC地址的归属。VXLAN的转发过程主要依赖FDB(Forwarding Database)实现。二层网桥的FDB表项格式可表达为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VLAN&gt; &lt;DEV PORT&gt;</span><br></pre></td></tr></table></figure>
+<p>VXLAN设备的表项与之类似，可以表达为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VNI&gt; &lt;REMOTE IP&gt;</span><br></pre></td></tr></table></figure>
+
+<p>VXLAN设备根据MAC地址来查找相应的VTEP IP地址，继而将二层数据帧封装发送至相应VTEP。</p>
+<p>如果我们能够从集中的Controller或者存储中获取VTEP信息以及MAC地址与VTEP的对应信息，则问题一和问题二都可以通过根据相应信息动态更新FDB表项来解决，OpenStack的Neutron, VMware的NSX，Docker Overlay都有类似的思路。</p>
+<p>下面我们通过实例来手动更新FDB表来实现VXLAN通信。我们的实验环境如下图, VTEP本地使用Linux bridge来挂载连接到network namespace中的<code>veth pair</code>虚拟网卡，我们要实现<code>3.3.3.3</code>二层访问<code>3.3.3.4</code>。</p>
+<img src="/images/2020-04-20/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2020/04/20/vxlan-fdb/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/03/13/vault-introduction/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -954,91 +1051,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/08/openstack-l2-vfw/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2018/08/08/openstack-l2-vfw/" class="post-title-link" itemprop="url">OpenStack私有网络二层接入虚拟防火墙</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2018-08-08 19:47:06" itemprop="dateCreated datePublished" datetime="2018-08-08T19:47:06+08:00">2018-08-08</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>默认情况下，在OpenStack上私有网络上开启的虚拟机接口必须配置IP，否则网络包无法到达该接口。而之前的文章&lt;&lt;<a href="/blog/2018/08/08/openstack-vfw/">OpenStack私有网络旁路部署虚拟防火墙</a>&gt;&gt;最后提到某些厂商的VFW只支持二层透明接入，那么我们怎样在OpenStack环境上跑通这样的VFW实例呢？本文来通过实例说明。</p>
-<p>上篇文章的示例网络拓扑如下: </p>
-<img src="/images/2018-08-08/21.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/08/08/openstack-l2-vfw/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1109,7 +1121,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">127</span>
+          <span class="site-state-item-count">128</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
