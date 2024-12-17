@@ -164,6 +164,84 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2024/12/17/runc-ansible/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/12/17/runc-ansible/" class="post-title-link" itemprop="url">使用runc运行ansible</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-12-17 20:03:29 / 修改时间：20:21:20" itemprop="dateCreated datePublished" datetime="2024-12-17T20:03:29+08:00">2024-12-17</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>我们的系统使用<code>ansible</code>执行部署过程，然而部署的目标操作系统和CPU架构环境多种多样，存在大量适配工作。之前调研过是否有<code>Golang</code>开发的<code>ansible</code>替代物，但没有找到合适的方案。这种到处运行的场景很适合使用容器，但如果使用<code>docker</code>,  在不同操作系统上也需要准备不同的<code>docker</code>安装包，依然需要适配，因而也不是很满足。今天想到<code>runc</code>本身就是<code>Golang</code>开发的纯静态二进制，非常适合到处分发，因而尝试调研直接使用<code>runc</code>来做为运行时运行<code>ansible</code>容器。</p>
+<p>在容器领域，<a target="_blank" rel="noopener" href="https://opencontainers.org/"><code>OCI:Open Container Initiative</code></a>制定了两个规范，镜像规范: <code>image-spec</code>和运行时规范:<code>runtime-spec</code>。镜像规范规定了镜像文件的格式，而运行时规范规定了如何根据配置运行容器。它们之间通过<code>filesystem bundle</code>联系在一起，镜像可以通过工具转换成<code>filesystem bundle</code>, 运行时根据<code>filesystem bundle</code>运行容器进程。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2024/12/17/runc-ansible/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2024/12/05/docker-netfilter/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -871,84 +949,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/02/26/pv-queued-spin-lock-slowpath/" class="post-title-link" itemprop="url">__pv_queued_spin_lock_slowpath崩溃分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-02-26 13:00:40 / 修改时间：13:09:27" itemprop="dateCreated datePublished" datetime="2023-02-26T13:00:40+08:00">2023-02-26</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kernel/" itemprop="url" rel="index">
-                    <span itemprop="name">Kernel</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>最近遇到一个<code>CentOS8</code>环境上的内核崩溃问题,内核版本号为<code>4.18.0-305.3.1.el8.x86_64</code>，崩溃堆栈为:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; bt</span><br><span class="line">PID: 2310003  TASK: ffff99f4ee683e80  CPU: 1   COMMAND: &quot;Verdict2&quot;</span><br><span class="line"> #0 [ffffb71241e375e8] machine_kexec at ffffffffbc66156e</span><br><span class="line"> #1 [ffffb71241e37640] __crash_kexec at ffffffffbc78f99d</span><br><span class="line"> #2 [ffffb71241e37708] crash_kexec at ffffffffbc79088d</span><br><span class="line"> #3 [ffffb71241e37720] oops_end at ffffffffbc62434d</span><br><span class="line"> #4 [ffffb71241e37740] no_context at ffffffffbc67262f</span><br><span class="line"> #5 [ffffb71241e37798] __bad_area_nosemaphore at ffffffffbc67298c</span><br><span class="line"> #6 [ffffb71241e377e0] do_page_fault at ffffffffbc673267</span><br><span class="line"> #7 [ffffb71241e37810] page_fault at ffffffffbd0010fe</span><br><span class="line">    [exception RIP: __pv_queued_spin_lock_slowpath+410]</span><br><span class="line">    RIP: ffffffffbc73cbda  RSP: ffffb71241e378c0  RFLAGS: 00010282</span><br><span class="line">    RAX: 0000000000003ffe  RBX: ffff99f4a6ffc624  RCX: 0000000000000001</span><br><span class="line">    RDX: 0000000000003fff  RSI: 0000000000000000  RDI: 0000000000000000</span><br><span class="line">    RBP: ffff99f576e6ac00   R8: 0000000000000000   R9: ffff99f56428e200</span><br><span class="line">    R10: 0000000032950000  R11: 0000000000000002  R12: ffffffffbcaaa6d0</span><br><span class="line">    R13: ffff99f576e6ac14  R14: 0000000000000001  R15: 0000000000080000</span><br><span class="line">    ORIG_RAX: ffffffffffffffff  CS: 0010  SS: 0018</span><br><span class="line"> #8 [ffffb71241e378f8] queued_write_lock_slowpath at ffffffffbc73df3c</span><br><span class="line"> #9 [ffffb71241e37910] bpf_sk_reuseport_detach at ffffffffbc842ff9</span><br><span class="line">#10 [ffffb71241e37928] reuseport_detach_sock at ffffffffbcdc2c25</span><br><span class="line">#11 [ffffb71241e37940] sk_destruct at ffffffffbcd7ac33</span><br><span class="line">#12 [ffffb71241e37950] nf_queue_entry_release_refs at ffffffffbce1c1e4</span><br><span class="line">#13 [ffffb71241e37960] nf_reinject at ffffffffbce1c52e</span><br><span class="line">#14 [ffffb71241e37998] nfqnl_recv_verdict at ffffffffc095a81f [nfnetlink_queue]</span><br><span class="line">#15 [ffffb71241e37a10] nfnetlink_rcv_msg at ffffffffc09552be [nfnetlink]</span><br><span class="line">#16 [ffffb71241e37b88] netlink_rcv_skb at ffffffffbce07a3c</span><br><span class="line">#17 [ffffb71241e37bd8] nfnetlink_rcv at ffffffffc0955d08 [nfnetlink]</span><br><span class="line">#18 [ffffb71241e37c18] netlink_unicast at ffffffffbce0725e</span><br><span class="line">#19 [ffffb71241e37c58] netlink_sendmsg at ffffffffbce07524</span><br><span class="line">#20 [ffffb71241e37cc8] sock_sendmsg at ffffffffbcd751fc</span><br><span class="line">#21 [ffffb71241e37ce0] ____sys_sendmsg at ffffffffbcd7551b</span><br><span class="line">#22 [ffffb71241e37d58] ___sys_sendmsg at ffffffffbcd76b9c</span><br><span class="line">#23 [ffffb71241e37eb0] __sys_sendmsg at ffffffffbcd76c67</span><br><span class="line">#24 [ffffb71241e37f38] do_syscall_64 at ffffffffbc60420b</span><br><span class="line">#25 [ffffb71241e37f50] entry_SYSCALL_64_after_hwframe at ffffffffbd0000ad</span><br></pre></td></tr></table></figure>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2023/02/26/pv-queued-spin-lock-slowpath/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1019,7 +1019,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">128</span>
+          <span class="site-state-item-count">129</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1032,7 +1032,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">51</span>
+        <span class="site-state-item-count">53</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
