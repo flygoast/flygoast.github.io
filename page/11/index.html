@@ -164,6 +164,94 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/11/06/xenserver-kernel-module/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2016/11/06/xenserver-kernel-module/" class="post-title-link" itemprop="url">XenServer编译内核模块</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-11-06 17:25:14" itemprop="dateCreated datePublished" datetime="2016-11-06T17:25:14+08:00">2016-11-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Xen/" itemprop="url" rel="index">
+                    <span itemprop="name">Xen</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>Citrix提供了DDK(Driver Development Kit)来支持在XenServer中要构建自定义的内核模块或硬件驱动。DDK是一个OVA格式的虚拟机镜像，包含了内核头文件和编译器等开发工具。</p>
+<p>下面介绍使用DDK构建内核模块的步骤。</p>
+<p>首先从官方下载相应版本DDK，这里选择6.5:<br><a target="_blank" rel="noopener" href="http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso">http://downloadns.citrix.com.edgesuite.net/10106/XenServer-6.5.0-DDK.iso</a></p>
+<p>将下载的ISO文件上传到XenServer宿主机上</p>
+<p>挂载ISO</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> /mnt/tmp</span><br><span class="line">mount &lt;path_to_DDK&gt;/ddk.iso /mnt/tmp -o loop</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2016/11/06/xenserver-kernel-module/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/06/10/lua-math/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -937,96 +1025,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2015/09/08/ngx-http-limit-req-module/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2015/09/08/ngx-http-limit-req-module/" class="post-title-link" itemprop="url">ngx_http_limit_req_module分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2015-09-08 15:34:36" itemprop="dateCreated datePublished" datetime="2015-09-08T15:34:36+08:00">2015-09-08</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/NGINX/" itemprop="url" rel="index">
-                    <span itemprop="name">NGINX</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>ngx_http_limit_req_module用于依据指定的KEY来限制请求处理速度。比如，用来限制单个IP的访问频率。</p>
-<p>文档地址: <a target="_blank" rel="noopener" href="http://nginx.org/en/docs/http/ngx_http_limit_req_module.html">http://nginx.org/en/docs/http/ngx_http_limit_req_module.html</a></p>
-<p>下面来看具体实现:</p>
-<p>NGINX模块从逻辑中主要有两部分：</p>
-<ul>
-<li>配置解析: 将配置文件的内容解析到各配置结构中</li>
-<li>请求处理: 在当前请求上完成模块逻辑处理</li>
-</ul>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2015/09/08/ngx-http-limit-req-module/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1097,7 +1095,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">129</span>
+          <span class="site-state-item-count">130</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1110,7 +1108,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-count">54</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

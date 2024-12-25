@@ -164,6 +164,91 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/06/10/vmware-westeast/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2017/06/10/vmware-westeast/" class="post-title-link" itemprop="url">VMware vSphere东西向网络防护</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-06-10 23:24:22" itemprop="dateCreated datePublished" datetime="2017-06-10T23:24:22+08:00">2017-06-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/05/01/vmvare/">VMware vSphere虚拟网络防护</a>&gt;&gt;介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vSphere提供的能力将流量引至虚拟安全设备实现东西向网络安全防护的思路。</p>
+<p>我们当前一台ESXi上的环境如图:</p>
+<img src="/images/2017-06-10/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2017/06/10/vmware-westeast/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/05/21/vxlan/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -948,100 +1033,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/01/07/all-in-one-neutron/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/01/07/all-in-one-neutron/" class="post-title-link" itemprop="url">RDO安装all-in-one模式OpenStack虚拟网络架构分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-01-07 23:45:09" itemprop="dateCreated datePublished" datetime="2017-01-07T23:45:09+08:00">2017-01-07</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
-                    <span itemprop="name">OpenStack</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>RDO是在RHEL，Fedora, CentOS等系统上部署OpenStack的方案。简单的试用或研究OpenStack可以选择all-in-one模式安装。这种模式将所有的OpenStack组件都部署在同一台机器上。本文来分析这种模式下虚拟网络的架构。</p>
-<p>all-in-one模式安装完成时，RDO自动完成了以下工作:</p>
-<ul>
-<li>创建了外部网络public: <code>172.24.4.224/28</code></li>
-<li>创建了租户demo</li>
-<li>为租户demo创建了私有网络private: <code>10.0.0.0/24</code></li>
-<li>为租户demo创建路由器router1, 将private和public连接在一起</li>
-</ul>
-<p>我们登录demo租户，创建两个虚拟机，网络拓朴图如下:</p>
-<img src="/images/2017-01-07/1.png" class="">
-
-<p>本文基于该拓朴分析虚拟网络架构。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/01/07/all-in-one-neutron/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1112,7 +1103,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">129</span>
+          <span class="site-state-item-count">130</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1125,7 +1116,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-count">54</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

@@ -1,3 +1,4 @@
+http://just4coding.com/2024/12/25/kolla-openstack-nat/
 http://just4coding.com/2024/12/17/runc-ansible/
 http://just4coding.com/2024/12/05/docker-netfilter/
 http://just4coding.com/2024/11/27/conntrack-extend/
@@ -184,6 +185,7 @@ http://just4coding.com/tags/BIOS/
 http://just4coding.com/tags/LSM/
 http://just4coding.com/tags/Ansible/
 http://just4coding.com/tags/runc/
+http://just4coding.com/tags/OpenStack/
 http://just4coding.com/categories/NGINX/
 http://just4coding.com/categories/XMPP/
 http://just4coding.com/categories/DNS/
