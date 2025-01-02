@@ -1,3 +1,4 @@
+http://just4coding.com/2025/01/02/namespace-inode/
 http://just4coding.com/2024/12/25/kolla-openstack-nat/
 http://just4coding.com/2024/12/17/runc-ansible/
 http://just4coding.com/2024/12/05/docker-netfilter/

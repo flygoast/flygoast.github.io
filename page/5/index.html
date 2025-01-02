@@ -164,6 +164,92 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/31/core-dump/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/10/31/core-dump/" class="post-title-link" itemprop="url">Linux core dump过程分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-10-31 18:26:39" itemprop="dateCreated datePublished" datetime="2021-10-31T18:26:39+08:00">2021-10-31</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>Linux进程在运行中异常中止或者崩溃，Linux会将进程当时的内存信息、寄存器信息、函数调用堆栈等信息存储到文件系统的一个文件中，这个过程叫做<code>core dump</code>, 生成的<code>core</code>文件可以使用<code>gdb</code>来分析诊断程序存在的问题。最近对<code>core dump</code>的生成过程及相应进程退出的过程有些疑惑。究竟是崩溃进程的内核<code>task</code>退出前生成<code>core</code>文件还是崩溃的<code>task</code>先退出之后<code>kernel</code>检测到进程崩溃后额外来生成的呢？带着这个疑问去做些了实验和代码分析。</p>
+<p>默认情况下，<code>core dump</code>文件被命名为<code>core.pid</code>, 如<code>core.12345</code>。内核参数<code>/proc/sys/kernel/core_pattern</code>可以定义<code>core dump</code>文件名模板。具体模板参数可以参考<a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man5/core.5.html">文档</a>。但内核有个小巧特性，如果<code>core_pattern</code>的第一个字符为管道符:<code>|</code>, 内核会执行<code>|</code>之后的配置的可执行程序，并通过<code>pipe</code>将<code>core dump</code>内容传给这个用户态程序。</p>
+<p><a target="_blank" rel="noopener" href="http://abrt.readthedocs.org/en/latest/"><code>ABRT:Automated Bug Reporting Tool</code></a>服务收集应用崩溃的<code>core</code>文件就是使用这个机制，<code>abrt-ccpp</code>服务会将<code>core_pattern</code>设置为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">|/usr/libexec/abrt-hook-ccpp %s %c %p %u %g %t e %P %I %h</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/10/31/core-dump/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/17/security-boot/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -982,92 +1068,11 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/06/13/airflow/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2020/06/13/airflow/" class="post-title-link" itemprop="url">Apache Airflow介绍</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2020-06-13 17:02:01" itemprop="dateCreated datePublished" datetime="2020-06-13T17:02:01+08:00">2020-06-13</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>很多业务场景都需要在后台定期执行任务，如数据ETL(Extract-Transform-Load)操作。简单处理可通过crontab来管理。当任务需要在多台机器上执行，或者任务之间有依赖关系时，crontab便不太能满足需求。这种场景下需要分布式任务调度系统来组织任务编排，管理任务依赖，调度任务工作流和监视任务执行状态。</p>
-<p>比较优秀的开源解决方案有:</p>
-<ul>
-<li><a target="_blank" rel="noopener" href="https://airflow.apache.org/">Apache Airflow</a></li>
-<li><a target="_blank" rel="noopener" href="https://azkaban.github.io/">LinkedIn Azkaban</a></li>
-<li><a target="_blank" rel="noopener" href="https://oozie.apache.org/">Apache Oozie</a></li>
-</ul>
-<p>Azkaban和Oozie都更聚集在大数据处理平台上的任务调度，Airflow的应用场景更为通用。本文简单介绍Airflow。</p>
-<p>Airflow使用Python开发，它通过<code>DAGs(Directed Acyclic Graph, 有向无环图)</code>来表达一个工作流中所要执行的任务，以及任务之间的关系和依赖。比如，如下的工作流中，任务<code>T1</code>执行完成，<code>T2</code>和<code>T3</code>才能开始执行，<code>T2</code>和<code>T3</code>都执行完成，<code>T4</code>才能开始执行。</p>
-<img src="/images/2020-06-13/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2020/06/13/airflow/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
   <nav class="pagination">
-    <a class="extend prev" rel="prev" href="/page/4/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><span class="page-number current">5</span><a class="page-number" href="/page/6/">6</a><span class="space">&hellip;</span><a class="page-number" href="/page/13/">13</a><a class="extend next" rel="next" href="/page/6/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
+    <a class="extend prev" rel="prev" href="/page/4/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><span class="page-number current">5</span><a class="page-number" href="/page/6/">6</a><span class="space">&hellip;</span><a class="page-number" href="/page/14/">14</a><a class="extend next" rel="next" href="/page/6/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
   </nav>
 
 
@@ -1133,7 +1138,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">130</span>
+          <span class="site-state-item-count">131</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1171,7 +1176,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2024</span>
+  <span itemprop="copyrightYear">2025</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>
