@@ -164,6 +164,72 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/11/01/boot-iso/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2023/11/01/boot-iso/" class="post-title-link" itemprop="url">ISO启动原理及启动盘制作</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2023-11-01 10:51:40 / 修改时间：11:01:50" itemprop="dateCreated datePublished" datetime="2023-11-01T10:51:40+08:00">2023-11-01</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>计算机加电后，首先会执行刷在<code>ROM/NVRAM</code>中的系统固件代码。系统固件(<code>BIOS/UEFI</code>)完成自身的一系列工作(如硬件自检(<code>POST: Power-On Self-Test</code>)后，需要引导操作系统启动。固件可以从<code>NVRAM</code>中读取启动设备列表，按设备顺序尝试进行引导。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2023/11/01/boot-iso/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/10/19/openbox/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -901,86 +967,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/20/vmware-iscsi-multipathing/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2022/11/20/vmware-iscsi-multipathing/" class="post-title-link" itemprop="url">VMware vSphere环境iSCSI配置多路径</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2022-11-20 18:02:45 / 修改时间：20:02:10" itemprop="dateCreated datePublished" datetime="2022-11-20T18:02:45+08:00">2022-11-20</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
-                    <span itemprop="name">Virtualization</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p><code>VMware vSphere</code>的很多高级特性都依赖于共享存储, 如<code>vMotion</code>, <code>HA: High Availability</code>, <code>DRS: Distributed Resource Schedule</code>等, 它们要生效都需要虚拟机的存储位于共享存储中. <code>vSphere</code>支持的共享存储除了自家的<code>vSAN</code>, 还包括: <code>NFS</code>, <code>iSCSI</code>, <code>光纤通道: Fibre Channel</code>等. </p>
-<p><code>iSCSI</code>是一个标准协议, 全称为:<code>Internet Small Computer System Interface</code>, 它在<code>以太网</code>上基于<code>TCP/IP</code>协议来传输<code>SCSI</code>协议. <code>SCSI</code>协议是计算机上的<code>I/O</code>传输协议, <code>SCSI</code>控制器通过<code>SCSI</code>总线与硬盘等设备以块为单位传输数据. <code>iSCSI</code>服务器称为<code>target</code>, 客户端称为<code>initiator</code>. <code>iSCSI initiator</code>能够以纯软件实现运行在标准网络适配器上, 也可以以硬件形式实现为专用的<code>HBA</code>卡:(<code>Host Bus Adaptor</code>), 也有带有<code>iSCSCI offload</code>硬件支持的网卡可以来加速<code>iSCSI</code>协议处理. </p>
-<p><code>iSCSI</code>协议层次如图(来自: <a target="_blank" rel="noopener" href="https://www.snia.org/education/what-is-iscsi">https://www.snia.org/education/what-is-iscsi</a>):</p>
-<img src="/images/2022-11-20/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2022/11/20/vmware-iscsi-multipathing/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1051,7 +1037,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">133</span>
+          <span class="site-state-item-count">134</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1064,7 +1050,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">54</span>
+        <span class="site-state-item-count">55</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

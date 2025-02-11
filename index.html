@@ -164,6 +164,91 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2025/02/11/nf-conntrack-max/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2025/02/11/nf-conntrack-max/" class="post-title-link" itemprop="url">关于参数net.netfilter.nf_conntrack_max</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2025-02-11 15:27:44 / 修改时间：15:29:09" itemprop="dateCreated datePublished" datetime="2025-02-11T15:27:44+08:00">2025-02-11</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>Linux内核中<code>conntrack</code>模块使用哈希表来存储连接跟踪条目，当哈希表条目达到上限时，系统会将新分配<code>conntrack</code>条目的数据包<code>DROP</code>掉，从而导致网络受到影响。此时，日志中会记录:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nf_conntrack: table full, dropping packet</span><br></pre></td></tr></table></figure>
+
+<p>哈希表条目上限由参数<code>net.netfilter.nf_conntrack_max</code>设置。</p>
+<p>网上文章对这个问题的解决方法往往是调大该参数。但在涉及多个<code>network namespace</code>的场景下，不能简单的这样做，还是要根据自身场景分析清楚具体原因。</p>
+<p>根据<code>CentOS7 3.10.0-957</code>版本内核源码，实际上每个<code>network namespace</code>的<code>conntrack</code>哈希表是独立的。在表示<code>network namespace</code>的结构体<code>net</code>中的成员<code>ct</code>表示<code>conntrack</code>相关信息:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">net</span> &#123;</span></span><br><span class="line">    ...</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">netns_ct</span>     <span class="title">ct</span>;</span></span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>netns_ct</code>结构中保存有独立的哈希表相关信息:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">netns_ct</span> &#123;</span></span><br><span class="line">    <span class="type">atomic_t</span>        count;</span><br><span class="line">    ...</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">int</span>        htable_size;</span><br><span class="line">    RH_KABI_DEPRECATE(<span class="type">seqcount_t</span>, generation)</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">kmem_cache</span>   *<span class="title">nf_conntrack_cachep</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_nulls_head</span> *<span class="title">hash</span>;</span></span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2025/02/11/nf-conntrack-max/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2025/02/08/sysctl/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -875,72 +960,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/11/01/boot-iso/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/11/01/boot-iso/" class="post-title-link" itemprop="url">ISO启动原理及启动盘制作</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-11-01 10:51:40 / 修改时间：11:01:50" itemprop="dateCreated datePublished" datetime="2023-11-01T10:51:40+08:00">2023-11-01</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>计算机加电后，首先会执行刷在<code>ROM/NVRAM</code>中的系统固件代码。系统固件(<code>BIOS/UEFI</code>)完成自身的一系列工作(如硬件自检(<code>POST: Power-On Self-Test</code>)后，需要引导操作系统启动。固件可以从<code>NVRAM</code>中读取启动设备列表，按设备顺序尝试进行引导。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2023/11/01/boot-iso/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1011,7 +1030,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">133</span>
+          <span class="site-state-item-count">134</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1024,7 +1043,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">54</span>
+        <span class="site-state-item-count">55</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

@@ -164,6 +164,96 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/11/bash-test/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/06/11/bash-test/" class="post-title-link" itemprop="url">Bash test和[命令分析</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-06-11 23:16:54" itemprop="dateCreated datePublished" datetime="2022-06-11T23:16:54+08:00">2022-06-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>近期我们的<code>BASH</code>脚本中遇到一个BUG，最终分析到是变量值为空时没有用<code>&quot;&quot;</code>包裹导致的。</p>
+<p>我们使用一个测试脚本来进行分析。测试脚本<code>t.sh</code>内容如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"></span><br><span class="line">kof=<span class="string">&quot;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ ! -f <span class="variable">$kof</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;1&quot;</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ ! -f <span class="string">&quot;<span class="variable">$kof</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;2&quot;</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;END&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>测试脚本的执行结果如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># bash t.sh</span></span><br><span class="line">2</span><br><span class="line">END</span><br></pre></td></tr></table></figure>
+
+<p>可以看到当变量<code>$kof</code>为空时，第一个<code>if</code>语句块中的语句没有被执行，而第二个<code>if</code>语句块中的语句被执行了。这两个语句块的差别就在于第二个语句块中的<code>$kof</code>变量用<code>&quot;&quot;</code>进行了包裹。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/06/11/bash-test/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/20/fix-exit/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -982,91 +1072,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/14/external-ip/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/11/14/external-ip/" class="post-title-link" itemprop="url">基于LVS DR模式的Kubernetes Service External-IP实现</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-11-14 22:34:27" itemprop="dateCreated datePublished" datetime="2021-11-14T22:34:27+08:00">2021-11-14</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
-                    <span itemprop="name">Kubernetes</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章<a href="/2021/11/07/kubernetes-clusterip/">&lt;&lt;Kubernetes Service网络通信路径&gt;&gt;</a>介绍了<code>kubernetes</code>的几种<code>Service</code>。如果要暴露服务给<code>kubernetes</code>集群外使用，可以选择<code>NodePort</code>和<code>LoadBalancer</code>。但<code>LoadBalancer</code>现在主要在各大公有云厂商上能够原生支持。而使用<code>NodePort</code>暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如<code>mysql</code>的<code>3306</code>端口。</p>
-<p><code>Service</code>的<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/service/#external-ips">官方文档</a>中介绍了一种辅助方式, 叫<code>External-IP</code>, 可以在<code>worker</code>节点上会通过该<code>IP</code>来暴露服务，而且可以使用在任意类型的<code>service</code>上。集群外的用户就可以通过该<code>IP</code>来访问服务。但如果这个<code>IP</code>只存在于一个<code>worker</code>节点上，那么就不具备高可用的能力了，我们需要在多个<code>worker</code>节点上配置这个<code>VIP:Virtual IP</code>。我们可以使用<code>LVS</code>(也叫做<code>IPVS</code>)的<code>DR(Director Routing)</code>模式作为外部负载均衡器将流量分发到多个<code>worker</code>节点上，同时保持数据包的目的地址为该<code>VIP</code>。</p>
-<p><code>DR</code>模式只会修改数据包的目的<code>MAC</code>地址为后端<code>RealServer</code>的<code>MAC</code>地址，因而要求负载均衡器<code>Director</code>和<code>RealServer</code>在同一个二层网络，而且响应包不会经过<code>Director</code>。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/11/14/external-ip/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1137,7 +1142,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">133</span>
+          <span class="site-state-item-count">134</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1150,7 +1155,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">54</span>
+        <span class="site-state-item-count">55</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
