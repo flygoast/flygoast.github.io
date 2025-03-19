@@ -164,6 +164,95 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/21/custom-loadbalancer/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/11/21/custom-loadbalancer/" class="post-title-link" itemprop="url">本地环境Kubernetes LoadBalancer实现</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-21 14:04:59" itemprop="dateCreated datePublished" datetime="2021-11-21T14:04:59+08:00">2021-11-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><code>Kubernetes</code>没有给本地环境(<code>Bare-metal</code>, <code>On-Premise</code>)提供负载均衡实现，<code>LoadBalancer</code>类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建<code>LoadBalancer</code>类型的服务后，服务的<code>EXTERNAL-IP</code>会一直处于<code>&lt;pending&gt;</code>状态。这是因为在本地环境没有相应的<code>controller</code>来处理这些<code>LoadBalancer</code>服务。比如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl get svc</span></span><br><span class="line">NAME         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE</span><br><span class="line">kubernetes   ClusterIP      10.32.0.1     &lt;none&gt;        443/TCP        31d</span><br><span class="line"><span class="built_in">whoami</span>       LoadBalancer   10.32.0.132   &lt;pending&gt;     80:31620/TCP   103s</span><br></pre></td></tr></table></figure>
+
+<p>之前的文章<a href="/2021/11/14/external-ip/">&lt;&lt;基于LVS DR模式的Kubernetes Service External-IP实现&gt;&gt;</a>介绍了手动设置<code>EXTERNAL-IP</code>的方式实现外部负载均衡。本文通过在本地环境实现一个简单的<code>controller</code>来处理<code>LoadBalancer</code>类型服务自动实现负载均衡器。架构示意如图:</p>
+<img src="/images/2021-11-21/1.png" class="">
+
+<p><code>LoadBalancer</code>是位于<code>Kubernetes</code>集群外的独立集群。可以通过<code>ECMP</code>将请求分散到不同的<code>LoaderBalancer</code>节点上，<code>LoadBalancer</code>再将请求分发到<code>Kubernetes</code>的<code>node</code>上。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/11/21/custom-loadbalancer/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/14/external-ip/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -977,100 +1066,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/07/21/socket-to-pid/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/07/21/socket-to-pid/" class="post-title-link" itemprop="url">Linux内核TCP网络连接关联进程</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2021-07-21 19:02:48" itemprop="dateCreated datePublished" datetime="2021-07-21T19:02:48+08:00">2021-07-21</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>在一些服务器安全场景中，需要通过网络连接关联到相关进程。例如，在安全溯源场景中，通过威胁情报可以判断某台主机上存在恶意连接，这时就需要追查这些恶意连接是由哪个进程以及哪个可执行文件来发起的。又或者，在微隔离场景中，我们不仅仅需要知道<code>IP:Port</code>与<code>IP:Port</code>之间的访问关系，我们还需要额外增加进程级别的信息，也就是哪个进程通过<code>IP:Port</code>在访问<code>IP:Port</code>的哪个进程。</p>
-<p>要解决这种网络连接与进程关联的问题，在用户态的可行办法主要是通过读取<code>/proc/net/tcp</code>以及<code>/proc/[pid]/fd</code>这两种文件来构建相应的映射结构。</p>
-<p>通过读取文件<code>/proc/net/tcp</code>可获取系统的TCP连接信息:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 tcpconn]# cat /proc/net/tcp</span><br><span class="line">  sl  local_address rem_address   st tx_queue rx_queue tr tm-&gt;when retrnsmt   uid  timeout inode</span><br><span class="line">   0: 00000000:006F 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 13841 1 ffff9fc7da7c8000 100 0 0 10 0</span><br><span class="line">   1: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 16863 1 ffff9fc7da7c87c0 100 0 0 10 0</span><br><span class="line">   2: 0100007F:0019 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 17951 1 ffff9fc7da7c9f00 100 0 0 10 0</span><br><span class="line">   3: 0F02000A:0016 0202000A:F3FE 01 00000000:00000000 02:000AF352 00000000     0        0 23961 4 ffff9fc7da7c8f80 20 4 25 10 -1</span><br></pre></td></tr></table></figure>
-
-<p>从其中可获取TCP连接四元组及对应socket的<code>inode</code>号。</p>
-<p>而从<code>/proc/[pid]/fd</code>中可以获取进程所有的文件描述符:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 tcpconn]# ls -l /proc/823/fd</span><br><span class="line">total 0</span><br><span class="line">lr-x------. 1 root root 64 Jul 24 15:06 0 -&gt; /dev/null</span><br><span class="line">lrwx------. 1 root root 64 Jul 24 15:06 1 -&gt; socket:[16389]</span><br><span class="line">lrwx------. 1 root root 64 Jul 24 15:06 2 -&gt; socket:[16389]</span><br><span class="line">lrwx------. 1 root root 64 Jul 24 15:06 3 -&gt; socket:[16863]</span><br><span class="line">lrwx------. 1 root root 64 Jul 24 15:06 4 -&gt; socket:[16939]</span><br></pre></td></tr></table></figure>
-
-<p>其中也可以获取相应的<code>inode</code>号.</p>
-<p>这样，我们就可以从<code>/proc/net/tcp</code>建立起<code>网络连接五元组-&gt;inode</code>的映射, 再从<code>/proc/pid/fd</code>建立起连接<code>inode-&gt;进程</code>的映射。从而实现网络连接关联到相应进程。</p>
-<p>但这种方式整个映射关系的建立依赖周期性读取两种proc文件，缺乏实时性，对于瞬时连接相应的数据可以无法实时获取到，从而无法关联到进程。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/07/21/socket-to-pid/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1141,7 +1136,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">134</span>
+          <span class="site-state-item-count">135</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
