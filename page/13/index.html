@@ -164,6 +164,124 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/17/flashcache-init/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2014/12/17/flashcache-init/" class="post-title-link" itemprop="url">flashcache简介及模块初始化</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-17 17:48:16" itemprop="dateCreated datePublished" datetime="2014-12-17T17:48:16+08:00">2014-12-17</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Flashcache/" itemprop="url" rel="index">
+                    <span itemprop="name">Flashcache</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><a target="_blank" rel="noopener" href="https://github.com/facebook/flashcache">flashcache</a>是Facebook开源的用SSD来缓存机械磁盘数据的Linux内核模块。</p>
+<p>简单来说，Linux的I&#x2F;O栈层次结构可以表示为:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">+----------------------------+</span><br><span class="line">| VFS(Virtual File System)   |</span><br><span class="line">+----------------------------+</span><br><span class="line">| Block I/O Layer            |</span><br><span class="line">+----------------------------+</span><br><span class="line">| Devices                    |</span><br><span class="line">+----------------------------+</span><br></pre></td></tr></table></figure>
+<p>文件系统I&#x2F;O操作传递给块设备，抽象块设备最终传递给真实的设备驱动，完成I&#x2F;O操作。Linux在块设备层实现了Device Mapper(DM)的映射机制。DM机制可以将一个或多个块设备再映射成一个虚拟块设备。具体的映射规则由mapping table来实现。到达虚拟块设备的I&#x2F;O请求，DM机制会根据映射表找到正确的目标设备，将请求放到目标设备的请求队列中，目标设备根据目标类型进行处理。结构图如下:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">         +---------------+</span><br><span class="line">         | Mapped Device |</span><br><span class="line">         +-------+-------+</span><br><span class="line">                 |</span><br><span class="line">                 v</span><br><span class="line">         +---------------+</span><br><span class="line">         | mapping table |</span><br><span class="line">         +--+---------+--+</span><br><span class="line">            |         |</span><br><span class="line">            |         |</span><br><span class="line">            v         v</span><br><span class="line">+---------------+  +-----------------+</span><br><span class="line">|Physical Device|  | Physical Device |</span><br><span class="line">+---------------+  +-----------------+</span><br></pre></td></tr></table></figure>
+<p>DM机制的映射目标类型可以通过内核模块进行扩展，flashcache就是通过定义一种名称为”flashcache”的映射目标类型来实现SSD做为机械磁盘的缓存。结构示意图如下:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">+---------------+</span><br><span class="line">| Mapped Device |</span><br><span class="line">+-------+-------+</span><br><span class="line">        |</span><br><span class="line">        v</span><br><span class="line">+---------------+</span><br><span class="line">| mapper table  |</span><br><span class="line">+-------+-------+</span><br><span class="line">        |</span><br><span class="line">        | flashcache</span><br><span class="line">        |</span><br><span class="line">    +---+---+</span><br><span class="line">    |       |</span><br><span class="line">    v       v</span><br><span class="line">+-----+  +------+</span><br><span class="line">| SSD |  | DISK |</span><br><span class="line">+-----+  +------+</span><br></pre></td></tr></table></figure>
+<p>flashcache做为缓存层，提供了三种写入模式：</p>
+<ul>
+<li>writeback</li>
+<li>writethrough</li>
+<li>writearound</li>
+</ul>
+<p>三种模式的区别如下图所示:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">writethrough  writearound  writeback</span><br><span class="line">     |            |           |</span><br><span class="line">-----|------------|-----------|------------</span><br><span class="line">     v            |           v       SSD</span><br><span class="line">-----|------------|------------------------</span><br><span class="line">     v            v                   DISK</span><br><span class="line">-------------------------------------------</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>writethrough：进行写操作时，会同时写入SSD和磁盘</li>
+<li>writearound: 进行写操作时，只对磁盘进行写操作</li>
+<li>writeback: 进行写操作时，只写入SSD，flashcache异步地将内容写入磁盘</li>
+</ul>
+<p>下面分析flashcache模块的初始化。</p>
+<p>flashcache内核模块的入口函数为flashcache_init。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">module_init(flashcache_init);</span><br></pre></td></tr></table></figure>
+<p>flashcache_init首先会对job相关的变量及结构进行初始化:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">r = flashcache_jobs_init();</span><br><span class="line"><span class="keyword">if</span> (r)</span><br><span class="line">    <span class="keyword">return</span> r;</span><br><span class="line"><span class="type">atomic_set</span>(&amp;nr_cache_jobs, <span class="number">0</span>);</span><br><span class="line"><span class="type">atomic_set</span>(&amp;nr_pending_jobs, <span class="number">0</span>);</span><br></pre></td></tr></table></figure>
+<p>flashcache_jobs_init会分配job操作所需的内存池，简化逻辑如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">flashcache_jobs_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    _job_cache = kmem_cache_create(<span class="string">&quot;kcached-jobs&quot;</span>,</span><br><span class="line">                                   <span class="keyword">sizeof</span>(<span class="keyword">struct</span> kcached_job),</span><br><span class="line">                                   __alignof__(<span class="keyword">struct</span> kcached_job),</span><br><span class="line">                                   <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    _job_pool = mempool_create(MIN_JOBS, mempool_alloc_slab,</span><br><span class="line">                               mempool_free_slab, _job_cache);</span><br><span class="line"></span><br><span class="line">    _pending_job_cache = kmem_cache_create(<span class="string">&quot;pending-jobs&quot;</span>,</span><br><span class="line">                           <span class="keyword">sizeof</span>(<span class="keyword">struct</span> pending_job),</span><br><span class="line">                           __alignof__(<span class="keyword">struct</span> pending_job),</span><br><span class="line">                           <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    _pending_job_pool = mempool_create(MIN_JOBS, mempool_alloc_slab,</span><br><span class="line">                       mempool_free_slab, _pending_job_cache);</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后，flashcache_init调用dm_io_client_create创建一个dm_io_client结构，它为块设备I&#x2F;O请求执行过程提供内存池。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flashcache_io_client = dm_io_client_create();</span><br></pre></td></tr></table></figure>
+<p>接着，flashcache_init调用dm_kcopyd_client_create创建了一个dm_kcopyd_client结构。kcopyd是一个内核进程，它用于异步地copy一个块设备的区域到一个或多个其他的块设备。dm_kcopyd_client用于向kcopyd提交任务。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flashcache_kcp_client = dm_kcopyd_client_create(<span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+<p>然后，初始化了一个内核工作队列，执行do_work去处理各种job, 本文略过。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INIT_WORK(&amp;_kcached_wq, do_work);</span><br></pre></td></tr></table></figure>
+<p>接着，注册flashcache的DM机制目标类型, 目标类型中具体回调本文略过。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">r = dm_register_target(&amp;flashcache_target);</span><br></pre></td></tr></table></figure>
+<p>再来看flashcache_init的最后部分:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">flashcache_module_procfs_init();</span><br><span class="line">flashcache_control = (<span class="keyword">struct</span> flashcache_control_s *)</span><br><span class="line">    kmalloc(<span class="keyword">sizeof</span>(<span class="keyword">struct</span> flashcache_control_s), GFP_KERNEL);</span><br><span class="line">flashcache_control-&gt;synch_flags = <span class="number">0</span>;</span><br><span class="line">register_reboot_notifier(&amp;flashcache_notifier);</span><br><span class="line"><span class="keyword">return</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>首先，调用flashcache_module_procfs_init创建”&#x2F;proc&#x2F;flashcache”目录及文件”&#x2F;proc&#x2F;flashcache&#x2F;flashcache_version”。<br>flachcache_module_procfs_init简化逻辑如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">flashcache_module_procfs_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_PROC_FS</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">proc_dir_entry</span> *<span class="title">entry</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (proc_mkdir(<span class="string">&quot;flashcache&quot;</span>, <span class="literal">NULL</span>)) &#123;</span><br><span class="line">        entry = create_proc_entry(<span class="string">&quot;flashcache/flashcache_version&quot;</span>, <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">        <span class="keyword">if</span> (entry)</span><br><span class="line">            entry-&gt;proc_fops =  &amp;flashcache_version_operations;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span> <span class="comment">/* CONFIG_PROC_FS */</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最后，通过register_reboot_notifier注册函数flashcache_notify_reboot。这函数会在机器重启或关闭时被调用。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">notifier_block</span> <span class="title">flashcache_notifier</span> =</span> &#123;</span><br><span class="line">    .notifier_call  = flashcache_notify_reboot,</span><br><span class="line">    .next       = <span class="literal">NULL</span>,</span><br><span class="line">    .priority   = INT_MAX, <span class="comment">/* should be &gt; ssd pri&#x27;s and disk dev pri&#x27;s */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>至此，flashcache内核模块初始化完成，可以使用dmsetup指定flashcache目标类型创建虚拟块设备了。</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/09/ejabberd-config/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1220,153 +1338,6 @@ process_terms对于没有明确列出的选项，给配置的每个HOST都调用
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/24/ejabberd-ping/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2014/11/24/ejabberd-ping/" class="post-title-link" itemprop="url">ejabberd中XMPP协议PING实现</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2014-11-24 18:09:43" itemprop="dateCreated datePublished" datetime="2014-11-24T18:09:43+08:00">2014-11-24</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/XMPP/" itemprop="url" rel="index">
-                    <span itemprop="name">XMPP</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>根据<a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0199.html">XEP-0199</a>, XMPP客户端和服务器都可以在XML流上发送应用层PING请求。因为XMPP依赖底层的TCP连接，有可能TCP连接意外中断，而上层的XMPP并不知晓，从而影响消息传递。通过发送应用层PING请求可以来确认对端的连接可用性。</p>
-<p>以服务器发给客户端为例，协议如下：</p>
-<p>发送的PING请求：</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;get&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">ping</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
-<p>如果对端支持PING请求，则返回对应的”PONG”回应。</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;result&#x27;</span>/&gt;</span></span><br></pre></td></tr></table></figure>
-<p>如果对端不支持则返回<service-unavailable/>错误。</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;error&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">ping</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">error</span> <span class="attr">type</span>=<span class="string">&#x27;cancel&#x27;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">service-unavailable</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:ietf:params:xml:ns:xmpp-stanzas&#x27;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">error</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
-<p>ejabberd中PING功能实现位于mod_ping.erl。它主要支持3个配置：</p>
-<ul>
-<li><strong>send_pings</strong>: <em>true|false</em></li>
-</ul>
-<p>如果这个选项设置为true, 当客户端在给定时间间隔内没有活动，则向客户端发送一个ping请求。</p>
-<ul>
-<li><strong>ping_interval</strong>: <em>Seconds</em></li>
-</ul>
-<p>设置上述send_pings选项中客户端没有活动的时间间隔。</p>
-<ul>
-<li><strong>timeout_action</strong>: <em>none|kill</em></li>
-</ul>
-<p>表示当PING请求发出32秒后，ejabberd依然没有收到PING响应，服务端如何处理。none表示什么也不做，kill表示关闭客户端连接。</p>
-<p>当ejabberd启动时会调用mod_ping:start&#x2F;2。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">(Host, Opts)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    PingSpec = &#123;Proc, &#123;?MODULE, start_link, [Host, Opts]&#125;,</span><br><span class="line">                transient, <span class="number">2000</span>, worker, [?MODULE]&#125;,</span><br><span class="line">    supervisor:start_child(?SUPERVISOR, PingSpec).</span><br></pre></td></tr></table></figure>
-<p>start函数调用supervisor:start_child&#x2F;2为每个支持的host创建一个负责该host的worker进程。</p>
-<p>进程树模型如下:</p>
-<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">+------------+</span><br><span class="line">|ejabberd_sup|</span><br><span class="line">+-----+------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------+</span><br><span class="line">      +---&gt;|Other processes...|</span><br><span class="line">      |    +------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(im.just4coding.com)|</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(localhost)         |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(Other host)        |</span><br><span class="line">           +------------------------+</span><br></pre></td></tr></table></figure>
-<p>每个worker是一个gen_server进程，进程调用init函数进行初始化。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init</span><span class="params">([Host, Opts])</span> -&gt;</span></span><br><span class="line">    SendPings = gen_mod:get_opt(send_pings, Opts, ?DEFAULT_SEND_PINGS),</span><br><span class="line">    PingInterval = gen_mod:get_opt(ping_interval, Opts, ?DEFAULT_PING_INTERVAL),</span><br><span class="line">    TimeoutAction = gen_mod:get_opt(timeout_action, Opts, none),</span><br><span class="line">    IQDisc = gen_mod:get_opt(iqdisc, Opts, no_queue),</span><br><span class="line">    mod_disco:register_feature(Host, ?NS_PING),</span><br><span class="line">    gen_iq_handler:add_iq_handler(ejabberd_sm, Host, ?NS_PING,</span><br><span class="line">                                  ?MODULE, iq_ping, IQDisc),</span><br><span class="line">    gen_iq_handler:add_iq_handler(ejabberd_local, Host, ?NS_PING,</span><br><span class="line">                                  ?MODULE, iq_ping, IQDisc),</span><br><span class="line">    <span class="keyword">case</span> SendPings <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        <span class="comment">%% Ping requests are sent to all entities, whether they</span></span><br><span class="line">        <span class="comment">%% announce &#x27;urn:xmpp:ping&#x27; in their caps or not</span></span><br><span class="line">        ejabberd_hooks:add(sm_register_connection_hook, Host,</span><br><span class="line">                           ?MODULE, user_online, <span class="number">100</span>),</span><br><span class="line">        ejabberd_hooks:add(sm_remove_connection_hook, Host,</span><br><span class="line">                           ?MODULE, user_offline, <span class="number">100</span>),</span><br><span class="line">        ejabberd_hooks:add(user_send_packet, Host,</span><br><span class="line">                           ?MODULE, user_send, <span class="number">100</span>);</span><br><span class="line">    _ -&gt;</span><br><span class="line">        ok</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;ok, #state&#123;host = Host,</span><br><span class="line">                send_pings = SendPings,</span><br><span class="line">                ping_interval = PingInterval,</span><br><span class="line">                timeout_action = TimeoutAction,</span><br><span class="line">                timers = ?DICT:new()&#125;&#125;.</span><br></pre></td></tr></table></figure>
-<ul>
-<li><p>首先获取相关配置</p>
-</li>
-<li><p>接着调用mod_disco:register_feature注册PING功能的XMLNS。这样当客户端请求”Service Discovery”信息时，ejabberd返回的特征中会包括”urn:xmpp:ping”。</p>
-</li>
-</ul>
-<p>ServiceDiscovery请求:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">type</span>=<span class="string">&#x27;get&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">id</span>=<span class="string">&#x27;disco1&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">query</span> <span class="attr">xmlns</span>=<span class="string">&#x27;http://jabber.org/protocol/disco#info&#x27;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<p>ServiceDiscovery响应:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">type</span>=<span class="string">&#x27;result&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">from</span>=<span class="string">&#x27;capulet.lit&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">to</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">id</span>=<span class="string">&#x27;disco1&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">query</span> <span class="attr">xmlns</span>=<span class="string">&#x27;http://jabber.org/protocol/disco#info&#x27;</span>&gt;</span></span><br><span class="line">    ...</span><br><span class="line">    <span class="tag">&lt;<span class="name">feature</span> <span class="attr">var</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line">    ...</span><br><span class="line">  <span class="tag">&lt;/<span class="name">query</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<p>ServiceDiscovery相关信息参考<a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0030.html">XEP-0030</a>。</p>
-<ul>
-<li><p>接下来，注册IQ处理器，令XMLNS为”urn:xmpp:ping”的IQ请求由函数iq_ping处理。iq_ping简单地返回相应响应或者错误。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">iq_ping</span><span class="params">(_From, _To, #iq&#123;type = Type, sub_el = SubEl&#125; = IQ)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> &#123;Type, SubEl&#125; <span class="keyword">of</span></span><br><span class="line">        &#123;get, &#123;xmlelement, <span class="string">&quot;ping&quot;</span>, _, _&#125;&#125; -&gt;</span><br><span class="line">            IQ#iq&#123;type = result, sub_el = []&#125;;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            IQ#iq&#123;type = error, sub_el = [SubEl, ?ERR_FEATURE_NOT_IMPLEMENTED]&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>如果send_pings配置为true, mod_ping在ejabberd中注册n以下3个hook函数:</p>
-</li>
-<li><p><code>sm_register_connection_hook</code>: 它在客户端完成登录验证，建立session信息时调用。</p>
-</li>
-</ul>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">open_session</span><span class="params">(SID, User, Server, Resource, Info)</span> -&gt;</span></span><br><span class="line">    set_session(SID, User, Server, Resource, undefined, Info),</span><br><span class="line">    mnesia:dirty_update_counter(session_counter,</span><br><span class="line">                jlib:nameprep(Server), <span class="number">1</span>),</span><br><span class="line">    check_for_sessions_to_replace(User, Server, Resource),</span><br><span class="line">    JID = jlib:make_jid(User, Server, Resource),</span><br><span class="line">    ejabberd_hooks:run(sm_register_connection_hook, JID#jid.lserver,</span><br><span class="line">               [SID, JID, Info]).</span><br></pre></td></tr></table></figure>
-<ul>
-<li><code>sm_remove_connection_hook</code>: 在用户退出,关闭session时调用。<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">close_session</span><span class="params">(SID, User, Server, Resource)</span> -&gt;</span></span><br><span class="line">    Info = <span class="keyword">case</span> mnesia:dirty_read(&#123;session, SID&#125;) <span class="keyword">of</span></span><br><span class="line">    [] -&gt; [];</span><br><span class="line">    [#session&#123;info=I&#125;] -&gt; I</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    F = <span class="keyword">fun</span>() -&gt;</span><br><span class="line">        mnesia:delete(&#123;session, SID&#125;),</span><br><span class="line">        mnesia:dirty_update_counter(session_counter,</span><br><span class="line">                        jlib:nameprep(Server), -<span class="number">1</span>)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    mnesia:sync_dirty(F),</span><br><span class="line">    JID = jlib:make_jid(User, Server, Resource),</span><br><span class="line">    ejabberd_hooks:run(sm_remove_connection_hook, JID#jid.lserver,</span><br><span class="line">               [SID, JID, Info]).</span><br></pre></td></tr></table></figure></li>
-<li><code>user_send_packet</code>: 在C2S进程收到客户端发送的消息时被调用。</li>
-</ul>
-<p><code>sm_register_connection_hook</code>的hook函数<code>user_online</code>和<code>user_send_packet</code>的hook函数<code>user_send</code>都会调用start_ping函数。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start_ping</span><span class="params">(Host, JID)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    gen_server:cast(Proc, &#123;start_ping, JID&#125;).</span><br></pre></td></tr></table></figure>
-<p>start_ping向该HOST的worker进程发送一个{start_ping, JID}消息。worker进程调用handle_cast进行处理:</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;start_ping, JID&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = add_timer(JID, State#state.ping_interval, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
-<p>handle_cast调用add_timer为该客户端创建一个timer。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">add_timer</span><span class="params">(JID, Interval, Timers)</span> -&gt;</span></span><br><span class="line">    LJID = jlib:jid_tolower(JID),</span><br><span class="line">    NewTimers = <span class="keyword">case</span> ?DICT:find(LJID, Timers) <span class="keyword">of</span></span><br><span class="line">            &#123;ok, OldTRef&#125; -&gt;</span><br><span class="line">            cancel_timer(OldTRef),</span><br><span class="line">            ?DICT:erase(LJID, Timers);</span><br><span class="line">            _ -&gt;</span><br><span class="line">            Timers</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    TRef = erlang:start_timer(Interval * <span class="number">1000</span>, self(), &#123;ping, JID&#125;),</span><br><span class="line">    ?DICT:store(LJID, TRef, NewTimers).</span><br></pre></td></tr></table></figure>
-<p>由于用户每次发送消息时都会调用add_timer函数，因而add_timer中需要检查之前是否已经存在timer。如果存在，则先取消旧的timer, 再创建新的Timer。</p>
-<p>当timer超时后，即客户若干时间内没有活动，进程收到{ping, JID}消息，此时ejabberd应向客户端发送PING消息。进程调用handle_info处理。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_info</span><span class="params">(&#123;timeout, _TRef, &#123;ping, JID&#125;&#125;, State)</span> -&gt;</span></span><br><span class="line">    IQ = #iq&#123;type = get,</span><br><span class="line">             sub_el = [&#123;xmlelement, <span class="string">&quot;ping&quot;</span>, [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_PING&#125;], []&#125;]&#125;,</span><br><span class="line">    Pid = self(),</span><br><span class="line">    F = <span class="keyword">fun</span>(Response) -&gt;</span><br><span class="line">        gen_server:cast(Pid, &#123;iq_pong, JID, Response&#125;)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    From = jlib:make_jid(<span class="string">&quot;&quot;</span>, State#state.host, <span class="string">&quot;&quot;</span>),</span><br><span class="line">    ejabberd_local:route_iq(From, JID, IQ, F),</span><br><span class="line">    Timers = add_timer(JID, State#state.ping_interval, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
-<p>handle_info创建IQ消息后，设置回调函数F，调用ejabberd_local:route_iq&#x2F;4消息IQ消息发送给客户端。当收到该IQ消息的响应或者超过32秒依然没有收到客户端的响应，回调函数F将会被调用。如果响应超时，Response为timeout，F将向进程发送{iq_pong, JID, timeout}消息。进程调用handle_cast处理。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;iq_pong, JID, timeout&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = del_timer(JID, State#state.timers),</span><br><span class="line">    ejabberd_hooks:run(user_ping_timeout, State#state.host, [JID]),</span><br><span class="line">    <span class="keyword">case</span> State#state.timeout_action <span class="keyword">of</span></span><br><span class="line">    kill -&gt;</span><br><span class="line">        #jid&#123;user = User, server = Server, resource = Resource&#125; = JID,</span><br><span class="line">        <span class="keyword">case</span> ejabberd_sm:get_session_pid(User, Server, Resource) <span class="keyword">of</span></span><br><span class="line">        Pid <span class="keyword">when</span> is_pid(Pid) -&gt;</span><br><span class="line">            ejabberd_c2s:stop(Pid);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        ok</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
-<p>如果timeout_action设置为kill, 则调用ejabberd_c2s:stop关闭相应的客户端连接。</p>
-<p>因为在<code>sm_remove_connection_hook</code>注册了hook函数<code>user_offline</code>, 当用户退出时会调用stop_ping函数，向worker进程发送{stop_ping, JID}消息。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">stop_ping</span><span class="params">(Host, JID)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    gen_server:cast(Proc, &#123;stop_ping, JID&#125;).</span><br></pre></td></tr></table></figure>
-<p>worker进程调用del_timer函数将该客户端的timer删除。</p>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;stop_ping, JID&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = del_timer(JID, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
-<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">del_timer</span><span class="params">(JID, Timers)</span> -&gt;</span></span><br><span class="line">    LJID = jlib:jid_tolower(JID),</span><br><span class="line">    <span class="keyword">case</span> ?DICT:find(LJID, Timers) <span class="keyword">of</span></span><br><span class="line">        &#123;ok, TRef&#125; -&gt;</span><br><span class="line">        cancel_timer(TRef),</span><br><span class="line">        ?DICT:erase(LJID, Timers);</span><br><span class="line">        _ -&gt;</span><br><span class="line">        Timers</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
-<p>模块及进程停止的逻辑与模块和进程初始化的逻辑相反，本文略过。</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1437,7 +1408,7 @@ process_terms对于没有明确列出的选项，给配置的每个HOST都调用
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">136</span>
+          <span class="site-state-item-count">137</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
