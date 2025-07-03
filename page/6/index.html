@@ -164,6 +164,92 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/09/25/ivshmem-pci/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/09/25/ivshmem-pci/" class="post-title-link" itemprop="url">ivshmem PCI设备中断机制驱动示例</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-09-25 19:00:59" itemprop="dateCreated datePublished" datetime="2021-09-25T19:00:59+08:00">2021-09-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>之前的文章<a href="/2021/09/12/qemu-ivshmem/">&lt;&lt;QEMU虚拟机内识别ivshmem设备&gt;&gt;</a>介绍了在虚拟机内通过用户态程序访问<code>ivshmem</code>设备的共享内存。在虚拟机之间或者宿主机与虚拟机之间通过共享内存进行通信的情形下，共享内存的两端必须依赖轮询方式来实现通知机制。这种方式是<code>ivshmem</code>提供的<code>ivshmem-plain</code>的使用方式。除此之外，<code>ivshmem</code>还提供了<code>ivshmem-doorbell</code>的使用方式，它提供了基于中断的通知机制。</p>
+<p><code>ivshmem-doorbell</code>提供了两种中断方式，一种是传统的基于<code>INTx</code>的中断, 它主要使用<code>BAR0</code>的<code>Interrupt Mask</code>和<code>Interrupt Status</code>两个寄存器；另一种是基于<code>MSI-X</code>的中断，它主要使用<code>BAR0</code>的<code>IVPosition</code>和<code>Doorbell</code>两个寄存器。参考共享的设备端叫做<code>peer</code>。<code>IVPosition</code>寄存器存储该<code>peer</code>的数字标识符(0-65535), 称做<code>peer_id</code>。该寄存器为只读寄存器。而<code>Doorbell</code>寄存器为只写寄存器。<code>ivshmem-doorbell</code>支持多个中断向量，写入<code>Doorbell</code>寄存器则触发共享该内存的某个<code>peer</code>的某个中断。<code>Doorbell</code>为<code>32</code>位，低<code>16</code>位为<code>peer_id</code>，而高<code>16</code>位为中断向量号(这里是从<code>0</code>开始的顺序号，而非<code>PCI</code>驱动在Guest虚拟机内部所申请的向量号)。</p>
+<p>使用<code>ivshmem-doorbell</code>机制需要运行<code>ivshmem-server</code>。<code>ivshmem-server</code>根据参数创建共享内存，并通过监听本地<code>UNIX DOMAIN SOCKET</code>等待共享内存的<code>peer</code>来连接。添加了<code>ivshmem-doorbell</code>设备的<code>QEMU</code>进程会连接该<code>socket</code>, 从而获取<code>ivshmem-server</code>所分配的一个<code>peer_id</code>。<code>ivshmem-doorbell</code>支持多个中断向量，<code>ivshmem-server</code>会为<code>ivshmem</code>虚拟<code>PCI</code>设备支持的每个中断向量创建一个<code>eventfd</code>，并将共享内存以及为所有客户端中断向量所创建的<code>eventfd</code>都通过<code>SCM_RIGHTS</code>机制传递给所有客户端进程。这样所有的<code>peer</code>便都具备了独立的两两之间的通知通道。之后在虚拟机内通过触发<code>ivshmem</code>虚拟<code>PCI</code>设备的<code>DOORBELL</code>寄存器的写入，虚拟机的<code>QEMU</code>进程便会通过<code>DOORBELL</code>寄存器中的<code>peer_id</code>和中断向量号来找到相应的<code>eventfd</code>，从而通知到对端的<code>QEMU</code>进程来产生相应的<code>PCI</code>中断。</p>
+<p>要使用中断机制，用户态程序是无能为力的，需要编写相应的<code>PCI</code>驱动来实现。本文通过一个简单的<code>PCI</code>驱动示例来说明<code>ivshmem-doorbell</code>的<code>MSI-X</code>中断机制的使用。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/09/25/ivshmem-pci/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/09/12/qemu-ivshmem/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -979,103 +1065,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/04/20/vxlan-fdb/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2020/04/20/vxlan-fdb/" class="post-title-link" itemprop="url">动态维护FDB表项实现VXLAN通信</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2020-04-20 16:45:48" itemprop="dateCreated datePublished" datetime="2020-04-20T16:45:48+08:00">2020-04-20</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>之前的文章&lt;&lt;<a href="/2017/05/21/vxlan/">VXLAN原理介绍与实例分析</a>&gt;&gt;简要介绍了VXLAN的基本概念和基于组播的通信过程实例。其中控制面是混合在数据面中的，由洪泛(flood)和源地址学习实现。本文通过实例将控制面从数据面中分离，手动维护<code>FDB</code>及<code>ARP</code>表项实现通信过程。</p>
-<p>对于大规模的VXLAN网络中，最核心的问题一般有两个:</p>
-<ol>
-<li>如何发现网络中其他VTEP</li>
-<li>如何降低BUM（Broadcast, Unknown unicast, Multicast)流量</li>
-</ol>
-<p>在对于问题一来说，之前的文章中的解决方法是洪泛，对于问题二，则通过源地址学习来确定MAC地址的归属。VXLAN的转发过程主要依赖FDB(Forwarding Database)实现。二层网桥的FDB表项格式可表达为:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VLAN&gt; &lt;DEV PORT&gt;</span><br></pre></td></tr></table></figure>
-<p>VXLAN设备的表项与之类似，可以表达为:</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VNI&gt; &lt;REMOTE IP&gt;</span><br></pre></td></tr></table></figure>
-
-<p>VXLAN设备根据MAC地址来查找相应的VTEP IP地址，继而将二层数据帧封装发送至相应VTEP。</p>
-<p>如果我们能够从集中的Controller或者存储中获取VTEP信息以及MAC地址与VTEP的对应信息，则问题一和问题二都可以通过根据相应信息动态更新FDB表项来解决，OpenStack的Neutron, VMware的NSX，Docker Overlay都有类似的思路。</p>
-<p>下面我们通过实例来手动更新FDB表来实现VXLAN通信。我们的实验环境如下图, VTEP本地使用Linux bridge来挂载连接到network namespace中的<code>veth pair</code>虚拟网卡，我们要实现<code>3.3.3.3</code>二层访问<code>3.3.3.4</code>。</p>
-<img src="/images/2020-04-20/1.png" class="">
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2020/04/20/vxlan-fdb/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1146,7 +1135,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">137</span>
+          <span class="site-state-item-count">138</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1159,7 +1148,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">56</span>
+        <span class="site-state-item-count">57</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
