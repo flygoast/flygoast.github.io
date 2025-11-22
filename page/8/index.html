@@ -164,6 +164,92 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/14/celery/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          
+            <a href="/2018/08/14/celery/" class="post-title-link" itemprop="url">Celery实例介绍</a>
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-08-14 16:16:24" itemprop="dateCreated datePublished" datetime="2018-08-14T16:16:24+08:00">2018-08-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p><a target="_blank" rel="noopener" href="http://www.celeryproject.org/">Celery</a>是一个基于消息传递的分布式任务队列。与单纯的消息队列相比较，队列中传递的消息为任务(Task&#x2F;Job)信息，而不是数据类信息，Celery基于这些消息完成了任务信息的管理。实现这种任务管理的相似项目还有<a target="_blank" rel="noopener" href="http://gearman.org/">Gearman</a>，只不过这个项目已经很久未更新了，更推荐使用Celery。</p>
+<p>Celery支持同步和异步执行两种模式。同步模式为任务调用方等待任务执行完成，这种方式等同于RPC(Remote Procedure Call)， 异步方式为任务在后台执行，调用方调用后就去做其他工作，之后再根据需要来查看任务结果。Celery自己没有实现消息队列，而是直接已存在的消息队列作为Broker角色。官方推荐的Broker为<a target="_blank" rel="noopener" href="http://www.rabbitmq.com/">RabbitMQ</a>，除此之外，Redis、Beanstalkd、MongoDB等也都支持，具体可参考<a target="_blank" rel="noopener" href="http://docs.celeryproject.org/en/latest/getting-started/brokers/index.html">官方文档</a>。</p>
+<p>Celery整体架构可以理解为下图:</p>
+<img src="/images/2018-08-14/1.png" class="">
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2018/08/14/celery/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+        
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/08/openstack-l2-vfw/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -965,92 +1051,6 @@
   
   
 
-        
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block home" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/09/timewait/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="flygoast">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Just For Coding">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          
-            <a href="/2017/11/09/timewait/" class="post-title-link" itemprop="url">TIME_WAIT状态实验分析</a>
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2017-11-09 23:03:34" itemprop="dateCreated datePublished" datetime="2017-11-09T23:03:34+08:00">2017-11-09</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="fa fa-calendar-check-o"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2022-07-05 23:34:42" itemprop="dateModified" datetime="2022-07-05T23:34:42+08:00">2022-07-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="fa fa-folder-o"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Network/" itemprop="url" rel="index">
-                    <span itemprop="name">Network</span>
-                  </a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>TIME_WAIT是排查TCP连接问题经常遇到的一种TCP状态。首先我们来看TIME_WAIT状态是如何产生的。TCP关闭连接的状态变化图如下:</p>
-<img src="/images/2017-11-09/1.png" class="">
-
-<p>可以看到，主动关闭连接的一端在发送最后一个<code>ACK</code>后进入TIME_WAIT状态。TIME_WAIT状态会持续2倍的MSL(Maximum Segment Lifetime)，MSL是指一个TCP分段在网络上存在的最大时间，因而TIME_WAIT状态也被称为<code>2MSL</code>状态。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/11/09/timewait/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
   </div>
 
   
@@ -1121,7 +1121,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">138</span>
+          <span class="site-state-item-count">139</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
