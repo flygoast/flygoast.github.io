@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="最近CentOS7服务器上遇到一个系统崩溃: 12345678910111213141516171819202122232425262728293031323334353637383940[92957.332974] BUG: unable to handle kernel NULL pointer dereference at 0000000000000a30[92957.332981] IP:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nf_ct_deliver_cached_events崩溃分析">
+<meta property="og:url" content="http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="最近CentOS7服务器上遇到一个系统崩溃: 12345678910111213141516171819202122232425262728293031323334353637383940[92957.332974] BUG: unable to handle kernel NULL pointer dereference at 0000000000000a30[92957.332981] IP:">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-06-25/1.png">
+<meta property="article:published_time" content="2022-06-25T10:20:44.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.501Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-06-25/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>nf_ct_deliver_cached_events崩溃分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/06/25/nf-ct-deliver-cached-events/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nf_ct_deliver_cached_events崩溃分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-06-25 18:20:44" itemprop="dateCreated datePublished" datetime="2022-06-25T18:20:44+08:00">2022-06-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>最近<code>CentOS7</code>服务器上遇到一个系统崩溃:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">[92957.332974] BUG: unable to handle kernel NULL pointer dereference at 0000000000000a30</span><br><span class="line">[92957.332981] IP: [&lt;ffffffffc086077d&gt;] nf_ct_deliver_cached_events+0x2d/0x110 [nf_conntrack]</span><br><span class="line"></span><br><span class="line">......</span><br><span class="line"></span><br><span class="line">[92957.333112] CPU: 1 PID: 5027 Comm: Verdict3 Kdump: loaded Tainted: G           OE  ------------ T 3.10.0-1160.el7.x86_64 #1</span><br><span class="line">[92957.333114] Hardware name: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 12/12/2018</span><br><span class="line">[92957.333116] task: ffff893cad135280 ti: ffff893c4f524000 task.ti: ffff893c4f524000</span><br><span class="line">[92957.333118] RIP: 0010:[&lt;ffffffffc086077d&gt;]  [&lt;ffffffffc086077d&gt;] nf_ct_deliver_cached_events+0x2d/0x110 [nf_conntrack]</span><br><span class="line">[92957.333125] RSP: 0018:ffff893c4f527810  EFLAGS: 00010246</span><br><span class="line">[92957.333127] RAX: 0000000000000000 RBX: ffff893ca41e5140 RCX: ffffffffa035de80</span><br><span class="line">[92957.333128] RDX: ffff893c4f527fd8 RSI: 0000000000000200 RDI: ffff893ca41e5140</span><br><span class="line">[92957.333130] RBP: ffff893c4f527850 R08: 0000000000000000 R09: ffff893ca41e5178</span><br><span class="line">[92957.333131] R10: 0000000000000001 R11: ffff893ca41e5140 R12: ffff893ca41e5140</span><br><span class="line">[92957.333132] R13: ffff893c9491a500 R14: ffffffffa0367e40 R15: 0000000000000000</span><br><span class="line">[92957.333135] FS:  00007fbda1d78700(0000) GS:ffff893d3fd00000(0000) knlGS:0000000000000000</span><br><span class="line">[92957.333137] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033</span><br><span class="line">[92957.333138] CR2: 0000000000000a30 CR3: 000000007fda4000 CR4: 00000000001607e0</span><br><span class="line">[92957.333202] Call Trace:</span><br><span class="line">[92957.333221]  [&lt;ffffffffc08372ce&gt;] ipv4_confirm+0x4e/0x100 [nf_conntrack_ipv4]</span><br><span class="line">[92957.333227]  [&lt;ffffffff9fc94e38&gt;] nf_iterate+0x98/0xe0</span><br><span class="line">[92957.333231]  [&lt;ffffffff9fc96240&gt;] nf_reinject+0x160/0x1b0</span><br><span class="line">[92957.333239]  [&lt;ffffffffc0a48566&gt;] nfqnl_recv_verdict+0x216/0x310 [nfnetlink_queue]</span><br><span class="line">[92957.333244]  [&lt;ffffffff9f9b4716&gt;] ? nla_parse+0xb6/0x120</span><br><span class="line">[92957.333247]  [&lt;ffffffffc09b03a2&gt;] nfnetlink_rcv_msg+0x162/0x270 [nfnetlink]</span><br><span class="line">[92957.333251]  [&lt;ffffffffc09b0240&gt;] ? nfnetlink_net_exit_batch+0x70/0x70 [nfnetlink]</span><br><span class="line">[92957.333254]  [&lt;ffffffff9fc9249b&gt;] netlink_rcv_skb+0xab/0xc0</span><br><span class="line">[92957.333257]  [&lt;ffffffffc09b089f&gt;] nfnetlink_rcv+0x28f/0x575 [nfnetlink]</span><br><span class="line">[92957.333260]  [&lt;ffffffff9fc90773&gt;] ? __netlink_lookup+0xd3/0x130</span><br><span class="line">[92957.333263]  [&lt;ffffffff9fc91e20&gt;] netlink_unicast+0x170/0x210</span><br><span class="line">[92957.333267]  [&lt;ffffffff9f99ca72&gt;] ? memcpy_fromiovec+0x62/0xb0</span><br><span class="line">[92957.333269]  [&lt;ffffffff9fc921c8&gt;] netlink_sendmsg+0x308/0x420</span><br><span class="line">[92957.333272]  [&lt;ffffffff9fc343a6&gt;] sock_sendmsg+0xb6/0xf0</span><br><span class="line">[92957.333277]  [&lt;ffffffff9fd86c8f&gt;] ? __schedule+0x3af/0x860</span><br><span class="line">[92957.333279]  [&lt;ffffffff9fc35269&gt;] ___sys_sendmsg+0x3e9/0x400</span><br><span class="line">[92957.333284]  [&lt;ffffffff9f712040&gt;] ? futex_wake+0x90/0x180</span><br><span class="line">[92957.333287]  [&lt;ffffffff9f714d2a&gt;] ? do_futex+0x12a/0x5a0</span><br><span class="line">[92957.333289]  [&lt;ffffffff9fc36921&gt;] __sys_sendmsg+0x51/0x90</span><br><span class="line">[92957.333292]  [&lt;ffffffff9fc36972&gt;] SyS_sendmsg+0x12/0x20</span><br><span class="line">[92957.333296]  [&lt;ffffffff9fd93f92&gt;] system_call_fastpath+0x25/0x2a</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>使用<code>crash</code>工具进行分析，查看调用栈:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; bt</span><br><span class="line">PID: 5027   TASK: ffff893cad135280  CPU: 1   COMMAND: &quot;Verdict3&quot;</span><br><span class="line"> #0 [ffff893c4f527488] machine_kexec at ffffffff9f666294</span><br><span class="line"> #1 [ffff893c4f5274e8] __crash_kexec at ffffffff9f722562</span><br><span class="line"> #2 [ffff893c4f5275b8] crash_kexec at ffffffff9f722650</span><br><span class="line"> #3 [ffff893c4f5275d0] oops_end at ffffffff9fd8b798</span><br><span class="line"> #4 [ffff893c4f5275f8] no_context at ffffffff9f675d14</span><br><span class="line"> #5 [ffff893c4f527648] __bad_area_nosemaphore at ffffffff9f675fe2</span><br><span class="line"> #6 [ffff893c4f527698] bad_area at ffffffff9fd7a058</span><br><span class="line"> #7 [ffff893c4f5276c0] __do_page_fault at ffffffff9fd8e8b7</span><br><span class="line"> #8 [ffff893c4f527730] do_page_fault at ffffffff9fd8e975</span><br><span class="line"> #9 [ffff893c4f527760] page_fault at ffffffff9fd8a778</span><br><span class="line">    [exception RIP: nf_ct_deliver_cached_events+45]</span><br><span class="line">    RIP: ffffffffc086077d  RSP: ffff893c4f527810  RFLAGS: 00010246</span><br><span class="line">    RAX: 0000000000000000  RBX: ffff893ca41e5140  RCX: ffffffffa035de80</span><br><span class="line">    RDX: ffff893c4f527fd8  RSI: 0000000000000200  RDI: ffff893ca41e5140</span><br><span class="line">    RBP: ffff893c4f527850   R8: 0000000000000000   R9: ffff893ca41e5178</span><br><span class="line">    R10: 0000000000000001  R11: ffff893ca41e5140  R12: ffff893ca41e5140</span><br><span class="line">    R13: ffff893c9491a500  R14: ffffffffa0367e40  R15: 0000000000000000</span><br><span class="line">    ORIG_RAX: ffffffffffffffff  CS: 0010  SS: 0018</span><br><span class="line">#10 [ffff893c4f527858] ipv4_confirm at ffffffffc08372ce [nf_conntrack_ipv4]</span><br><span class="line">#11 [ffff893c4f527878] nf_iterate at ffffffff9fc94e38</span><br><span class="line">#12 [ffff893c4f5278b8] nf_reinject at ffffffff9fc96240</span><br><span class="line">#13 [ffff893c4f5278f8] nfqnl_recv_verdict at ffffffffc0a48566 [nfnetlink_queue]</span><br><span class="line">#14 [ffff893c4f527960] nfnetlink_rcv_msg at ffffffffc09b03a2 [nfnetlink]</span><br><span class="line">#15 [ffff893c4f527a60] netlink_rcv_skb at ffffffff9fc9249b</span><br><span class="line">#16 [ffff893c4f527a88] nfnetlink_rcv at ffffffffc09b089f [nfnetlink]</span><br><span class="line">#17 [ffff893c4f527b08] netlink_unicast at ffffffff9fc91e20</span><br><span class="line">#18 [ffff893c4f527b50] netlink_sendmsg at ffffffff9fc921c8</span><br><span class="line">#19 [ffff893c4f527bd8] sock_sendmsg at ffffffff9fc343a6</span><br><span class="line">#20 [ffff893c4f527d38] ___sys_sendmsg at ffffffff9fc35269</span><br><span class="line">#21 [ffff893c4f527ed0] __sys_sendmsg at ffffffff9fc36921</span><br><span class="line">#22 [ffff893c4f527f40] sys_sendmsg at ffffffff9fc36972</span><br><span class="line">#23 [ffff893c4f527f50] system_call_fastpath at ffffffff9fd93f92</span><br><span class="line">    RIP: 00007fbdac77bcbd  RSP: 00007fbda1d76968  RFLAGS: 00000206</span><br><span class="line">    RAX: 000000000000002e  RBX: 0000000000000001  RCX: 00007fbda1d76a00</span><br><span class="line">    RDX: 0000000000000000  RSI: 00007fbda1d76940  RDI: 0000000000000009</span><br><span class="line">    RBP: 00007fbda1d769d0   R8: 0000000000000008   R9: 00007fbdac0b9140</span><br><span class="line">    R10: fffffffffffff8c9  R11: 0000000000000293  R12: 00007fbd8c001b40</span><br><span class="line">    R13: 00007fbda1d769a0  R14: 0000000000000000  R15: 00000000bc0b0c00</span><br><span class="line">    ORIG_RAX: 000000000000002e  CS: 0033  SS: 002b</span><br></pre></td></tr></table></figure>
+
+<p>可以看到崩溃点位置为:<code>nf_ct_deliver_cached_events+45</code>，而该函数位于<code>nf_conntrack</code>模块。</p>
+<p>加载调用栈中所用到的模块:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; mod -s nf_conntrack</span><br><span class="line">     MODULE       NAME                            SIZE  OBJECT FILE</span><br><span class="line">ffffffffc086c960  nf_conntrack                  139264  /usr/lib/debug/usr/lib/modules/3.10.0-1160.el7.x86_64/kernel/net/netfilter/nf_conntrack.ko.debug</span><br><span class="line">crash&gt; mod -s nf_conntrack_ipv4</span><br><span class="line">     MODULE       NAME                            SIZE  OBJECT FILE</span><br><span class="line">ffffffffc08396c0  nf_conntrack_ipv4              15053  /usr/lib/debug/usr/lib/modules/3.10.0-1160.el7.x86_64/kernel/net/ipv4/netfilter/nf_conntrack_ipv4.ko.debug</span><br><span class="line">crash&gt; mod -s nfnetlink_queue</span><br><span class="line">     MODULE       NAME                            SIZE  OBJECT FILE</span><br><span class="line">ffffffffc0a4a080  nfnetlink_queue                18197  /usr/lib/debug/usr/lib/modules/3.10.0-1160.el7.x86_64/kernel/net/netfilter/nfnetlink_queue.ko.debug</span><br><span class="line">crash&gt; mod -s nfnetlink</span><br><span class="line">     MODULE       NAME                            SIZE  OBJECT FILE</span><br><span class="line">ffffffffc09b2060  nfnetlink                      14519  /usr/lib/debug/usr/lib/modules/3.10.0-1160.el7.x86_64/kernel/net/netfilter/nfnetlink.ko.debug</span><br></pre></td></tr></table></figure>
+
+<p>反汇编<code>nf_ct_deliver_cached_events</code>函数:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; dis nf_ct_deliver_cached_events</span><br><span class="line">0xffffffffc0860750 &lt;nf_ct_deliver_cached_events&gt;:       nopl   0x0(%rax,%rax,1) [FTRACE NOP]</span><br><span class="line">0xffffffffc0860755 &lt;nf_ct_deliver_cached_events+5&gt;:     push   %rbp</span><br><span class="line">0xffffffffc0860756 &lt;nf_ct_deliver_cached_events+6&gt;:     mov    %rsp,%rbp</span><br><span class="line">0xffffffffc0860759 &lt;nf_ct_deliver_cached_events+9&gt;:     push   %r14</span><br><span class="line">0xffffffffc086075b &lt;nf_ct_deliver_cached_events+11&gt;:    push   %r13</span><br><span class="line">0xffffffffc086075d &lt;nf_ct_deliver_cached_events+13&gt;:    push   %r12</span><br><span class="line">0xffffffffc086075f &lt;nf_ct_deliver_cached_events+15&gt;:    push   %rbx</span><br><span class="line">0xffffffffc0860760 &lt;nf_ct_deliver_cached_events+16&gt;:    mov    %rdi,%rbx</span><br><span class="line">0xffffffffc0860763 &lt;nf_ct_deliver_cached_events+19&gt;:    sub    $0x20,%rsp</span><br><span class="line">0xffffffffc0860767 &lt;nf_ct_deliver_cached_events+23&gt;:    mov    %gs:0x28,%rax</span><br><span class="line">0xffffffffc0860770 &lt;nf_ct_deliver_cached_events+32&gt;:    mov    %rax,-0x28(%rbp)</span><br><span class="line">0xffffffffc0860774 &lt;nf_ct_deliver_cached_events+36&gt;:    xor    %eax,%eax</span><br><span class="line">0xffffffffc0860776 &lt;nf_ct_deliver_cached_events+38&gt;:    mov    0xf0(%rdi),%rax</span><br><span class="line">0xffffffffc086077d &lt;nf_ct_deliver_cached_events+45&gt;:    mov    0xa30(%rax),%rdx</span><br><span class="line">0xffffffffc0860784 &lt;nf_ct_deliver_cached_events+52&gt;:    test   %rdx,%rdx</span><br><span class="line">0xffffffffc0860787 &lt;nf_ct_deliver_cached_events+55&gt;:    je     0xffffffffc0860810 &lt;nf_ct_deliver_cached_events+192&gt;</span><br><span class="line">0xffffffffc086078d &lt;nf_ct_deliver_cached_events+61&gt;:    mov    0xe8(%rdi),%rax</span><br><span class="line">0xffffffffc0860794 &lt;nf_ct_deliver_cached_events+68&gt;:    test   %rax,%rax</span><br></pre></td></tr></table></figure>
+
+<p>可以看到崩溃点<code>nf_ct_deliver_cached_events+45</code>执行的指令为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">0xffffffffc086077d &lt;nf_ct_deliver_cached_events+45&gt;:    mov    0xa30(%rax),%rdx</span><br></pre></td></tr></table></figure>
+<p>而查看<code>bt</code>输出可以知道崩溃时<code>%rax</code>寄存器的值为<code>0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">RAX: 0000000000000000  RBX: ffff893ca41e5140  RCX: ffffffffa035de80</span><br></pre></td></tr></table></figure>
+
+<p>指令表示从为<code>%rax</code>+<code>0xa30</code>的地址取值存入<code>%rdx</code>, 而<code>0 + 0xa30</code>的地址为<code>0000000000000a30</code><br>因而发生空指针访问错误:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">unable to handle kernel NULL pointer dereference at 0000000000000a30</span><br></pre></td></tr></table></figure>
+
+<p>再向上查看执行的指令，<code>%rax</code>的值来自<code>0xf0(%rdi)</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">0xffffffffc0860776 &lt;nf_ct_deliver_cached_events+38&gt;:    mov    0xf0(%rdi),%rax</span><br></pre></td></tr></table></figure>
+
+<p>而<code>%rdi</code>寄存器的值为<code>ffff893ca41e5140</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">RDX: ffff893c4f527fd8  RSI: 0000000000000200  RDI: ffff893ca41e5140</span><br></pre></td></tr></table></figure>
+
+<p>通过指令<code>dis -l</code>反汇编<code>nf_ct_deliver_cached_events</code>函数和源码可以确认<code>%rdi</code>寄存器存储的结构为<code>struct nf_conn</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">/usr/src/debug/kernel-3.10.0-1160.el7/linux-3.10.0-1160.el7.x86_64/include/net/netfilter/nf_conntrack.h: 144</span><br><span class="line">0xffffffffc0860776 &lt;nf_ct_deliver_cached_events+38&gt;:    mov    0xf0(%rdi),%rax</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="keyword">struct</span> net *<span class="title function_">nf_ct_net</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> nf_conn *ct)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="keyword">return</span> read_pnet(&amp;ct-&gt;ct_net);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -xo nf_conn</span><br><span class="line">struct nf_conn &#123;</span><br><span class="line">    [0x0] struct nf_conntrack ct_general;</span><br><span class="line">    [0x4] spinlock_t lock;</span><br><span class="line">    [0x8] u16 cpu;</span><br><span class="line">   [0x10] struct nf_conntrack_tuple_hash tuplehash[2];</span><br><span class="line">   [0x80] unsigned long status;</span><br><span class="line">   [0x88] struct nf_conn *master;</span><br><span class="line">   [0x90] struct timer_list timeout;</span><br><span class="line">   [0xe0] u_int32_t mark;</span><br><span class="line">   [0xe4] u_int32_t secmark;</span><br><span class="line">   [0xe8] struct nf_ct_ext *ext;</span><br><span class="line">   [0xf0] struct net *ct_net;</span><br><span class="line">   [0xf8] union nf_conntrack_proto proto;</span><br><span class="line">&#125;</span><br><span class="line">SIZE: 0x138</span><br></pre></td></tr></table></figure>
+<p><code>0xf0</code>的偏移为<code>ct_net</code>成员，<code>0xf0(%rdi)</code>是在读取<code>struct nf_conn</code>的<code>ct_net</code>成员。</p>
+<p>查看该成员, 发现不是<code>0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -x nf_conn.ct_net ffff893ca41e5140</span><br><span class="line">  ct_net = 0xffffffffa0315e40</span><br></pre></td></tr></table></figure>
+
+<p>再查看<code>init_net</code>的地址, 发现实际值和正常情况<code>init_net</code>的地址是匹配的:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; px &amp;init_net</span><br><span class="line">$1 = (struct net *) 0xffffffffa0315e40</span><br></pre></td></tr></table></figure>
+
+<p>因而推测，在该<code>CPU core</code>上崩溃时，该结构在被其他<code>cpu core</code>使用写成了正常值。</p>
+<p>阅读源码知道，<code>nf_conn</code>结构是从<code>SLAB</code>内存中分配的:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">net-&gt;ct.slabname = kasprintf(GFP_KERNEL, <span class="string">&quot;nf_conntrack_%llu&quot;</span>,</span><br><span class="line">                        (u64)atomic64_inc_return(&amp;unique_id));</span><br><span class="line"><span class="keyword">if</span> (!net-&gt;ct.slabname)</span><br><span class="line">        <span class="keyword">goto</span> err_slabname;</span><br><span class="line"></span><br><span class="line">net-&gt;ct.nf_conntrack_cachep = kmem_cache_create(net-&gt;ct.slabname,</span><br><span class="line">                                                <span class="keyword">sizeof</span>(<span class="keyword">struct</span> nf_conn), <span class="number">0</span>,</span><br><span class="line">                                                SLAB_DESTROY_BY_RCU, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+
+<p>而重用该结构时，会调用<code>__nf_conntrack_alloc</code>函数, 该函数会将<code>struct nf_conn</code>结构的成员变量<code>tuplehash</code>之后的<code>status</code>和<code>proto</code>之间的位置置为<code>0</code>，而<code>ct_net</code>正好位于该区间。之后会再次初始化<code>ct_net</code>为正常的<code>net</code>值:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Do not use kmem_cache_zalloc(), as this cache uses</span></span><br><span class="line"><span class="comment"> * SLAB_DESTROY_BY_RCU.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">ct = kmem_cache_alloc(net-&gt;ct.nf_conntrack_cachep, gfp);</span><br><span class="line"><span class="keyword">if</span> (ct == <span class="literal">NULL</span>)</span><br><span class="line">        <span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Let ct-&gt;tuplehash[IP_CT_DIR_ORIGINAL].hnnode.next</span></span><br><span class="line"><span class="comment"> * and ct-&gt;tuplehash[IP_CT_DIR_REPLY].hnnode.next unchanged.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="built_in">memset</span>(&amp;ct-&gt;tuplehash[IP_CT_DIR_MAX], <span class="number">0</span>,</span><br><span class="line">       offsetof(<span class="keyword">struct</span> nf_conn, proto) -</span><br><span class="line">       offsetof(<span class="keyword">struct</span> nf_conn, tuplehash[IP_CT_DIR_MAX]));</span><br><span class="line">spin_lock_init(&amp;ct-&gt;lock);</span><br><span class="line">ct-&gt;tuplehash[IP_CT_DIR_ORIGINAL].tuple = *orig;</span><br><span class="line">ct-&gt;tuplehash[IP_CT_DIR_ORIGINAL].hnnode.pprev = <span class="literal">NULL</span>;</span><br><span class="line">ct-&gt;tuplehash[IP_CT_DIR_REPLY].tuple = *repl;</span><br><span class="line"><span class="comment">/* save hash for reusing when confirming */</span></span><br><span class="line">*(<span class="type">unsigned</span> <span class="type">long</span> *)(&amp;ct-&gt;tuplehash[IP_CT_DIR_REPLY].hnnode.pprev) = hash;</span><br><span class="line"><span class="comment">/* Don&#x27;t set timer yet: wait for confirmation */</span></span><br><span class="line">setup_timer(&amp;ct-&gt;timeout, death_by_timeout, (<span class="type">unsigned</span> <span class="type">long</span>)ct);</span><br><span class="line">write_pnet(&amp;ct-&gt;ct_net, net);</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，如果一个<code>CPU core</code>正常分配该<code>struct nf_conn</code>结构执行到将<code>memset</code>操作，而另一个<code>CPU core</code>上恰好执行读取<code>ct_net</code>的操作，就会读取<code>NULL</code>值。因而推测崩溃发生时，这个<code>struct nf_conn</code>结构已经在另一个<code>CPU core</code>上被重用。</p>
+<p>接下来开始分析崩溃时，<code>sk_buff</code>数据包内容来分析当时的流量。最后崩溃时的寄存器和栈中并没有相应<code>sk_buff</code>的地址，因而需要在层层栈桢中去追溯<code>sk_buff</code>的地址。因为<code>x86_64</code>体系结构上在前<code>6</code>个参数都是通过寄存器(参数从左到右放入寄存器:<code>rdi</code>, <code>rsi</code>, <code>rdx</code>, <code>rcx</code>, <code>r8</code>, <code>r9</code>)进行传参，因而找某个局部变量并不是非常简单。从<code>vmcore</code>文件中分析栈中局部变量可以参考这篇文章:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://blog.chinaunix.net/uid-14528823-id-4358785.html">http://blog.chinaunix.net/uid-14528823-id-4358785.html</a></li>
+</ul>
+<p>文章中提到的主要思路就是依赖变量和<code>%rbp</code>寄存器的关系进行查找。因为栈上的变量一般都是以<code>%rbp</code>为基址进行表示，如<code>0xf0(%rbp)</code>。而每次函数调用时都会将之前的<code>%rbp</code>寄存器进行压栈。我们找到相应栈桢<code>%rbp</code>的值，再根据变量的偏移量就可以找到相应的内存地址。</p>
+<p>关于栈桢可以参考这篇文章:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/unwinding-stack-frame-pointers-and-orc">https://blogs.oracle.com/linux/post/unwinding-stack-frame-pointers-and-orc</a></li>
+</ul>
+<p>我这里补充一种思路，就是根据函数中使用的某个寄存器来查找。当某个寄存器在本级函数使用，在下级函数中也使用到，因为内容有被污染，因而需要在函数头部压栈进行保存，返回前再出栈恢复内容。</p>
+<p>在这个崩溃栈中，<code>nf_reinject</code>调用了<code>nf_iterate</code>。</p>
+<p>反汇编<code>nf_reinject</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">0xffffffff9fc96210 &lt;nf_reinject+304&gt;:   lea    0x28(%rbx),%r14</span><br><span class="line">0xffffffff9fc96214 &lt;nf_reinject+308&gt;:   movl   $0x80000000,0x34(%rbx)</span><br><span class="line">0xffffffff9fc9621b &lt;nf_reinject+315&gt;:   movzbl 0x38(%rbx),%edx</span><br><span class="line">0xffffffff9fc9621f &lt;nf_reinject+319&gt;:   mov    0x30(%rbx),%eax</span><br><span class="line">0xffffffff9fc96222 &lt;nf_reinject+322&gt;:   lea    -0x30(%rbp),%rcx</span><br><span class="line">0xffffffff9fc96226 &lt;nf_reinject+326&gt;:   mov    %r13,%rsi</span><br><span class="line">0xffffffff9fc96229 &lt;nf_reinject+329&gt;:   lea    (%rax,%rdx,8),%rdi</span><br><span class="line">0xffffffff9fc9622d &lt;nf_reinject+333&gt;:   mov    %r14,%rdx</span><br><span class="line">0xffffffff9fc96230 &lt;nf_reinject+336&gt;:   shl    $0x4,%rdi</span><br><span class="line">0xffffffff9fc96234 &lt;nf_reinject+340&gt;:   add    $0xffffffffa0367d00,%rdi</span><br><span class="line">0xffffffff9fc9623b &lt;nf_reinject+347&gt;:   callq  0xffffffff9fc94da0 &lt;nf_iterate&gt;</span><br></pre></td></tr></table></figure>
+
+<p><code>nf_iterate</code>原型为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">unsigned</span> <span class="type">int</span> <span class="title function_">nf_iterate</span><span class="params">(<span class="keyword">struct</span> list_head *head,</span></span><br><span class="line"><span class="params">                        <span class="keyword">struct</span> sk_buff *skb,</span></span><br><span class="line"><span class="params">                        <span class="keyword">struct</span> nf_hook_state *state,</span></span><br><span class="line"><span class="params">                        <span class="keyword">struct</span> nf_hook_ops **elemp)</span></span><br></pre></td></tr></table></figure>
+
+<p>第二个参数为<code>sk_buff</code>, 而第二个参数使用<code>%rsi</code>寄存器传递, 根据前边执行的指令:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">0xffffffff9fc96226 &lt;nf_reinject+326&gt;:   mov    %r13,%rsi</span><br></pre></td></tr></table></figure>
+<p>可以知道<code>%r13</code>中的值就是<code>sk_buff</code>的地址。</p>
+<p>反汇编<code>nf_iterate</code>函数:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">0xffffffff9fc94da0 &lt;nf_iterate&gt;:        nopl   0x0(%rax,%rax,1) [FTRACE NOP]</span><br><span class="line">0xffffffff9fc94da5 &lt;nf_iterate+5&gt;:      push   %rbp</span><br><span class="line">0xffffffff9fc94da6 &lt;nf_iterate+6&gt;:      mov    %rsp,%rbp</span><br><span class="line">0xffffffff9fc94da9 &lt;nf_iterate+9&gt;:      push   %r14</span><br><span class="line">0xffffffff9fc94dab &lt;nf_iterate+11&gt;:     mov    %rdi,%r14</span><br><span class="line">0xffffffff9fc94dae &lt;nf_iterate+14&gt;:     push   %r13</span><br><span class="line">0xffffffff9fc94db0 &lt;nf_iterate+16&gt;:     mov    %rsi,%r13</span><br><span class="line">0xffffffff9fc94db3 &lt;nf_iterate+19&gt;:     push   %r12</span><br><span class="line">0xffffffff9fc94db5 &lt;nf_iterate+21&gt;:     mov    %rcx,%r12</span><br><span class="line">0xffffffff9fc94db8 &lt;nf_iterate+24&gt;:     push   %rbx</span><br><span class="line">0xffffffff9fc94db9 &lt;nf_iterate+25&gt;:     mov    %rdx,%rbx</span><br><span class="line">0xffffffff9fc94dbc &lt;nf_iterate+28&gt;:     sub    $0x10,%rsp</span><br></pre></td></tr></table></figure>
+
+<p>可以看到在<code>nf_iterate</code>函数头部对<code>%r13</code>进行了压栈，因为顺序为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">push rbp</span><br><span class="line">push r14</span><br><span class="line">push r13</span><br></pre></td></tr></table></figure>
+<p>因而<code>%r13</code>的位置就是比<code>rbp</code>低<code>16</code>字节的位置。</p>
+<p>再使用<code>bt -Fsf</code>查看函数栈桢:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">#11 [ffff893c4f527878] nf_iterate+152 at ffffffff9fc94e38</span><br><span class="line">    ffff893c4f527880: ipv4_conntrack_ops+288 0000000008d72c81</span><br><span class="line">    ffff893c4f527890: [kmalloc-128]    0000000000000001</span><br><span class="line">    ffff893c4f5278a0: [kmalloc-256]    [kmalloc-128]</span><br><span class="line">    ffff893c4f5278b0: ffff893c4f5278f0 nf_reinject+352</span><br><span class="line">#12 [ffff893c4f5278b8] nf_reinject+352 at ffffffff9fc96240</span><br><span class="line">    ffff893c4f5278c0: ipv4_conntrack_ops+288 0000000008d72c81</span><br><span class="line">    ffff893c4f5278d0: ffff893c4f527968 0000000000000001</span><br><span class="line">    ffff893c4f5278e0: [kmalloc-96]     [kmalloc-128]</span><br><span class="line">    ffff893c4f5278f0: ffff893c4f527958 nfqnl_recv_verdict+534</span><br></pre></td></tr></table></figure>
+
+<p><code>nf_reinject</code>的返回地址<code>nf_reinject+352</code>位于<code>ffff893c4f5278b8</code>, 因而<code>%r13</code>被压栈在<code>ffff893c4f5278a0</code>。</p>
+<p>读取内容:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; rd ffff893c4f5278a0</span><br><span class="line">ffff893c4f5278a0:  ffff893c9491a500                    ....&lt;...</span><br></pre></td></tr></table></figure>
+
+<p>因而<code>sk_buff</code>的地址为:<code>ffff893c9491a500</code>。</p>
+<p>通过设备名称校验一下地址是否正确:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct sk_buff.dev ffff893c9491a500</span><br><span class="line">  dev = 0xffff893c358b8000</span><br><span class="line">crash&gt; struct net_device.name 0xffff893c358b8000</span><br><span class="line">  name = &quot;ens192\000\000\000\000\000\000\000\000\000&quot;</span><br></pre></td></tr></table></figure>
+<p>设备名称<code>ens192</code>正常，地址应该正确。</p>
+<p>查看<code>sk_buff</code>关联的<code>struct nf_conn</code>结构:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct sk_buff.nfct ffff893c9491a500</span><br><span class="line">  nfct = 0xffff893c7fc96b40</span><br></pre></td></tr></table></figure>
+
+<p>发现<code>sk_buff</code>关联的<code>nf_conn</code>为<code>0xffff893c7fc96b40</code>, 这和崩溃时的<code>ffff893ca41e5140</code>并不一致。</p>
+<p>很令人疑惑，怀疑在调用过程中有地方修改了<code>sk_buff.nfct</code>的值。</p>
+<p>通过查看源码，发现调用链上的确有一处地方进行了修改。</p>
+<p><code>nf_conntrack_confirm</code>函数会调用<code>nf_ct_deliver_cached_events</code>函数，传递的参数<code>ct</code>是在函数开始时就已经从<code>sk_buff</code>中通过<code>skb_nfct</code>取出的:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Confirm a connection: returns NF_DROP if packet must be dropped. */</span></span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">int</span> <span class="title function_">nf_conntrack_confirm</span><span class="params">(<span class="keyword">struct</span> sk_buff *skb)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn</span> *<span class="title">ct</span> =</span> (<span class="keyword">struct</span> nf_conn *)skb_nfct(skb);</span><br><span class="line">        <span class="type">int</span> ret = NF_ACCEPT;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ct &amp;&amp; !nf_ct_is_untracked(ct)) &#123;</span><br><span class="line">                <span class="keyword">if</span> (!nf_ct_is_confirmed(ct))</span><br><span class="line">                        ret = __nf_conntrack_confirm(skb);</span><br><span class="line">                <span class="keyword">if</span> (likely(ret == NF_ACCEPT))</span><br><span class="line">                        nf_ct_deliver_cached_events(ct);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而<code>__nf_conntrack_confirm</code>函数可能会调用<code>nf_ct_resolve_clash</code>修改<code>sk_buff.nfct</code>。</p>
+<p>如果是这种情况发生的话，我们在<code>vmcore</code>文件中看到的<code>sk_buff.nfct</code>是已经修改后的值，而崩溃时的<code>ct</code>值则为修改之前的值。应该是之前的<code>struct nf_conn</code>结构被复用恰好出现前边分析的情况引发崩溃。</p>
+<p>查看内核社区这里的代码，发现不久前社区修改了这里:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/commit/56b14ecec97f39118bf85c9ac2438c5a949509ed">https://github.com/torvalds/linux/commit/56b14ecec97f39118bf85c9ac2438c5a949509ed</a></li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">netfilter: conntrack: re-fetch conntrack after insertion</span><br><span class="line">In case the conntrack is clashing, insertion can free skb-&gt;_nfct and</span><br><span class="line">set skb-&gt;_nfct to the already-confirmed entry.</span><br><span class="line"></span><br><span class="line">This wasn&#x27;t found before because the conntrack entry and the extension</span><br><span class="line">space used to free&#x27;d after an rcu grace period, plus the race needs</span><br><span class="line">events enabled to trigger.</span><br></pre></td></tr></table></figure>
+
+<p>感觉看到了希望，大概率就是这里的问题。但社区<code>commit</code>里没有提到这会引发崩溃。因而还在怀疑是否是我们的内核模块额外有其他影响才会引发崩溃。</p>
+<p>在<code>Google</code>搜索找到一个相同的崩溃:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://community.nethserver.org/t/server-freeze-kernel-error/19929">https://community.nethserver.org/t/server-freeze-kernel-error/19929</a></li>
+</ul>
+<p>它的情况是关闭了<code>Suricata</code>之后崩溃不再复现了。<code>Suricata</code>使用<code>NFQUEUE</code>机制往用户态上送数据包。我们的业务模块也使用<code>NFQUEUE</code>机制将数据包送到用户态进行分析然后再将裁决结果返回给内核进行放行。完全一致的机制，因而怀疑崩溃发生和<code>NFQUEUE</code>机制有关系。</p>
+<p>接下来就要分析什么场景下会导致崩溃，这需要对<code>conntrack</code>实现有所了解。</p>
+<p><code>conntrack</code>具体实现可以参考这两篇文章，写的非常详细:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://thermalcircle.de/doku.php?id=blog:linux:connection_tracking_1_modules_and_hooks">https://thermalcircle.de/doku.php?id=blog:linux:connection_tracking_1_modules_and_hooks</a></li>
+<li><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/conntrack-design-and-implementation/">https://arthurchiao.art/blog/conntrack-design-and-implementation/</a></li>
+</ul>
+<p><code>sk_buff</code>结构关联<code>struct nf_conn</code>结构是根据从<code>sk_buff</code>中获取的<code>tuple</code>信息从全局的哈希表中进行查找，而<code>struct nf_conn</code>结构从创建到插入哈希表分为两步:</p>
+<ol>
+<li>在<code>PRE_ROUTING</code>和<code>LOCAL_OUT</code>阶段，主要是调用<code>ipv4_conntrack_in</code>函数根据<code>tuple</code>从全局哈希表中查找是否已经有相应的<code>struct nf_conn</code>结构。如果没有，会创建一个<code>struct nf_conn</code>结构插入<code>unconfirmed list</code>链表结构。</li>
+<li>在<code>LOCAL_IN</code>和<code>POST_ROUTING</code>阶段，调用<code>ipv4_confirm</code>函数将<code>struct nf_conn</code>结构从<code>unconfirmed list</code>链表中插入到哈希表。</li>
+</ol>
+<p>在第二个阶段，在将<code>struct nf_conn</code>结构插入哈希表前还要在哈希表进行查找是否已有相同<code>tuple</code>信息的结构。如果已有，则说明相同的<code>conntrack</code>有了两个<code>nf_conn</code>结构，需要处理这种冲突，具体的实现就是函数<code>nf_ct_resolve_clash</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Resolve race on insertion if this protocol allows this. */</span></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">nf_ct_resolve_clash</span><span class="params">(<span class="keyword">struct</span> net *net, <span class="keyword">struct</span> sk_buff *skb,</span></span><br><span class="line"><span class="params">                               <span class="keyword">enum</span> ip_conntrack_info ctinfo,</span></span><br><span class="line"><span class="params">                               <span class="keyword">struct</span> nf_conntrack_tuple_hash *h)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="comment">/* This is the conntrack entry already in hashes that won race. */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn</span> *<span class="title">ct</span> =</span> nf_ct_tuplehash_to_ctrack(h);</span><br><span class="line">        <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">nf_conntrack_l4proto</span> *<span class="title">l4proto</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">enum</span> <span class="title">ip_conntrack_info</span> <span class="title">oldinfo</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn</span> *<span class="title">loser_ct</span> =</span> nf_ct_get(skb, &amp;oldinfo);</span><br><span class="line"></span><br><span class="line">        l4proto = __nf_ct_l4proto_find(nf_ct_l3num(ct), nf_ct_protonum(ct));</span><br><span class="line">        <span class="keyword">if</span> (l4proto-&gt;allow_clash &amp;&amp;</span><br><span class="line">            !nf_ct_is_dying(ct) &amp;&amp;</span><br><span class="line">            atomic_inc_not_zero(&amp;ct-&gt;ct_general.use)) &#123;</span><br><span class="line">                <span class="keyword">if</span> (((ct-&gt;status &amp; IPS_NAT_DONE_MASK) == <span class="number">0</span>) ||</span><br><span class="line">                    nf_ct_match(ct, loser_ct)) &#123;</span><br><span class="line">                        nf_ct_acct_merge(ct, ctinfo, loser_ct);</span><br><span class="line">                        nf_conntrack_put(&amp;loser_ct-&gt;ct_general);</span><br><span class="line">                        nf_ct_set(skb, ct, oldinfo);</span><br><span class="line">                        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">                &#125;</span><br><span class="line">                nf_ct_put(ct);</span><br><span class="line">        &#125;</span><br><span class="line">        NF_CT_STAT_INC(net, drop);</span><br><span class="line">        <span class="keyword">return</span> NF_DROP;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>处理的过程就是先调用<code>nf_conntrack_put</code>, 然后将<code>sk_buff.nfct</code>指向之前已经在哈希表中的<code>nf_conn</code>结构。</p>
+<p>后插入的这个<code>nf_conn</code>结构，源码中叫做<code>loser_ct</code>。<code>loser_ct</code>因为只有这一个<code>sk_buff</code>在关联，因而引用计数为<code>1</code>, 在函数<code>nf_conntrack_put</code>中引用计数减<code>1</code>后变为<code>0</code>, 从而调用<code>nf_conntrack_destroy(nfct)</code>销毁了<code>nf_conn</code>结构:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">nf_conntrack_destroy</span><span class="params">(<span class="keyword">struct</span> nf_conntrack *nfct)</span>;</span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">void</span> <span class="title function_">nf_conntrack_put</span><span class="params">(<span class="keyword">struct</span> nf_conntrack *nfct)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="keyword">if</span> (nfct &amp;&amp; atomic_dec_and_test(&amp;nfct-&gt;use))</span><br><span class="line">                nf_conntrack_destroy(nfct);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因而推论更进一步，当发生<code>conntrack</code>冲突时，<code>loser_ct</code>在一个<code>CPU core</code>被释放，而另一个<code>CPU core</code>上复用该<code>nf_conn</code>结构执行到<code>memset</code>的操作。而释放<code>loser_ct</code>的<code>CPU core</code>执行到<code>nf_ct_deliver_cached_events</code>中的<code>nf_ct_net</code>读取<code>nf_conn.ct_net</code>，读取到<code>NULL</code>值。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* deliver cached events and clear cache entry - must be called with locally</span></span><br><span class="line"><span class="comment"> * disabled softirqs */</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">nf_ct_deliver_cached_events</span><span class="params">(<span class="keyword">struct</span> nf_conn *ct)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">net</span> *<span class="title">net</span> =</span> nf_ct_net(ct);</span><br></pre></td></tr></table></figure>
+
+<p>官方修复中提到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">This wasn&#x27;t found before because the conntrack entry and the extension</span><br><span class="line">space used to free&#x27;d after an rcu grace period, plus the race needs</span><br><span class="line">events enabled to trigger.</span><br></pre></td></tr></table></figure>
+<p><code>conntrack entry</code>(就是<code>struct nf_conn</code>)的释放会被推迟一个<code>rcu grace period</code>。</p>
+<p>看上去有点像说明因为<code>SLAB_DESTROY_BY_RCU</code>选项，所以在<code>rcu grace period</code>内结构不会被复用。但我对这里有些不同的理解。<code>conntrack entry</code>的<code>SLAB</code>创建时指定了选项<code>SLAB_DESTROY_BY_RCU</code>, 但这个选项的作用是推迟<code>SLAB</code>内存页释放，而不是推迟<code>object</code>释放。<code>include/linux/slab.h</code>中的注释明确表示<code>object</code>一旦调用<code>kmem_cache_free()</code>，在一个<code>rcu grace period</code>内可以看到<code>object</code>被重用:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * SLAB_DESTROY_BY_RCU - **WARNING** READ THIS!</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * This delays freeing the SLAB page by a grace period, it does _NOT_</span></span><br><span class="line"><span class="comment"> * delay object freeing. This means that if you do kmem_cache_free()</span></span><br><span class="line"><span class="comment"> * that memory location is free to be reused at any time. Thus it may</span></span><br><span class="line"><span class="comment"> * be possible to see another object there in the same RCU grace period.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * This feature only ensures the memory location backing the object</span></span><br><span class="line"><span class="comment"> * stays valid, the trick to using this is relying on an independent</span></span><br><span class="line"><span class="comment"> * object validation pass. Something like:</span></span><br></pre></td></tr></table></figure>
+
+<p>另一个影响崩溃触发可能性的因素是，从<code>nf_ct_resolve_clash()</code>返回到执行<code>nf_ct_deliver_cached_events</code>的时间差和另一个<code>CPU core</code>重用该<code>nf_conn</code>结构的时间谁快谁慢的问题。</p>
+<p>感觉上<code>nf_ct_resolve_clash</code>返回到执行<code>nf_ct_deliver_cached_events</code>应该更快，不太能构成上述的推论条件。</p>
+<p>但查看源码发现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">out:</span><br><span class="line">        nf_ct_add_to_dying_list(ct);</span><br><span class="line">        ret = nf_ct_resolve_clash(net, skb, ctinfo, h);</span><br><span class="line">dying:</span><br><span class="line">        nf_conntrack_double_unlock(hash, reply_hash);</span><br><span class="line">        NF_CT_STAT_INC(net, insert_failed);</span><br><span class="line">        local_bh_enable();</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br></pre></td></tr></table></figure>
+<p><code>nf_ct_resolve_clash</code>返回后<code>__nf_conntrack_confirm</code>函数会调用<code>local_bh_enable</code>, 这会开启软中断，处理软中断的过程会延迟这个<code>CPU core</code>调用<code>nf_ct_deliver_cached_events</code>的时间。</p>
+<p>这样，推论就进一步完整了: 当发生<code>conntrack</code>冲突时，<code>loser_ct</code>在一个<code>CPU core</code>被释放，这时开启并执行软中断延迟一段时间，而另一个<code>CPU core</code>上复用该<code>nf_conn</code>结构执行到<code>memset</code>的操作。而释放<code>loser_ct</code>的<code>CPU core</code>执行到<code>nf_ct_deliver_cached_events</code>中的<code>nf_ct_net</code>读取<code>nf_conn.ct_net</code>，读取到<code>NULL</code>值，引发崩溃，如下图:</p>
+<img src="/images/2022-06-25/1.png" class="">
+
+<p>这时还有一个疑惑，就是<code>conntrack</code>冲突的产生。之前的文章<a href="/2021/12/29/nfqueue-dns/">&lt;&lt;NFQUEUE机制导致DNS请求5秒超时分析&gt;&gt;</a>分析过这个过程。我们的业务逻辑函数运行在<code>LOCAL_IN</code>和<code>POST_ROUTING</code>的最开始执行位置，而<code>ipv4_confirm</code>注册在最后执行的位置。在我们的逻辑里通过<code>NFQUEUE</code>机制上送数据包。在没有我们这个逻辑的场景下，<code>netfilter</code>会直接运行完上述的两个步骤。而我们的<code>NFQUEUE</code>位于两个步骤之间，第一个包创建<code>nf_conn</code>结构并放入<code>unconfirmed list</code>之后被上送用户态。这时第二个包到达，因为第一个包还没有执行<code>confirm</code>过程，全局哈希表中是没有这个<code>nf_conn</code>结构的，因而会再创建一个<code>nf_conn</code>，这样就产生了<code>conntrack</code>冲突。</p>
+<p>当然这种过程适用于<code>UDP</code>，而不适用于<code>TCP</code>，因为<code>TCP</code>第二个包发送要等第一个包的响应。</p>
+<p>我们再次确认一下<code>nf_conn</code>和<code>sk_buff</code>中的数据信息。</p>
+<p>从<code>nf_conn</code>中可以看协议为<code>UDP(0x11)</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -x nf_conn.tuplehash[0].tuple.dst 0xffff893c7fc96b40</span><br><span class="line">  tuplehash[0].tuple.dst = &#123;</span><br><span class="line">    u3 = &#123;</span><br><span class="line">      all = &#123;0x733b4c0a, 0x0, 0x0, 0x0&#125;,</span><br><span class="line">      ip = 0x733b4c0a,</span><br><span class="line">      ip6 = &#123;0x733b4c0a, 0x0, 0x0, 0x0&#125;,</span><br><span class="line">      in = &#123;</span><br><span class="line">        s_addr = 0x733b4c0a</span><br><span class="line">      &#125;,</span><br><span class="line">      in6 = &#123;</span><br><span class="line">        in6_u = &#123;</span><br><span class="line">          u6_addr8 = &quot;\nL;s\000\000\000\000\000\000\000\000\000\000\000&quot;,</span><br><span class="line">          u6_addr16 = &#123;0x4c0a, 0x733b, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0&#125;,</span><br><span class="line">          u6_addr32 = &#123;0x733b4c0a, 0x0, 0x0, 0x0&#125;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;,</span><br><span class="line">    u = &#123;</span><br><span class="line">      all = 0xb512,</span><br><span class="line">      tcp = &#123;</span><br><span class="line">        port = 0xb512</span><br><span class="line">      &#125;,</span><br><span class="line">      udp = &#123;</span><br><span class="line">        port = 0xb512</span><br><span class="line">      &#125;,</span><br><span class="line">      icmp = &#123;</span><br><span class="line">        type = 0x12,</span><br><span class="line">        code = 0xb5</span><br><span class="line">      &#125;,</span><br><span class="line">      dccp = &#123;</span><br><span class="line">        port = 0xb512</span><br><span class="line">      &#125;,</span><br><span class="line">      sctp = &#123;</span><br><span class="line">        port = 0xb512</span><br><span class="line">      &#125;,</span><br><span class="line">      gre = &#123;</span><br><span class="line">        key = 0xb512</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;,</span><br><span class="line">    protonum = 0x11,</span><br><span class="line">    dir = 0x0</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>sk_buff</code>结构也可以确认协议为<code>UDP(0x11)</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -x sk_buff.network_header ffff893c9491a500</span><br><span class="line">  network_header = 0xaa</span><br><span class="line">crash&gt; struct -x sk_buff.head ffff893c9491a500</span><br><span class="line">  head = 0xffff893c80fd1400 &quot;&quot;</span><br><span class="line">crash&gt; px (0xffff893c80fd1400 + 0xaa)</span><br><span class="line">$2 = 0xffff893c80fd14aa</span><br><span class="line">crash&gt; struct -x iphdr 0xffff893c80fd14aa</span><br><span class="line">struct iphdr &#123;</span><br><span class="line">  ihl = 0x5,</span><br><span class="line">  version = 0x4,</span><br><span class="line">  tos = 0x0,</span><br><span class="line">  tot_len = 0x6600,</span><br><span class="line">  id = 0x2097,</span><br><span class="line">  frag_off = 0x0,</span><br><span class="line">  ttl = 0x40,</span><br><span class="line">  protocol = 0x11,</span><br><span class="line">  check = 0xbe57,</span><br><span class="line">  saddr = 0x9e3b4c0a,</span><br><span class="line">  daddr = 0x733b4c0a</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>conntrack</code>冲突可以通过<code>systemtap</code>来进行确认，脚本内容如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">%&#123;</span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;net/udp.h&gt;</span></span></span><br><span class="line">%&#125;</span><br><span class="line"></span><br><span class="line">probe <span class="title function_">module</span><span class="params">(<span class="string">&quot;nf_conntrack&quot;</span>)</span>.<span class="title function_">function</span><span class="params">(<span class="string">&quot;nf_ct_resolve_clash&quot;</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    iphdr = __get_skb_iphdr($skb)</span><br><span class="line">    saddr = format_ipaddr(__ip_skb_saddr(iphdr), %&#123; AF_INET %&#125;)</span><br><span class="line">    daddr = format_ipaddr(__ip_skb_daddr(iphdr), %&#123; AF_INET %&#125;)</span><br><span class="line">    protocol = __ip_skb_proto(iphdr)</span><br><span class="line"></span><br><span class="line">    udphdr = __get_skb_tcphdr($skb)</span><br><span class="line">    <span class="keyword">if</span> (protocol == %&#123; IPPROTO_UDP %&#125;) &#123;</span><br><span class="line">        dport = __tcp_skb_dport(udphdr)</span><br><span class="line">        sport = __tcp_skb_sport(udphdr)</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;nf_ct_resolve_clash: %s:%d-&gt;%s:%d, ct: %p, ctinfo: %d, mark: %x\n&quot;</span>, saddr, sport, daddr, dport, $skb-&gt;nfct, $skb-&gt;nfctinfo, $skb-&gt;mark)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>至此可以确认该崩溃发生的三个核心要素:<br>1、<code>nf_conntrack_confirm</code>函数中的BUG存在<br>2、<code>conntrack</code>冲突大量发生，这是由于在<code>conntrack</code>两步骤之间的<code>NFQUEUE</code>机制导致<br>3、<code>nf_ct_resolve_clash</code>和<code>nf_ct_deliver_cached_events</code>之间的软中断处理时延。这可以在网卡大量处理发包时发生。</p>
+<p>截止到写作之时，当前<code>CentOS7</code>最新的内核版本是<code>2022-05-19</code>发布的<code>3.10.0-1160.66.1.el7</code>, 还没有包含这个BUG的修复, 不知道<code>Redhat</code>官方是否会修复这个问题。</p>
+<p>我们自己解决这个问题可以修复代码后，重新编译<code>nf_conntrack</code>模块进行替换。</p>
+<p>参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://m.blog.chinaunix.net/uid-25171069-id-3204608.html">http://m.blog.chinaunix.net/uid-25171069-id-3204608.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://softwareengineering.stackexchange.com/questions/195385/understanding-stack-frame-of-function-call-in-c-c">https://softwareengineering.stackexchange.com/questions/195385/understanding-stack-frame-of-function-call-in-c-c</a></li>
+<li><a target="_blank" rel="noopener" href="https://abcdxyzk.github.io/blog/2012/11/23/assembly-args/">https://abcdxyzk.github.io/blog/2012/11/23/assembly-args/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/56945504/is-possble-protecting-nf-conntrack-find-return-value-by-rcu">https://stackoverflow.com/questions/56945504/is-possble-protecting-nf-conntrack-find-return-value-by-rcu</a></li>
+<li><a target="_blank" rel="noopener" href="http://bbs.chinaunix.net/thread-4185506-1-1.html">http://bbs.chinaunix.net/thread-4185506-1-1.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/363500946">https://zhuanlan.zhihu.com/p/363500946</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.wowotech.net/kernel_synchronization/462.html">http://www.wowotech.net/kernel_synchronization/462.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.51cto.com/u_15015138/2557130">https://blog.51cto.com/u_15015138/2557130</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.dazhuanlan.com/su2lin/topics/948372">https://www.dazhuanlan.com/su2lin/topics/948372</a></li>
+<li><a target="_blank" rel="noopener" href="https://lists.openwall.net/netdev/2009/03/26/122">https://lists.openwall.net/netdev/2009/03/26/122</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/RCU/rculist_nulls.txt">https://www.kernel.org/doc/Documentation/RCU/rculist_nulls.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://lkml.org/lkml/2018/7/31/690">https://lkml.org/lkml/2018/7/31/690</a></li>
+<li><a target="_blank" rel="noopener" href="https://lore.kernel.org/lkml/20170118110731.GA15949@linux.vnet.ibm.com/">https://lore.kernel.org/lkml/20170118110731.GA15949@linux.vnet.ibm.com/</a></li>
+<li><a target="_blank" rel="noopener" href="https://xnhp0320.github.io/%E6%B5%81%E8%B7%9F%E8%B8%AA%E7%B3%BB%E7%BB%9F%E4%B8%AD%E7%9A%84%E5%B9%B6%E5%8F%91%E8%AE%BE%E8%AE%A1%E6%8E%A2%E8%AE%A8/">https://xnhp0320.github.io/%E6%B5%81%E8%B7%9F%E8%B8%AA%E7%B3%BB%E7%BB%9F%E4%B8%AD%E7%9A%84%E5%B9%B6%E5%8F%91%E8%AE%BE%E8%AE%A1%E6%8E%A2%E8%AE%A8/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/06/12/ssh-portforward/" rel="prev" title="SSH端口转发">
+      <i class="fa fa-chevron-left"></i> SSH端口转发
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/07/18/vmware-crash/" rel="next" title="VMware Guest虚拟机失去响应的排查方法">
+      VMware Guest虚拟机失去响应的排查方法 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

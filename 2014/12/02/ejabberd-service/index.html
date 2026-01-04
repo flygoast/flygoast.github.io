@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="XEP-0114中定义了Jabber组件协议(Jabber Componet Protocol)。XMPP网络外的可信组件可以使用这个协议和XMPP网络内实体进行通信。 组件协议定义了两种模式：  accept：外部组件向XMPP服务器发起连接 connect：XMPP服务器向外部组件发起连接  其中, accept方式使用比较广泛，ejabberd中只实现了accept方式。 组件协议像XMPP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd中Jabber组件协议实现">
+<meta property="og:url" content="http://just4coding.com/2014/12/02/ejabberd-service/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="XEP-0114中定义了Jabber组件协议(Jabber Componet Protocol)。XMPP网络外的可信组件可以使用这个协议和XMPP网络内实体进行通信。 组件协议定义了两种模式：  accept：外部组件向XMPP服务器发起连接 connect：XMPP服务器向外部组件发起连接  其中, accept方式使用比较广泛，ejabberd中只实现了accept方式。 组件协议像XMPP">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-02T07:12:16.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.468Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/02/ejabberd-service/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd中Jabber组件协议实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/02/ejabberd-service/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd中Jabber组件协议实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-02 15:12:16" itemprop="dateCreated datePublished" datetime="2014-12-02T15:12:16+08:00">2014-12-02</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0114.html">XEP-0114</a>中定义了Jabber组件协议(Jabber Componet Protocol)。XMPP网络外的可信组件可以使用这个协议和XMPP网络内实体进行通信。</p>
+<p>组件协议定义了两种模式：</p>
+<ul>
+<li>accept：外部组件向XMPP服务器发起连接</li>
+<li>connect：XMPP服务器向外部组件发起连接</li>
+</ul>
+<p>其中, accept方式使用比较广泛，ejabberd中只实现了accept方式。</p>
+<p>组件协议像XMPP一样，也是基于XML流，使用的XMLNS为<code>jabber:componet:accept</code>或者<code>jabber:component:connect</code>。</p>
+<p>accept方式的协议流程：</p>
+<ul>
+<li><p>外部组件建立到XMPP服务器的TCP连接，发送流头。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">stream:stream</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns</span>=<span class="string">&#x27;jabber:component:accept&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns:stream</span>=<span class="string">&#x27;http://etherx.jabber.org/streams&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">to</span>=<span class="string">&#x27;plays.shakespeare.lit&#x27;</span>&gt;</span></span><br></pre></td></tr></table></figure></li>
+<li><p>XMPP服务器回应，也发送流头，其中必须包括流ID属性:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">stream:stream</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns:stream</span>=<span class="string">&#x27;http://etherx.jabber.org/streams&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">xmlns</span>=<span class="string">&#x27;jabber:component:accept&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">from</span>=<span class="string">&#x27;plays.shakespeare.lit&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">id</span>=<span class="string">&#x27;3BF96D32&#x27;</span>&gt;</span></span><br></pre></td></tr></table></figure></li>
+<li><p>外部组件发送身份验证摘要信息。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">handshake</span>&gt;</span>aaee83c26aeeafcbabeabfcbcd50df997e0a2a1e<span class="tag">&lt;/<span class="name">handshake</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>组件协议身份验证不使用SASL，也不使用已废弃的<a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0078.html">XEP-0078</a>。它使用双方共享密钥计算摘要信息来验证身份。计算方法如下：</p>
+<ol>
+<li>将服务器流头中的流ID属性和共享密钥拼接成字符串</li>
+<li>计算该字符串的SHA1哈希值，并转换成小写16进制字符串</li>
+</ol>
+</li>
+<li><p>XMPP服务器用同样方法计算进行校验。通过后，返回一个空的handshake元素。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">handshake</span>/&gt;</span></span><br></pre></td></tr></table></figure>
+<p>至此，外部组件和XMPP服务器就可以交换XMPP消息了。</p>
+</li>
+</ul>
+<p>我们来看ejabberd中组件协议实现，位于ejabberd_service.erl模块中。</p>
+<p>ejabberd中的ejabberd_service的默认配置为:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;<span class="number">8888</span>, ejabberd_service, [</span><br><span class="line">                          &#123;access, all&#125;,</span><br><span class="line">                          &#123;shaper_rule, fast&#125;,</span><br><span class="line">                          &#123;ip, &#123;<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>&#125;&#125;,</span><br><span class="line">                          &#123;hosts, [<span class="string">&quot;icq.example.org&quot;</span>, <span class="string">&quot;sms.example.org&quot;</span>],</span><br><span class="line">                                  [&#123;password, <span class="string">&quot;secret&quot;</span>&#125;]</span><br><span class="line">                          &#125;</span><br><span class="line">                         ]&#125;,</span><br></pre></td></tr></table></figure>
+<p>ejabberd_service是端口8888的处理模块。当有ejabberd接收端口上的TCP连接后，ejabberd_socket:start&#x2F;4调用处理模块的socket_type&#x2F;0, 根据返回值进行不同处理。ejabberd_service:socket_type&#x2F;0返回xml_stream。它的处理流程和ejabberd_c2s模块相同。ejabberd为每个TCP连接分别创建一个receiver进程和一个处理进程(这里是ejabberd_service进程)。receiver进程接收消息并解析，然后发送相应的消息给处理进程。具体不再详述，请参考:<code>ejabberd消息处理流程分析</code>。</p>
+<p>service进程为gen_fsm进程，初始状态为wait_for_stream。receiver进程接收到XML流头后发送xmlstreamstart消息给service进程。service进程调用wait_for_stream函数进行处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">wait_for_stream</span><span class="params">(&#123;xmlstreamstart, _Name, Attrs&#125;, StateData)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> xml:get_attr_s(<span class="string">&quot;xmlns&quot;</span>, Attrs) <span class="keyword">of</span></span><br><span class="line">    <span class="string">&quot;jabber:component:accept&quot;</span> -&gt;</span><br><span class="line">        <span class="comment">%% Note: XEP-0114 requires to check that destination is a Jabber</span></span><br><span class="line">        <span class="comment">%% component served by this Jabber server.</span></span><br><span class="line">        <span class="comment">%% However several transports don&#x27;t respect that,</span></span><br><span class="line">        <span class="comment">%% so ejabberd doesn&#x27;t check &#x27;to&#x27; attribute (EJAB-717)</span></span><br><span class="line">        To = xml:get_attr_s(<span class="string">&quot;to&quot;</span>, Attrs),</span><br><span class="line">        Header = io_lib:format(?STREAM_HEADER,</span><br><span class="line">                   [StateData#state.streamid, xml:crypt(To)]),</span><br><span class="line">        send_text(StateData, Header),</span><br><span class="line">        &#123;next_state, wait_for_handshake, StateData&#125;;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        send_text(StateData, ?INVALID_HEADER_ERR),</span><br><span class="line">        &#123;stop, normal, StateData&#125;</span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+<p>wait_for_stream检测到XML流头中XMLNS为”jabber:component:accept”后，向组件发送流头，状态变更为wait_for_handshake。</p>
+<p>receiver进程收到handshake消息后，发送xmlstreamelement消息给service进程，service调用wait_for_handshake处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">wait_for_handshake</span><span class="params">(&#123;xmlstreamelement, El&#125;, StateData)</span> -&gt;</span></span><br><span class="line">    &#123;xmlelement, Name, _Attrs, Els&#125; = El,</span><br><span class="line">    <span class="keyword">case</span> &#123;Name, xml:get_cdata(Els)&#125; <span class="keyword">of</span></span><br><span class="line">    &#123;<span class="string">&quot;handshake&quot;</span>, Digest&#125; -&gt;</span><br><span class="line">        <span class="keyword">case</span> sha:sha(StateData#state.streamid ++</span><br><span class="line">             StateData#state.password) <span class="keyword">of</span></span><br><span class="line">        Digest -&gt;</span><br><span class="line">            send_text(StateData, <span class="string">&quot;&lt;handshake/&gt;&quot;</span>),</span><br><span class="line">            lists:foreach(</span><br><span class="line">              <span class="keyword">fun</span>(H) -&gt;</span><br><span class="line">                  ejabberd_router:register_route(H),</span><br><span class="line">                  ?INFO_MSG(<span class="string">&quot;Route registered for service ~p~n&quot;</span>, [H])</span><br><span class="line">              <span class="keyword">end</span>, StateData#state.hosts),</span><br><span class="line">            &#123;next_state, stream_established, StateData&#125;;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            send_text(StateData, ?INVALID_HANDSHAKE_ERR),</span><br><span class="line">            &#123;stop, normal, StateData&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        &#123;next_state, wait_for_handshake, StateData&#125;</span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+<p>wait_for_handshake使用XML流ID和密码计算身份验证摘要，和组件所发的摘要信息进行对比判断是否通过。检查通过后，发送空的handshake元素。然后调用ejabberd_router:register_route&#x2F;1依次注册配置的所有service域名。这样，XMPP实体发往这些域名的消息都将被ejabberd_router路由给该service进程。service进程状态变更为stream_established。</p>
+<p>至此，外部组件就可以和XMPP服务器交换XMPP消息了。</p>
+<p>组件向XMPP服务器发送消息后，receiver进程解析后向service进程发送xmlstreamelement消息，service进程调用stream_established处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">stream_established</span><span class="params">(&#123;xmlstreamelement, El&#125;, StateData)</span> -&gt;</span></span><br><span class="line">    NewEl = jlib:remove_attr(<span class="string">&quot;xmlns&quot;</span>, El),</span><br><span class="line">    &#123;xmlelement, Name, Attrs, _Els&#125; = NewEl,</span><br><span class="line">    From = xml:get_attr_s(<span class="string">&quot;from&quot;</span>, Attrs),</span><br><span class="line">    ...</span><br><span class="line">    To = xml:get_attr_s(<span class="string">&quot;to&quot;</span>, Attrs),</span><br><span class="line">    ToJID = <span class="keyword">case</span> To <span class="keyword">of</span></span><br><span class="line">        <span class="string">&quot;&quot;</span> -&gt; error;</span><br><span class="line">        _ -&gt; jlib:string_to_jid(To)</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    <span class="keyword">if</span></span><br><span class="line">    ((Name == <span class="string">&quot;iq&quot;</span>) or</span><br><span class="line">     (Name == <span class="string">&quot;message&quot;</span>) or</span><br><span class="line">     (Name == <span class="string">&quot;presence&quot;</span>)) <span class="keyword">and</span></span><br><span class="line">    (ToJID /= error) <span class="keyword">and</span> (FromJID /= error) -&gt;</span><br><span class="line">        ejabberd_router:route(FromJID, ToJID, NewEl);</span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        Err = jlib:make_error_reply(NewEl, ?ERR_BAD_REQUEST),</span><br><span class="line">        send_element(StateData, Err),</span><br><span class="line">        error</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;next_state, stream_established, StateData&#125;;</span><br></pre></td></tr></table></figure>
+<p>stream_established进行一系列检查后，调用ejabberd_router:route转发消息。</p>
+<p>XMPP实体发送给service域名的消息会由ejabberd_router以route消息的格式发给service进程。service进程调用handle_info处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_info</span><span class="params">(&#123;route, From, To, Packet&#125;, StateName, StateData)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> acl:match_rule(global, StateData#state.access, From) <span class="keyword">of</span></span><br><span class="line">    allow -&gt;</span><br><span class="line">        &#123;xmlelement, Name, Attrs, Els&#125; = Packet,</span><br><span class="line">        Attrs2 = jlib:replace_from_to_attrs(jlib:jid_to_string(From),</span><br><span class="line">                        jlib:jid_to_string(To),</span><br><span class="line">                        Attrs),</span><br><span class="line">        Text = xml:element_to_binary(&#123;xmlelement, Name, Attrs2, Els&#125;),</span><br><span class="line">        send_text(StateData, Text);</span><br><span class="line">    deny -&gt;</span><br><span class="line">        Err = jlib:make_error_reply(Packet, ?ERR_NOT_ALLOWED),</span><br><span class="line">        ejabberd_router:route_error(To, From, Err, Packet)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;next_state, StateName, StateData&#125;;</span><br></pre></td></tr></table></figure>
+<p>handle_info首先进行ACL检查，通过后，修改From和To属性，将消息发送给组件。</p>
+<p>使用telnet演示简单登录过程:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@flygoast flygoast]# telnet 127.0.0.1 8888</span><br><span class="line">Trying 127.0.0.1...</span><br><span class="line">Connected to 127.0.0.1.</span><br><span class="line">Escape character is &#x27;^]&#x27;.</span><br><span class="line">&lt;stream:stream</span><br><span class="line">    xmlns=&#x27;jabber:component:accept&#x27;</span><br><span class="line">    xmlns:stream=&#x27;http://etherx.jabber.org/streams&#x27;</span><br><span class="line">    to=&#x27;sms.example.com&#x27;&gt;</span><br><span class="line">&lt;?xml version=&#x27;1.0&#x27;?&gt;&lt;stream:stream xmlns:stream=&#x27;http://etherx.jabber.org/streams&#x27; xmlns=&#x27;jabber:component:accept&#x27; id=&#x27;2744762983&#x27; from=&#x27;sms.example.com&#x27;&gt;&lt;handshake&gt;cffc7fab4feae018a325ea834d2dca8c3b707a51&lt;/handshake&gt;</span><br><span class="line">&lt;handshake/&gt;</span><br></pre></td></tr></table></figure>
+<p>身份校验信息计算:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@flygoast flygoast]# echo -n &quot;2744762983secret&quot; | sha1sum</span><br><span class="line">cffc7fab4feae018a325ea834d2dca8c3b707a51  -</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/24/ejabberd-ping/" rel="prev" title="ejabberd中XMPP协议PING实现">
+      <i class="fa fa-chevron-left"></i> ejabberd中XMPP协议PING实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/03/nginx-cache-time/" rel="next" title="修改NGINX实现灵活设置文件缓存时间">
+      修改NGINX实现灵活设置文件缓存时间 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

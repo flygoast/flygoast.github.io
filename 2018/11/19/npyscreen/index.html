@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;TUI库newt和snack简要介绍&gt;&gt;介绍了如何使用newt库开发控制台应用程序。newt库是一个非常简单的库，只适合开发逻辑为顺序流程的程序，比如，典型的程序安装向导。当程序逻辑较为复杂时，可以直接使用ncurses来实现。但ncurses是一个较为底层的库，使用它开发工作量会较大。本文介绍一个使用更为简易但可实现复杂功能的TUI库:npyscreen。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Python TUI库npyscreen简要介绍">
+<meta property="og:url" content="http://just4coding.com/2018/11/19/npyscreen/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;TUI库newt和snack简要介绍&gt;&gt;介绍了如何使用newt库开发控制台应用程序。newt库是一个非常简单的库，只适合开发逻辑为顺序流程的程序，比如，典型的程序安装向导。当程序逻辑较为复杂时，可以直接使用ncurses来实现。但ncurses是一个较为底层的库，使用它开发工作量会较大。本文介绍一个使用更为简易但可实现复杂功能的TUI库:npyscreen。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2018-11-19/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-11-19/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-11-19/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-11-19/4.png">
+<meta property="article:published_time" content="2018-11-19T07:18:36.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.490Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2018-11-19/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2018/11/19/npyscreen/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Python TUI库npyscreen简要介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/19/npyscreen/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Python TUI库npyscreen简要介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-19 15:18:36" itemprop="dateCreated datePublished" datetime="2018-11-19T15:18:36+08:00">2018-11-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/blog/2018/09/07/newt/">TUI库newt和snack简要介绍</a>&gt;&gt;介绍了如何使用<code>newt</code>库开发控制台应用程序。<code>newt</code>库是一个非常简单的库，只适合开发逻辑为顺序流程的程序，比如，典型的程序安装向导。当程序逻辑较为复杂时，可以直接使用<code>ncurses</code>来实现。但<code>ncurses</code>是一个较为底层的库，使用它开发工作量会较大。本文介绍一个使用更为简易但可实现复杂功能的TUI库:npyscreen。</p>
+<p>当前最新版本为4.10.5，如图:</p>
+<img src="/images/2018-11-19/1.png" class="">
+
+<span id="more"></span>
+
+<p><code>Npyscreen</code>应用由三种对象构成:</p>
+<ul>
+<li><code>Application</code>对象:负责应用程序的开始、结束，创建<code>Form</code>对象，处理事件, 主要有两种类型:<ul>
+<li><code>NPSAppManaged</code>: 该类提供了开始和结束应用的框架，管理各类Form对象的显示，不需要自己完成该程序的主循环逻辑。</li>
+<li><code>NPSApp</code>:该类的实例需要在.main()中提供自定义的主循环逻辑，该类实例执行.run()时，该主循环逻辑会被执行。不推荐直接使用该类。</li>
+</ul>
+</li>
+<li><code>Form</code>对象:表示包含<code>Widget</code>对象的屏幕区域，主要有以下类型:<ul>
+<li><code>FormBaseNew</code>: 空Form</li>
+<li><code>Form</code>: 带有<code>&lt;&lt;OK&gt;&gt;</code>按钮的Form</li>
+<li><code>ActionForm</code>: 带有<code>&lt;&lt;OK&gt;&gt;</code>和<code>&lt;&lt;Cancel&gt;&gt;</code>两个按钮的Form</li>
+<li><code>FormWithMenus</code>: 支持Menu组件的Form</li>
+</ul>
+</li>
+<li><code>Widget</code>对象:表示各种与用户交互的组件</li>
+</ul>
+<p>具体细节，可以参考<a target="_blank" rel="noopener" href="https://npyscreen.readthedocs.io/index.html">官网文档</a></p>
+<p><code>Npyscreen</code>更推荐使用面向对象的编程方法，继承库中的类来自定义所需要的类，通过覆盖默认方法来扩展应用程序需要的功能。</p>
+<p>下面我们依然实现上篇文章中的登录示例来说明<code>npyscreen</code>的简要用法。</p>
+<p>首先直接使用<code>PIP</code>安装<code>npyscreen</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install npyscreen</span><br></pre></td></tr></table></figure>
+
+<p>我们的程序由两个<code>FORM</code>构成，第一个<code>FORM</code>用于使用者输入用户名和密码，如下图:</p>
+<img src="/images/2018-11-19/2.png" class="">
+
+<p>当用户名和密码输入正确时，显示第二个<code>FORM</code>, 它用于显示登录成功的消息，如图:</p>
+<img src="/images/2018-11-19/3.png" class="">
+
+<p>程序源代码如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> npyscreen</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SuccessForm</span>(npyscreen.Form):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">create</span>(<span class="params">self</span>):</span><br><span class="line">        self.name = <span class="string">&quot;SUCCESS&quot;</span></span><br><span class="line">        self.wgFixedText = self.add(npyscreen.FixedText, value = <span class="string">&quot;&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">beforeEditing</span>(<span class="params">self</span>):</span><br><span class="line">        username = self.parentApp.getForm(<span class="string">&#x27;MAIN&#x27;</span>).username</span><br><span class="line">        value = <span class="string">&quot;User [\&quot;%s\&quot;] logined successed!&quot;</span> % (username)</span><br><span class="line">        self.wgFixedText.value = value</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">afterEditing</span>(<span class="params">self</span>):</span><br><span class="line">        self.parentApp.switchForm(<span class="literal">None</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LoginForm</span>(npyscreen.ActionForm):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">create</span>(<span class="params">self</span>):</span><br><span class="line">        self.name = <span class="string">&quot;LOGIN&quot;</span></span><br><span class="line">        self.parentApp.value = <span class="string">&quot;&quot;</span></span><br><span class="line">        self.username = <span class="literal">None</span></span><br><span class="line">        self.password = <span class="literal">None</span></span><br><span class="line">        self.wgUsername = self.add(npyscreen.TitleText, name = <span class="string">&quot;Username:&quot;</span>)</span><br><span class="line">        self.wgPassword = self.add(npyscreen.TitlePassword, name = <span class="string">&quot;Password:&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">beforeEditing</span>(<span class="params">self</span>):</span><br><span class="line">        self.username = <span class="literal">None</span></span><br><span class="line">        self.password = <span class="literal">None</span></span><br><span class="line">        self.wgUsername.value = <span class="string">&#x27;&#x27;</span></span><br><span class="line">        self.wgPassword.value = <span class="string">&#x27;&#x27;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">on_ok</span>(<span class="params">self</span>):</span><br><span class="line">        self.username = self.wgUsername.value</span><br><span class="line">        self.password = self.wgPassword.value</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(self.username) == <span class="number">0</span> <span class="keyword">or</span> <span class="built_in">len</span>(self.password) == <span class="number">0</span>:</span><br><span class="line">            npyscreen.notify_confirm(<span class="string">&quot;USERNAME AND PASSWORD MUST NOT BE EMPTY!&quot;</span>)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            <span class="keyword">if</span> self.username != <span class="string">&quot;root&quot;</span> <span class="keyword">or</span> self.password != <span class="string">&quot;123456&quot;</span>:</span><br><span class="line">                npyscreen.notify_confirm(<span class="string">&quot;INVALID USERNAME OR PASSWORD!”)</span></span><br><span class="line"><span class="string">            else:</span></span><br><span class="line"><span class="string">                self.parentApp.switchForm(&#x27;SUCCESSFORM&#x27;)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    def on_cancel(self):</span></span><br><span class="line"><span class="string">        self.parentApp.switchForm(None)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">class LoginApp(npyscreen.NPSAppManaged):</span></span><br><span class="line"><span class="string">    def onStart(self):</span></span><br><span class="line"><span class="string">        self.addForm(&quot;</span>MAIN<span class="string">&quot;, LoginForm, name = &quot;</span>LOGIN<span class="string">&quot;, color = &quot;</span>IMPORTANT<span class="string">&quot;)</span></span><br><span class="line"><span class="string">        self.addForm(&quot;</span>SUCCESSFORM<span class="string">&quot;, SuccessForm, name = &quot;</span>SUCCESS<span class="string">&quot;, color = &quot;</span>WARNING<span class="string">&quot;)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">if __name__ == &#x27;__main__&#x27;:</span></span><br><span class="line"><span class="string">    LoginApp().run()</span></span><br></pre></td></tr></table></figure>
+
+<p>首先，我们创建了一个<code>SuccessForm</code>类，它继承<code>npyscreen.Form</code>类, 它自带一个<code>&lt;&lt;OK&gt;&gt;</code>按钮。它用于显示登录成功消息。<br><code>create</code>方法用于初始化该<code>Form</code>, 我们在其中创建了一个<code>FixedText</code>用于显示登录消息。术语<code>Edit</code>表示<code>Form</code>与用户的交互。方法<code>beforeEditing</code>在进入<code>Form</code>自身的<code>Edit</code>循环前调用，而<code>afterEditing</code>在交互完成<code>Form</code>要退出时被调用。我们在<code>beforeEditing</code>方法中将要显示的内容准备好。在<code>afterEditing</code>中通过调用<code>NPSAppManaged.switchForm(None)</code>退出程序。</p>
+<p>另一个类<code>LoginForm</code>表示用户输入用户名和密码的<code>Form</code>。它继承<code>npyscreen.ActionForm</code>, 带有一个<code>&lt;&lt;OK&gt;&gt;</code>和<code>&lt;&lt;Cancel&gt;&gt;</code>按钮。<code>create</code>方法用于初始化该<code>Form</code>, 创建了两个输入框来接收用户输入。<code>beforeEditing</code>方法用于在显示前清空内容。<code>on_ok</code>和<code>on_cancel</code>方法分别处理<code>&lt;&lt;OK&gt;&gt;</code>按钮和<code>&lt;&lt;Cancel&gt;&gt;</code>按钮被触发后的逻辑。<code>&lt;&lt;OK&gt;&gt;</code>按钮触发后，我们获取并检查用户输入的内容。若输入的用户名和密码正确，则调用<code>NPSAppManaged.switchForm(’SUCCESSFORM’)</code>显示第二个<code>FORM</code>。当<code>&lt;&lt;Cancel&gt;&gt;</code>按钮触发时，退出应用程序。</p>
+<p><code>LoginApp</code>类表示整个应用，在<code>onStart</code>方法中，我们添加了以上两个<code>FORM</code>，默认显示名称为<code>MAIN</code>的<code>FORM</code>。<br>最后直接调用<code>NPSAppManaged.run()</code>方法开始该程序。</p>
+<p>整体用法上非常简单，实现多屏应用及菜单等较为复杂的功能也不困难。只是官方文档上对于很多类及方法的描述并不是很详细，很多使用细节往往需要去翻阅源码，具体的一些示例可以参考:</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/vtr0n/npyscreen">https://github.com/vtr0n/npyscreen</a></p>
+<p>这个GITHUB作者还实现了一个基于npyscreen的Telegram客户端，如图:</p>
+<img src="/images/2018-11-19/4.png" class="">
+
+<p>是一个非常好的复杂应用的参考示例，具体代码参考: <a target="_blank" rel="noopener" href="https://github.com/vtr0n/TelegramTUI">https://github.com/vtr0n/TelegramTUI</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/10/10/vmware-pvlan/" rel="prev" title="基于PVLAN实现VMware vSphere环境DVS东西向防护">
+      <i class="fa fa-chevron-left"></i> 基于PVLAN实现VMware vSphere环境DVS东西向防护
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/11/23/fabric/" rel="next" title="Python远程执行库Fabric简要介绍">
+      Python远程执行库Fabric简要介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

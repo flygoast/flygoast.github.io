@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ngx_http_limit_req_module用于依据指定的KEY来限制请求处理速度。比如，用来限制单个IP的访问频率。 文档地址: http:&#x2F;&#x2F;nginx.org&#x2F;en&#x2F;docs&#x2F;http&#x2F;ngx_http_limit_req_module.html 下面来看具体实现: NGINX模块从逻辑中主要有两部分：  配置解析: 将配置文件的内容解析到各配置结构中 请求处理: 在当前请求上完成模块">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ngx_http_limit_req_module分析">
+<meta property="og:url" content="http://just4coding.com/2015/09/08/ngx-http-limit-req-module/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="ngx_http_limit_req_module用于依据指定的KEY来限制请求处理速度。比如，用来限制单个IP的访问频率。 文档地址: http:&#x2F;&#x2F;nginx.org&#x2F;en&#x2F;docs&#x2F;http&#x2F;ngx_http_limit_req_module.html 下面来看具体实现: NGINX模块从逻辑中主要有两部分：  配置解析: 将配置文件的内容解析到各配置结构中 请求处理: 在当前请求上完成模块">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-09-08T07:34:36.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.472Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2015/09/08/ngx-http-limit-req-module/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ngx_http_limit_req_module分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2015/09/08/ngx-http-limit-req-module/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ngx_http_limit_req_module分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2015-09-08 15:34:36" itemprop="dateCreated datePublished" datetime="2015-09-08T15:34:36+08:00">2015-09-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>ngx_http_limit_req_module用于依据指定的KEY来限制请求处理速度。比如，用来限制单个IP的访问频率。</p>
+<p>文档地址: <a target="_blank" rel="noopener" href="http://nginx.org/en/docs/http/ngx_http_limit_req_module.html">http://nginx.org/en/docs/http/ngx_http_limit_req_module.html</a></p>
+<p>下面来看具体实现:</p>
+<p>NGINX模块从逻辑中主要有两部分：</p>
+<ul>
+<li>配置解析: 将配置文件的内容解析到各配置结构中</li>
+<li>请求处理: 在当前请求上完成模块逻辑处理</li>
+</ul>
+<span id="more"></span>
+<p>首先看配置解析部分:</p>
+<p>limit_req模块的ngx_http_module_t结构指定了配置解析的HOOK函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_http_module_t</span>  ngx_http_limit_req_module_ctx = &#123;</span><br><span class="line">    <span class="literal">NULL</span>,                                  <span class="comment">/* preconfiguration */</span></span><br><span class="line">    ngx_http_limit_req_init,               <span class="comment">/* postconfiguration */</span></span><br><span class="line"></span><br><span class="line">    <span class="literal">NULL</span>,                                  <span class="comment">/* create main configuration */</span></span><br><span class="line">    <span class="literal">NULL</span>,                                  <span class="comment">/* init main configuration */</span></span><br><span class="line"></span><br><span class="line">    <span class="literal">NULL</span>,                                  <span class="comment">/* create server configuration */</span></span><br><span class="line">    <span class="literal">NULL</span>,                                  <span class="comment">/* merge server configuration */</span></span><br><span class="line"></span><br><span class="line">    ngx_http_limit_req_create_conf,        <span class="comment">/* create location configuration */</span></span><br><span class="line">    ngx_http_limit_req_merge_conf          <span class="comment">/* merge location configuration */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>limit_req模块只使用location级别的配置，只注册了location级别配置的create和merge函数。</p>
+<p>ngx_http_limit_req_create_conf()函数简单地从配置内存池中分配一个ngx_http_limit_req_conf_t结构。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_array_t</span>                  limits;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   limit_log_level;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   delay_log_level;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   status_code;</span><br><span class="line">&#125; <span class="type">ngx_http_limit_req_conf_t</span>;</span><br></pre></td></tr></table></figure>
+<p>该结构用于保存一个location{}配置块中的limit_req模块配置。location{}配置块下允许使用多个limit_req指令。如:</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">location</span> /dummy &#123;</span><br><span class="line">    <span class="attribute">limit_req</span> zone=one burst=<span class="number">5</span> nodelay;</span><br><span class="line">    <span class="attribute">limit_req</span> zone=two burst=<span class="number">10</span>;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>limits数组的每个元素为ngx_http_limit_req_limit_t结构，每条limit_req指令配置都保存到该结构中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_shm_zone_t</span>              *shm_zone;</span><br><span class="line">    <span class="comment">/* integer value, 1 corresponds to 0.001 r/s */</span></span><br><span class="line">    <span class="type">ngx_uint_t</span>                   burst;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   nodelay; <span class="comment">/* unsigned  nodelay:1 */</span></span><br><span class="line">&#125; <span class="type">ngx_http_limit_req_limit_t</span>;</span><br></pre></td></tr></table></figure>
+<p>下面看模块limit_req_zone和limit_req指令的解析:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&#123; ngx_string(<span class="string">&quot;limit_req_zone&quot;</span>),</span><br><span class="line">  NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE3,</span><br><span class="line">  ngx_http_limit_req_zone,</span><br><span class="line">  <span class="number">0</span>,</span><br><span class="line">  <span class="number">0</span>,</span><br><span class="line">  <span class="literal">NULL</span> &#125;,</span><br><span class="line"></span><br><span class="line">&#123; ngx_string(<span class="string">&quot;limit_req&quot;</span>),</span><br><span class="line">  NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE123,</span><br><span class="line">  ngx_http_limit_req,</span><br><span class="line">  NGX_HTTP_LOC_CONF_OFFSET,</span><br><span class="line">  <span class="number">0</span>,</span><br><span class="line">  <span class="literal">NULL</span> &#125;,</span><br></pre></td></tr></table></figure>
+<p>limit_req_zone指令处理函数为ngx_http_limit_req_zone函数。</p>
+<p>首先，函数从配置内存池分配一个ngx_http_limit_req_ctx_t结构。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ctx = ngx_pcalloc(cf-&gt;pool, <span class="keyword">sizeof</span>(<span class="type">ngx_http_limit_req_ctx_t</span>));</span><br><span class="line"><span class="keyword">if</span> (ctx == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>每个ngx_http_limit_req_ctx_t保存limit_req_zone指令的配置内容:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_http_limit_req_shctx_t</span>  *sh;</span><br><span class="line">    <span class="type">ngx_slab_pool_t</span>             *shpool;</span><br><span class="line">    <span class="comment">/* integer value, 1 corresponds to 0.001 r/s */</span></span><br><span class="line">    <span class="type">ngx_uint_t</span>                   rate;</span><br><span class="line">    <span class="type">ngx_http_complex_value_t</span>     key;</span><br><span class="line">    <span class="type">ngx_http_limit_req_node_t</span>   *node;</span><br><span class="line">&#125; <span class="type">ngx_http_limit_req_ctx_t</span>;</span><br></pre></td></tr></table></figure>
+<p>接着，预编译该ZONE所指定的KEY，将编译结果保存key成员变量中，在请求处理阶段模块根据key成员变量得到KEY的值。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">ngx_memzero(&amp;ccv, <span class="keyword">sizeof</span>(<span class="type">ngx_http_compile_complex_value_t</span>));</span><br><span class="line"></span><br><span class="line">ccv.cf = cf;</span><br><span class="line">ccv.value = &amp;value[<span class="number">1</span>];</span><br><span class="line">ccv.complex_value = &amp;ctx-&gt;key;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (ngx_http_compile_complex_value(&amp;ccv) != NGX_OK) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接下来，解析各参数的值，如共享内存区的名称和大小，限制的访问频率。为了避免计算时使用浮点数而提高处理效率，代码中将1r&#x2F;s对应的rate值设为1000。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ctx-&gt;rate = rate * <span class="number">1000</span> / scale;</span><br></pre></td></tr></table></figure>
+<p>再接着，添加共享内存信息:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">shm_zone = ngx_shared_memory_add(cf, &amp;name, size,</span><br><span class="line">                                 &amp;ngx_http_limit_req_module);</span><br><span class="line">...</span><br><span class="line">shm_zone-&gt;init = ngx_http_limit_req_init_zone;</span><br><span class="line">shm_zone-&gt;data = ctx;</span><br></pre></td></tr></table></figure>
+<p>NGINX此时并不会分配共享内存，只是将信息保存下来，在所有配置解析完后再统一进行分配。NGINX分配完共享内存后，调用设置的ngx_http_limit_req_init_zone来初始化该共享内存区域。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ctx-&gt;shpool = (<span class="type">ngx_slab_pool_t</span> *) shm_zone-&gt;shm.addr;</span><br><span class="line">...</span><br><span class="line">ctx-&gt;sh = ngx_slab_alloc(ctx-&gt;shpool, <span class="keyword">sizeof</span>(<span class="type">ngx_http_limit_req_shctx_t</span>));</span><br><span class="line"><span class="keyword">if</span> (ctx-&gt;sh == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">ctx-&gt;shpool-&gt;data = ctx-&gt;sh;</span><br><span class="line"></span><br><span class="line">ngx_rbtree_init(&amp;ctx-&gt;sh-&gt;rbtree, &amp;ctx-&gt;sh-&gt;sentinel,</span><br><span class="line">                ngx_http_limit_req_rbtree_insert_value);</span><br><span class="line"></span><br><span class="line">ngx_queue_init(&amp;ctx-&gt;sh-&gt;<span class="built_in">queue</span>);</span><br></pre></td></tr></table></figure>
+<p>ngx_http_limit_req_init_zone函数在共享内存区创建了一个RBTREE和一个QUEUE结构，RBTREE NODE用于保存检查命中各KEY的请求是否应限速所需的信息，QUEUE结构用于回收长期没有访问的节点内存。</p>
+<p>NGINX解析完配置后，调用注册在postconfiguration阶段的ngx_http_limit_req_init函数。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_limit_req_init</span><span class="params">(<span class="type">ngx_conf_t</span> *cf)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_handler_pt        *h;</span><br><span class="line">    <span class="type">ngx_http_core_main_conf_t</span>  *cmcf;</span><br><span class="line"></span><br><span class="line">    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);</span><br><span class="line"></span><br><span class="line">    h = ngx_array_push(&amp;cmcf-&gt;phases[NGX_HTTP_PREACCESS_PHASE].handlers);</span><br><span class="line">    <span class="keyword">if</span> (h == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    *h = ngx_http_limit_req_handler;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该函数在NGINX请求处理的PREACCESS阶段注册了处理函数ngx_http_limit_req_handler。</p>
+<p>下面来看请求阶段的处理。</p>
+<p>当请求到达时，NGINX按阶段执行到ngx_http_limit_req_handler函数。</p>
+<p>handler函数首先判断是否已经进行过limit_req检查。若已进行过，则直接跳到下一个阶段，保证每个请求只由limit_req模块处理一次。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (r-&gt;main-&gt;limit_req_set) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_DECLINED;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>接着依据当前请求所属location{}配置中的所有limit_req策略依次调用ngx_http_limit_req_lookup进行检查:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (n = <span class="number">0</span>; n &lt; lrcf-&gt;limits.nelts; n++) &#123;</span><br><span class="line">    limit = &amp;limits[n];</span><br><span class="line">    ctx = limit-&gt;shm_zone-&gt;data;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ngx_http_complex_value(r, &amp;ctx-&gt;key, &amp;key) != NGX_OK) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_HTTP_INTERNAL_SERVER_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    hash = ngx_crc32_short(key.data, key.len);</span><br><span class="line">    ngx_shmtx_lock(&amp;ctx-&gt;shpool-&gt;mutex);</span><br><span class="line">    rc = ngx_http_limit_req_lookup(limit, hash, &amp;key, &amp;excess,</span><br><span class="line">                                   (n == lrcf-&gt;limits.nelts - <span class="number">1</span>));</span><br><span class="line"></span><br><span class="line">    ngx_shmtx_unlock(&amp;ctx-&gt;shpool-&gt;mutex);</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">if</span> (rc != NGX_AGAIN) &#123;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>ngx_http_limit_req_lookup()首先从RBTREE中查找当前KEY所属节点。<br>若查找到节点，则把当前节点移到队列首端，保证不会在近期被回收内存。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ngx_queue_remove(&amp;lr-&gt;<span class="built_in">queue</span>);</span><br><span class="line">ngx_queue_insert_head(&amp;ctx-&gt;sh-&gt;<span class="built_in">queue</span>, &amp;lr-&gt;<span class="built_in">queue</span>);</span><br></pre></td></tr></table></figure>
+<p>然后，计算该请求是否超出了限制频率:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ms = (<span class="type">ngx_msec_int_t</span>) (now - lr-&gt;last);</span><br><span class="line">excess = lr-&gt;excess - ctx-&gt;rate * ngx_abs(ms) / <span class="number">1000</span> + <span class="number">1000</span>;</span><br></pre></td></tr></table></figure>
+<p>这里用的是”leaky bucket”算法。lr-&gt;excess表示上次处理后剩余的请求数，ms为现在距上次处理请求的时间，最后的”1000”为当前请求（一个请求为1000），excess为按限定速率进行处理到现在应该剩余的请求数。如果excess超过了设定的暴发阈值,则函数直接返回NGX_BUSY。这会让NGINX直接以limit_req_status_code设定的状态码结束请求（默认值为503）。若没有超过暴发阈值，若当前检查的limit_req规则是LOCATION所配置的最后一个，则将excess和当前时间更新到NODE中，返回NGX_OK, 否则，返回NGX_AGAIN，表示通过了该条limit_req策略，应该继续检查下一条limit_req策略。</p>
+<p>若没有找到节点，则创建新的节点插入到RBTREE中。同样的，若是最后一个策略返回NGX_OK, 否则返回NGX_AGAIN。</p>
+<p>ngx_http_limit_req_lookup()返回值总结如下:</p>
+<ul>
+<li>NGX_ERROR: 分配内存错误</li>
+<li>NGX_AGAIN: 通过了一个limit_req策略，需要检查下一个策略</li>
+<li>NGX_OK: 通过了所有limit_req策略</li>
+<li>NGX_BUSY: 超过了设置的最大请求频率，直接以状态码结束请求</li>
+</ul>
+<p>当通过所有策略后，handler调用ngx_http_limit_req_account检测是否需要delay请求。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">delay = ngx_http_limit_req_account(limits, n, &amp;excess, &amp;limit);</span><br></pre></td></tr></table></figure>
+<p>delay为处理完当前所有剩余请求所需的时间:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">tp = ngx_timeofday();</span><br><span class="line"></span><br><span class="line">now = (<span class="type">ngx_msec_t</span>) (tp-&gt;sec * <span class="number">1000</span> + tp-&gt;msec);</span><br><span class="line">ms = (<span class="type">ngx_msec_int_t</span>) (now - lr-&gt;last);</span><br><span class="line"></span><br><span class="line">excess = lr-&gt;excess - ctx-&gt;rate * ngx_abs(ms) / <span class="number">1000</span> + <span class="number">1000</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (excess &lt; <span class="number">0</span>) &#123;</span><br><span class="line">    excess = <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">delay = excess * <span class="number">1000</span> / ctx-&gt;rate;</span><br></pre></td></tr></table></figure>
+<p>若需要delay请求，则添加一个NGINX TIMER来延迟请求处理。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">r-&gt;read_event_handler = ngx_http_test_reading;</span><br><span class="line">r-&gt;write_event_handler = ngx_http_limit_req_delay;</span><br><span class="line">ngx_add_timer(r-&gt;connection-&gt;write, delay);</span><br></pre></td></tr></table></figure>
+<p>至此，limit_req的逻辑处理完成。</p>
+<p>limit_req模块在使用NGINX CORE的rbtree代码有些繁琐，比如ngx_http_limit_req_node_t结构用于保存”leaky bucket”算法所需的数据。limit_req模块需要将这些数据附在ngx_rbtree_node_t结构之后，从而复用rbtree操作的相关函数。limit_req模块在该结构的开始用了两个成员变量来标识来ngx_rbtree_node_t的拼接点。两结构定义如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">ngx_rbtree_node_s</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_rbtree_key_t</span>       key;</span><br><span class="line">    <span class="type">ngx_rbtree_node_t</span>     *left;</span><br><span class="line">    <span class="type">ngx_rbtree_node_t</span>     *right;</span><br><span class="line">    <span class="type">ngx_rbtree_node_t</span>     *parent;</span><br><span class="line">    u_char                 color;</span><br><span class="line">    u_char                 data;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    u_char                       color;</span><br><span class="line">    u_char                       dummy;</span><br><span class="line">    u_short                      len;</span><br><span class="line">    <span class="type">ngx_queue_t</span>                  <span class="built_in">queue</span>;</span><br><span class="line">    <span class="type">ngx_msec_t</span>                   last;</span><br><span class="line">    <span class="comment">/* integer value, 1 corresponds to 0.001 r/s */</span></span><br><span class="line">    <span class="type">ngx_uint_t</span>                   excess;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   count;</span><br><span class="line">    u_char                       data[<span class="number">1</span>];</span><br><span class="line">&#125; <span class="type">ngx_http_limit_req_node_t</span>;</span><br></pre></td></tr></table></figure>
+
+<p>NODE大小这样计算:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">size = offsetof(<span class="type">ngx_rbtree_node_t</span>, color)</span><br><span class="line">       + offsetof(<span class="type">ngx_http_limit_req_node_t</span>, data)</span><br><span class="line">       + key-&gt;len;</span><br></pre></td></tr></table></figure>
+<p>这样理解起来不够直观。可以简单的定义结构为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_rbtree_node_t</span>            node;</span><br><span class="line">    u_short                      len;</span><br><span class="line">    <span class="type">ngx_queue_t</span>                  <span class="built_in">queue</span>;</span><br><span class="line">    <span class="type">ngx_msec_t</span>                   last;</span><br><span class="line">    <span class="comment">/* integer value, 1 corresponds to 0.001 r/s */</span></span><br><span class="line">    <span class="type">ngx_uint_t</span>                   excess;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                   count;</span><br><span class="line">    u_char                       data[<span class="number">1</span>];</span><br><span class="line">&#125; <span class="type">ngx_http_limit_req_node_t</span>;</span><br></pre></td></tr></table></figure>
+<p>这样计算NODE大小则为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">size = offsetof(<span class="type">ngx_http_limit_req_node_t</span>, data)</span><br><span class="line">       + key-&gt;len;</span><br></pre></td></tr></table></figure>
+<p>另外对于我们特定的需求，limit_req_zone限定的访问频率有两个不方便之处:</p>
+<ul>
+<li>不能针对不同的KEY，限定不同的访问频率</li>
+<li>不能实时动态更改, 只能通过修改配置RELOAD NGINX来生效</li>
+</ul>
+<p>针对上述两个不方便之处，可以给limit_req_zone添加一个RATE变量表示需要对该请求的限制频率，在处理请求时动态获取到该值。而该变量可以在另外的模块中根据更情况来设置，比如，可以由NGX_LUA模块从REDIS等动态存储中获取相关信息而设置。</p>
+<p>但这种方式有两点需注意:</p>
+<ul>
+<li>针对同一个KEY的请求要保证频率值不变，否则失去了频率的意义</li>
+<li>RATE变量的设置要在PREACCESS阶段前，比如在SERVER REWRITE阶段</li>
+</ul>
+<p>文中代码为nginx-1.8.0。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2015/04/27/ejabberd-acl/" rel="prev" title="ejabberd中ACL实现">
+      <i class="fa fa-chevron-left"></i> ejabberd中ACL实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2015/09/13/libipvs/" rel="next" title="Keepalived libipvs分析">
+      Keepalived libipvs分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

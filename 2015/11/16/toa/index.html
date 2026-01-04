@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。 这种方式存在一个问题: RealServer中接收到数据包中源IP和源端口为LVS机器的IP和端口，这样应用层程序获取到的TCP连接的客户端地址为LVS的IP地址，很多依赖客户端">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LVS FULLNAT模式下客户端真实地址的传递">
+<meta property="og:url" content="http://just4coding.com/2015/11/16/toa/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。 这种方式存在一个问题: RealServer中接收到数据包中源IP和源端口为LVS机器的IP和端口，这样应用层程序获取到的TCP连接的客户端地址为LVS的IP地址，很多依赖客户端">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-11-16T10:01:03.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.474Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="LVS">
+<meta property="article:tag" content="IPVS">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2015/11/16/toa/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>LVS FULLNAT模式下客户端真实地址的传递 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2015/11/16/toa/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          LVS FULLNAT模式下客户端真实地址的传递
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2015-11-16 18:01:03" itemprop="dateCreated datePublished" datetime="2015-11-16T18:01:03+08:00">2015-11-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在LVS的FULLNAT转发模式下, LVS对数据包同时做SNAT和DNAT，将数据包的源IP、源端口更换为LVS本地的IP和端口，将数据包的目的IP和目的端口修改为RS的IP和端口，从而不再依赖特定网络拓朴转发数据包。</p>
+<p>这种方式存在一个问题: RealServer中接收到数据包中源IP和源端口为LVS机器的IP和端口，这样应用层程序获取到的TCP连接的客户端地址为LVS的IP地址，很多依赖客户端地址的功能就不能正常工作了。</p>
+<p>为了解决这问题，FULLNAT模式在转发包的时候，在TCP包中添加一个OPTION，来传递客户端的真实地址。RealServer中通过内核模块toa令应用层程序获取真实的客户端地址。</p>
+<span id="more"></span>
+<p>TOA OPTION的OPCODE为254(0xfe), 长度为8字节，结构为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">toa_data</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">    __u8   opcode;</span><br><span class="line">    __u8   opsize;</span><br><span class="line">    __u16  port;</span><br><span class="line">    __u32  ip;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>比如，TOA的OPTION为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fe 08 91 cd 0a 05 0c 46</span><br></pre></td></tr></table></figure>
+
+<p>0xfe为opcode, 08为option长度，8字节，Port和IP都为网络字节序，端口号为0x91cd(37325), IP为: 0x0a050c46, “10.5.12.70”。</p>
+<p>来看toa模块具体实现:</p>
+<p>模块的初始化函数为toa_init:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* module init */</span></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init</span><br><span class="line"><span class="title function_">toa_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* hook funcs for parse and get toa */</span></span><br><span class="line">    hook_toa_functions();</span><br><span class="line"></span><br><span class="line">    TOA_INFO(<span class="string">&quot;toa loaded\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">err:</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>函数调用hook_toa_functions函数HOOK两个函数:</p>
+<ul>
+<li>inet_getname</li>
+<li>tcp_v4_syn_recv_sock</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* replace the functions with our functions */</span></span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">hook_toa_functions</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">/* hook inet_getname for ipv4 */</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">proto_ops</span> *<span class="title">inet_stream_ops_p</span> =</span></span><br><span class="line">            (<span class="keyword">struct</span> proto_ops *)&amp;inet_stream_ops;</span><br><span class="line">    <span class="comment">/* hook tcp_v4_syn_recv_sock for ipv4 */</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">inet_connection_sock_af_ops</span> *<span class="title">ipv4_specific_p</span> =</span></span><br><span class="line">            (<span class="keyword">struct</span> inet_connection_sock_af_ops *)&amp;ipv4_specific;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    inet_stream_ops_p-&gt;getname = inet_getname_toa;</span><br><span class="line">    ...</span><br><span class="line">    ipv4_specific_p-&gt;syn_recv_sock = tcp_v4_syn_recv_sock_toa;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Linux内核在监听套接字收到三次握手的ACK包之后，会从SYN_REVC状态进入到TCP_ESTABLISHED状态。这时内核会调用tcp_v4_syn_recv_sock函数。Hook函数tcp_v4_syn_recv_sock_toa首先调用原有的tcp_v4_syn_recv_sock函数，然后调用get_toa_data函数从TCP OPTION中提取出TOA OPTION，并存储在sk_user_data字段中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="keyword">struct</span> sock *</span><br><span class="line"><span class="title function_">tcp_v4_syn_recv_sock_toa</span><span class="params">(<span class="keyword">struct</span> sock *sk, <span class="keyword">struct</span> sk_buff *skb, <span class="keyword">struct</span> request_sock *req, <span class="keyword">struct</span> dst_entry *dst)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock</span> *<span class="title">newsock</span> =</span> <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* call orginal one */</span></span><br><span class="line">    newsock = tcp_v4_syn_recv_sock(sk, skb, req, dst);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* set our value if need */</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">NULL</span> != newsock &amp;&amp; <span class="literal">NULL</span> == newsock-&gt;sk_user_data) &#123;</span><br><span class="line">        newsock-&gt;sk_user_data = get_toa_data(skb);</span><br><span class="line">        <span class="keyword">if</span>(<span class="literal">NULL</span> != newsock-&gt;sk_user_data)&#123;</span><br><span class="line">            TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_TOA_CNT);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            TOA_INC_STATS(ext_stats, SYN_RECV_SOCK_NO_TOA_CNT);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> newsock;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>get_toa_data函数的返回值处理比较特殊，并没有给返回结果分配内存空间，而是直接将TOA OPTION做为指针值返回并保存在sk_user_data这一指针变量中。这在64位服务器上没有问题，因为指针变量的大小为8字节，返回的TOA结构大小也为8字节。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span> * <span class="title function_">get_toa_data</span><span class="params">(<span class="keyword">struct</span> sk_buff *skb)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">tcphdr</span> *<span class="title">th</span>;</span></span><br><span class="line">    <span class="type">int</span> length;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> *ptr;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">toa_data</span> <span class="title">tdata</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="type">void</span> *ret_ptr = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">NULL</span> != skb) &#123;</span><br><span class="line">        th = tcp_hdr(skb);</span><br><span class="line">        length = (th-&gt;doff * <span class="number">4</span>) - <span class="keyword">sizeof</span> (<span class="keyword">struct</span> tcphdr);</span><br><span class="line">        ptr = (<span class="type">unsigned</span> <span class="type">char</span> *) (th + <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">while</span> (length &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="type">int</span> opcode = *ptr++;</span><br><span class="line">            <span class="type">int</span> opsize;</span><br><span class="line">            <span class="keyword">switch</span> (opcode) &#123;</span><br><span class="line">            <span class="keyword">case</span> TCPOPT_EOL:</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">            <span class="keyword">case</span> TCPOPT_NOP:    <span class="comment">/* Ref: RFC 793 section 3.1 */</span></span><br><span class="line">                length--;</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                opsize = *ptr++;</span><br><span class="line">                <span class="keyword">if</span> (opsize &lt; <span class="number">2</span>)    <span class="comment">/* &quot;silly options&quot; */</span></span><br><span class="line">                    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">                <span class="keyword">if</span> (opsize &gt; length)</span><br><span class="line">                    <span class="keyword">return</span> <span class="literal">NULL</span>;    <span class="comment">/* don&#x27;t parse partial options */</span></span><br><span class="line">                <span class="keyword">if</span> (TCPOPT_TOA == opcode &amp;&amp; TCPOLEN_TOA == opsize) &#123;</span><br><span class="line">                    <span class="built_in">memcpy</span>(&amp;tdata, ptr - <span class="number">2</span>, <span class="keyword">sizeof</span> (tdata));</span><br><span class="line">                    <span class="built_in">memcpy</span>(&amp;ret_ptr, &amp;tdata, <span class="keyword">sizeof</span> (ret_ptr));</span><br><span class="line">                    <span class="keyword">return</span> ret_ptr;</span><br><span class="line">                &#125;</span><br><span class="line">                ptr += opsize - <span class="number">2</span>;</span><br><span class="line">                length -= opsize;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>用户在使用套接字中的accept函数时, 会调用inet_getname将sock结构体中存储的源IP地址和端口返回。Hook函数inet_getname_toa首先调用原有函数inet_getname, 然后用tcp_v4_syn_recv_sock_toa函数保存在sk_user_data中数据提取真实IP和Port，对返回结果进行替换。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">inet_getname_toa</span><span class="params">(<span class="keyword">struct</span> socket *sock, <span class="keyword">struct</span> sockaddr *uaddr,</span></span><br><span class="line"><span class="params">        <span class="type">int</span> *uaddr_len, <span class="type">int</span> peer)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> retval = <span class="number">0</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock</span> *<span class="title">sk</span> =</span> sock-&gt;sk;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_in</span> *<span class="title">sin</span> =</span> (<span class="keyword">struct</span> sockaddr_in *) uaddr;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">toa_data</span> <span class="title">tdata</span>;</span></span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* call orginal one */</span></span><br><span class="line">    retval = inet_getname(sock, uaddr, uaddr_len, peer);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* set our value if need */</span></span><br><span class="line">    <span class="keyword">if</span> (retval == <span class="number">0</span> &amp;&amp; <span class="literal">NULL</span> != sk-&gt;sk_user_data &amp;&amp; peer) &#123;</span><br><span class="line">        <span class="keyword">if</span> (sk_data_ready_addr == (<span class="type">unsigned</span> <span class="type">long</span>) sk-&gt;sk_data_ready) &#123;</span><br><span class="line">            <span class="built_in">memcpy</span>(&amp;tdata, &amp;sk-&gt;sk_user_data, <span class="keyword">sizeof</span>(tdata));</span><br><span class="line">            <span class="keyword">if</span> (TCPOPT_TOA == tdata.opcode &amp;&amp;</span><br><span class="line">                TCPOLEN_TOA == tdata.opsize) &#123;</span><br><span class="line">                ...</span><br><span class="line">                <span class="built_in">sin</span>-&gt;sin_port = tdata.port;</span><br><span class="line">                <span class="built_in">sin</span>-&gt;sin_addr.s_addr = tdata.ip;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123; <span class="comment">/* sk_user_data doesn&#x27;t belong to us */</span></span><br><span class="line">                ...</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            TOA_INC_STATS(ext_stats, GETNAME_TOA_BYPASS_CNT);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123; <span class="comment">/* no need to get client ip */</span></span><br><span class="line">        TOA_INC_STATS(ext_stats, GETNAME_TOA_EMPTY_CNT);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> retval;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>后续应用层程序调用getpeername()时就可以获取到真实的客户端地址了。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/LVS/" rel="tag"># LVS</a>
+              <a href="/tags/IPVS/" rel="tag"># IPVS</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2015/10/11/vmod-lua/" rel="prev" title="使用Lua定制Varnish处理逻辑">
+      <i class="fa fa-chevron-left"></i> 使用Lua定制Varnish处理逻辑
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2015/12/03/redis-cidr/" rel="next" title="扩展Redis命令支持CIDR查询">
+      扩展Redis命令支持CIDR查询 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

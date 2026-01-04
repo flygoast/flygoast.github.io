@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Web应用程序的处理逻辑可以概括为:  接收HTTP请求 处理业务逻辑 发送HTTP响应给客户端  其中，接收HTTP请求和发送HTTP响应，主要是解析HTTP请求，构造HTTP协议响应，这些与业务无关，不需要每次开发Web应用程序都重新实现，因而已经存在许多独立可以直接使用的组件，这种组件称为WebServer，而业务逻辑处理部分则称为Application。WebServer和Applicat">
+<meta property="og:type" content="article">
+<meta property="og:title" content="WSGI介绍">
+<meta property="og:url" content="http://just4coding.com/2017/01/18/wsgi/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Web应用程序的处理逻辑可以概括为:  接收HTTP请求 处理业务逻辑 发送HTTP响应给客户端  其中，接收HTTP请求和发送HTTP响应，主要是解析HTTP请求，构造HTTP协议响应，这些与业务无关，不需要每次开发Web应用程序都重新实现，因而已经存在许多独立可以直接使用的组件，这种组件称为WebServer，而业务逻辑处理部分则称为Application。WebServer和Applicat">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-18/1.png">
+<meta property="article:published_time" content="2017-01-17T16:55:58.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.479Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-01-18/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/01/18/wsgi/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>WSGI介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/01/18/wsgi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          WSGI介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-01-18 00:55:58" itemprop="dateCreated datePublished" datetime="2017-01-18T00:55:58+08:00">2017-01-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Web应用程序的处理逻辑可以概括为:</p>
+<ul>
+<li>接收HTTP请求</li>
+<li>处理业务逻辑</li>
+<li>发送HTTP响应给客户端</li>
+</ul>
+<p>其中，接收HTTP请求和发送HTTP响应，主要是解析HTTP请求，构造HTTP协议响应，这些与业务无关，不需要每次开发Web应用程序都重新实现，因而已经存在许多独立可以直接使用的组件，这种组件称为WebServer，而业务逻辑处理部分则称为Application。WebServer和Application之间通过约定好的协议或规范进行通信。</p>
+<p>WSGI(Web Server Gateway Interface)是Python社区提出的WebServer与Application之间通信的规范, 当前版本为v1.0.1, 定义在PEP 3333(<a target="_blank" rel="noopener" href="https://www.python.org/dev/peps/pep-3333/)%E3%80%82">https://www.python.org/dev/peps/pep-3333/)。</a></p>
+<span id="more"></span>
+
+<p>在PHP Web开发中，一般使用FastCGI通过网络在WebServer和Application之间传递信息，而WSGI规范则要求通过Python函数调用完成信息传递。</p>
+<p>WSGI规范定义通信的两端分别为server和application。server端通过调用application端提供的一个<code>callable</code>对象，这个对象可以是<code>function</code>, 也可以是带有<code>__call__</code>成员方法的<code>class</code>或<code>class</code>实例。application端提供的<code>callable</code>对象要接收两个参数: <code>environ</code>和<code>start_response</code>。<code>environ</code>是一个包含请求信息的<code>dict</code>结构, <code>start_response</code>是server端提供给application端发送响应的回调函数。它的原型是:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">start_response(status, response_headers)</span><br></pre></td></tr></table></figure>
+
+<p>其中<code>status</code>为HTTP的状态码和消息，如”200 OK”, 而<code>response_headers</code>为包含多个<code>(header_name, value)</code>格式的<code>list</code>。</p>
+<p>application端的<code>callable</code>对象必须返回一个包含HTTP响应Body的<code>iterable</code>对象。</p>
+<p>如上所述，server负责接收客户端的请求，解析请求，并将请求信息存储在<code>environ</code>变量中，通过调用application提供的<code>callable</code>，连同回调函数传递给application，application处理请求后，将HTTP状态行和HTTP header通过回调函数传递给server, 并将HTTP响应的Body通过<code>callable</code>的返回值传递给server。</p>
+<p>除了server和application两种角色，WSGI还定义了middleware角色。它需要同时满足server和application的规范要求。它做为application来接收上游server传递的请求信息，处理业务逻辑，同时又做为server来调用下游的applicaiton。并且middleware可以叠加，整体结构如图:</p>
+<img src="/images/2017-01-18/1.png" class="">
+
+<p>下面以简单示例来说明WSGI规范。</p>
+<p>gunicorn(Green Unicorn)是一个WSGI的Server实现，安装gunicorn:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y python-gunicorn</span><br></pre></td></tr></table></figure>
+<p>编辑文件app.py, 添加如下内容:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">application</span>(<span class="params">environ, start_response</span>):</span><br><span class="line">    start_response(<span class="string">&quot;200 OK&quot;</span>, [(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;text/plain&quot;</span>)])</span><br><span class="line">    <span class="keyword">return</span> [<span class="string">&quot;hello, world\n”]</span></span><br></pre></td></tr></table></figure>
+<p>执行gunicorn:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># gunicorn app:application</span></span><br><span class="line">2017-01-05 11:16:56 [23918] [INFO] Starting gunicorn 18.0</span><br><span class="line">2017-01-05 11:16:56 [23918] [INFO] Listening at: http://127.0.0.1:8000 (23918)</span><br><span class="line">2017-01-05 11:16:56 [23918] [INFO] Using worker: <span class="built_in">sync</span></span><br><span class="line">2017-01-05 11:16:56 [23923] [INFO] Booting worker with pid: 23923</span><br></pre></td></tr></table></figure>
+<p>命令中的<code>app:application</code>表示<code>callable</code>为app模块中application函数。</p>
+<p>gunicorn默认监听8000端口，通过curl来访问, 结果正常返回:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># curl http://127.0.0.1:8000/</span></span><br><span class="line">hello, world</span><br></pre></td></tr></table></figure>
+
+<p>接下来简单实现一个URL路由功能来说明middleware。</p>
+<p>编辑文件app_foo.py, 添加如下内容:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">foo</span>(<span class="params">environ, start_response</span>):</span><br><span class="line">    start_response(<span class="string">&quot;200 OK&quot;</span>, [(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;text/plain&quot;</span>)])</span><br><span class="line">    <span class="keyword">return</span> [<span class="string">&quot;hello, foo\n”]</span></span><br></pre></td></tr></table></figure>
+<p>编辑文件app_bar.py, 添加如下内容:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">bar</span>(<span class="params">environ, start_response</span>):</span><br><span class="line">    start_response(<span class="string">&quot;200 OK&quot;</span>, [(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;text/plain&quot;</span>)])</span><br><span class="line">    <span class="keyword">return</span> [<span class="string">&quot;hello, bar\n”]</span></span><br></pre></td></tr></table></figure>
+<p>编辑文件router.py,添加如下内容:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> app_foo <span class="keyword">import</span> foo</span><br><span class="line"><span class="keyword">from</span> app_bar <span class="keyword">import</span> bar</span><br><span class="line"></span><br><span class="line">urls = &#123;</span><br><span class="line">    <span class="string">&#x27;foo&#x27;</span>: foo,</span><br><span class="line">    <span class="string">&#x27;bar&#x27;</span>: bar</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">application</span>(<span class="params">environ, start_response</span>):</span><br><span class="line">    path = environ.get(<span class="string">&#x27;PATH_INFO&#x27;</span>, <span class="string">&#x27;&#x27;</span>).lstrip(<span class="string">&#x27;/&#x27;</span>)</span><br><span class="line"></span><br><span class="line">    callback = urls.get(path)</span><br><span class="line">    <span class="keyword">if</span> callback <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">        <span class="keyword">return</span> callback(environ, start_response)</span><br><span class="line"></span><br><span class="line">    start_response(<span class="string">&#x27;404 Not Found&#x27;</span>, [(<span class="string">&#x27;Content-Type&#x27;</span>, <span class="string">&#x27;text/plain&#x27;</span>)])</span><br><span class="line">    <span class="keyword">return</span> [<span class="string">&#x27;Not Found&#x27;</span>]</span><br></pre></td></tr></table></figure>
+<p>执行gunicorn:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># gunicorn router:application</span></span><br><span class="line">2017-01-05 11:41:33 [24276] [INFO] Starting gunicorn 18.0</span><br><span class="line">2017-01-05 11:41:33 [24276] [INFO] Listening at: http://127.0.0.1:8000 (24276)</span><br><span class="line">2017-01-05 11:41:33 [24276] [INFO] Using worker: <span class="built_in">sync</span></span><br><span class="line">2017-01-05 11:41:33 [24281] [INFO] Booting worker with pid: 24281</span><br></pre></td></tr></table></figure>
+<p>用curl来访问8000端口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># curl http://127.0.0.1:8000/foo</span></span><br><span class="line">hello, foo</span><br><span class="line">[root@compute1 ~]<span class="comment"># curl http://127.0.0.1:8000/bar</span></span><br><span class="line">hello, bar</span><br><span class="line">[root@compute1 ~]<span class="comment"># curl http://127.0.0.1:8000/xxx</span></span><br><span class="line">Not Found[root@compute1 ~]<span class="comment"># ^C</span></span><br></pre></td></tr></table></figure>
+<p>当我们访问<code>/foo</code>时，请求被路由至app_foo:foo函数处理，而当访问<code>/bar</code>时，请求被路由至app_bar:bar函数处理。</p>
+<p>WSGI Server实现有许多，可以参考:<a target="_blank" rel="noopener" href="http://wsgi.readthedocs.io/en/latest/servers.html">http://wsgi.readthedocs.io/en/latest/servers.html</a></p>
+<p>目前使用较广泛的主要有:</p>
+<ul>
+<li>Green Unicorn: <a target="_blank" rel="noopener" href="http://gunicorn.org/">http://gunicorn.org/</a></li>
+<li>uWSGI: <a target="_blank" rel="noopener" href="http://uwsgi-docs.readthedocs.org/en/latest/">http://uwsgi-docs.readthedocs.org/en/latest/</a></li>
+<li>mod_wsgi: <a target="_blank" rel="noopener" href="https://github.com/GrahamDumpleton/mod_wsgi">https://github.com/GrahamDumpleton/mod_wsgi</a></li>
+</ul>
+<p>本文代码示例主要阐述WSGI的原理和规范，而实际开发中最好还是基于Python Web框架来开发应用程序，如Django，Flask等，这些框架都实现了WSGI规范。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/01/07/all-in-one-neutron/" rel="prev" title="RDO安装all-in-one模式OpenStack虚拟网络架构分析">
+      <i class="fa fa-chevron-left"></i> RDO安装all-in-one模式OpenStack虚拟网络架构分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/01/24/keystone/" rel="next" title="OpenStack keystone介绍">
+      OpenStack keystone介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;使用eBPF和BCC调查创建文件的进程&gt;&gt;介绍了基于BCC来实现eBPF程序。BCC实现了对eBPF的封装，用户态部分提供Python API, 内核态部分使用的eBPF程序还是通过C语言来实现。运行时BCC会把eBPF的C程序编译成字节码、加载到内核执行，最后再通过用户空间的前端程序获取执行状态。可以在BCC的BPF调用中，指定参数debug&#x3D;4, 我们可以">
+<meta property="og:type" content="article">
+<meta property="og:title" content="eBPF原理介绍与C语言实现eBPF程序">
+<meta property="og:url" content="http://just4coding.com/2022/03/22/ebpf-c/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;使用eBPF和BCC调查创建文件的进程&gt;&gt;介绍了基于BCC来实现eBPF程序。BCC实现了对eBPF的封装，用户态部分提供Python API, 内核态部分使用的eBPF程序还是通过C语言来实现。运行时BCC会把eBPF的C程序编译成字节码、加载到内核执行，最后再通过用户空间的前端程序获取执行状态。可以在BCC的BPF调用中，指定参数debug&#x3D;4, 我们可以">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-03-22/1.png">
+<meta property="article:published_time" content="2022-03-21T17:30:27.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.499Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="eBPF">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-03-22/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/03/22/ebpf-c/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>eBPF原理介绍与C语言实现eBPF程序 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/22/ebpf-c/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          eBPF原理介绍与C语言实现eBPF程序
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-03-22 01:30:27" itemprop="dateCreated datePublished" datetime="2022-03-22T01:30:27+08:00">2022-03-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/2022/03/19/ebpf-bcc/">使用eBPF和BCC调查创建文件的进程</a>&gt;&gt;介绍了基于<a target="_blank" rel="noopener" href="https://github.com/iovisor/bcc"><code>BCC</code></a>来实现<code>eBPF</code>程序。<code>BCC</code>实现了对<code>eBPF</code>的封装，用户态部分提供Python API, 内核态部分使用的<code>eBPF</code>程序还是通过<code>C</code>语言来实现。运行时<code>BCC</code>会把<code>eBPF</code>的<code>C</code>程序编译成字节码、加载到内核执行，最后再通过用户空间的前端程序获取执行状态。<br>可以在<code>BCC</code>的<code>BPF</code>调用中，指定参数<code>debug=4</code>, 我们可以看到<code>BCC</code>的执行过程, 如:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> bcc <span class="keyword">import</span> BPF</span><br><span class="line">BPF(text=<span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">#include &lt;linux/ptrace.h&gt;</span></span><br><span class="line"><span class="string">int kprobe__tty_write(struct pt_regs *ctx, struct file *file, const char __user *buf, size_t count) &#123;</span></span><br><span class="line"><span class="string">return 0;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span>, debug=<span class="number">4</span>)</span><br></pre></td></tr></table></figure>
+
+<p><code>eBPF</code>编程的门槛还是比较高的，在当前还是快速发展的情况，API也还不稳定，对程序员的<code>C</code>语言、编译过程和内核等知识都有比较高的要求。<code>BCC</code>把这些都封装起来给用户提供了一个更为简单的使用框架。但本身也存在的一些问题，比如:</p>
+<ul>
+<li>每次执行时都需要重新编译</li>
+<li>执行程序的机器都需要安装内核头文件</li>
+</ul>
+<p><code>eBPF: extended Berkeley Packet Filter</code>是对<code>BPF</code>(现在称为<code>cBPF: classic BPF</code>)的扩展, 现在尽管还叫做<code>BPF</code>, 但应用场景已经远远超过了它的名称的范畴。它的应用范围的扩大主要得益于这几方面:</p>
+<ul>
+<li>内核中<code>BPF</code>字节码虚拟机扩展为一个通用的执行引擎</li>
+<li>执行可节码的安全校验</li>
+<li><code>JIT</code>支持，可以直接将字节码指令转成内核可执行的原生指令运行</li>
+</ul>
+<p>这样在安全性、可编程性和性能方面的提升都使得<code>eBPF</code>在包过滤以外的其他领域获取巨大的应用空间。</p>
+<span id="more"></span>
+
+<p><code>eBPF</code>的整体架构图如下:</p>
+<img src="/images/2022-03-22/1.png" class="">
+
+<p>图片来自: <a target="_blank" rel="noopener" href="https://cloudnative.to/blog/bpf-intro/linux_ebpf_internals.png">https://cloudnative.to/blog/bpf-intro/linux_ebpf_internals.png</a></p>
+<p><code>eBPF</code>程序分为两部分：</p>
+<ul>
+<li>内核态部分: 内核中的<code>eBPF</code>字节码程序负责在内核中处理特定事件，并可以将处理的结果通过<code>maps</code>或者<code>perf-event</code>发送到用户空间</li>
+<li>用户态部分: 用户态部分主要有两方面作用:<ul>
+<li>加载<code>eBPF</code>字节码程序到内核中</li>
+<li>与内核态<code>eBPF</code>程序之写读写信息</li>
+</ul>
+</li>
+</ul>
+<p><code>eBPF</code>本身是事件驱动触发的机制，因而需要将特定的内核事件与<code>eBPF</code>字节码程序进行关联。</p>
+<p><code>eBPF</code>程序的开发及运行的一个典型过程如下:</p>
+<ol>
+<li>编写<code>eBPF</code>程序，并编译成字节码，目前只能使用<code>CLANG</code>和<code>LLVM</code>编译成<code>eBPF</code>字节码</li>
+<li>将<code>eBPF</code>程序加载到内核中，内核会校验字节码避免内核崩溃</li>
+<li>将内核事件与<code>eBPF</code>程序进行关联</li>
+<li>内核事件发生时，<code>eBPF</code>程序执行，发送信息给用户态程序</li>
+<li>用户态程序读取相关信息</li>
+</ol>
+<p>我们还是以之前文章中的示例来说明上述过程。上文我们提到我们的系统是<code>CentOS7.8</code>, 尽管<code>CentOS7</code>上的<code>eBPF</code>支持还是比较实验性的，但大多数功能还是能支持的。</p>
+<p>由于要使用<code>CLANG</code>和<code>LLVM</code>来编译<code>eBPF</code>程序，而<code>CentOS7</code>上默认<code>yum</code>安装的<code>CLANG</code>和<code>LLVM</code>的版本比较老，不支持<code>eBPF</code>的编译。可以从这个<code>repo</code>中安装, 在<code>/etc/yum.repos.d/</code>下创建文件<code>c7-llvm.repo</code>文件, 内容如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[c7-llvm-toolset-9]</span><br><span class="line">name=c7-llvm-toolset-9</span><br><span class="line">baseurl=https://buildlogs.centos.org/c7-llvm-toolset-9.0.x86_64/</span><br><span class="line">gpgcheck=0</span><br><span class="line">enabled=1</span><br></pre></td></tr></table></figure>
+<p>然后执行以下命令进行安装并启用:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">yum install llvm-toolset-9.0</span><br><span class="line"><span class="built_in">source</span> /opt/rh/llvm-toolset-9.0/enable</span><br></pre></td></tr></table></figure>
+
+<p>准备好编译环境之后，我们开始编写<code>eBPF</code>程序, <code>vfs_create.c</code>内容如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kconfig.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/fs.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;uapi/linux/ptrace.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;uapi/linux/bpf.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/sched.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> SEC(NAME) __attribute__((section(NAME), used))</span></span><br><span class="line"><span class="type">static</span> <span class="title function_">int</span> <span class="params">(*bpf_trace_printk)</span><span class="params">(<span class="type">const</span> <span class="type">char</span> *fmt, <span class="type">int</span> fmt_size, ...)</span> =</span><br><span class="line">    (<span class="type">void</span> *) BPF_FUNC_trace_printk;</span><br><span class="line"><span class="type">static</span> <span class="title function_">int</span> <span class="params">(*bpf_probe_read)</span><span class="params">(<span class="type">void</span> *dst, <span class="type">int</span> size, <span class="type">void</span> *src)</span> =</span><br><span class="line">    (<span class="type">void</span> *) BPF_FUNC_probe_read;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_PARM1(x) ((x)-&gt;di)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_PARM2(x) ((x)-&gt;si)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_PARM3(x) ((x)-&gt;dx)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_PARM4(x) ((x)-&gt;cx)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_PARM5(x) ((x)-&gt;r8)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_RET(x) ((x)-&gt;sp)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_FP(x) ((x)-&gt;bp)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_RC(x) ((x)-&gt;ax)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_SP(x) ((x)-&gt;sp)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PT_REGS_IP(x) ((x)-&gt;ip)</span></span><br><span class="line"></span><br><span class="line">SEC(<span class="string">&quot;kprobe/vfs_create&quot;</span>)</span><br><span class="line"><span class="type">int</span> <span class="title function_">kprobe__vfs_create</span><span class="params">(<span class="keyword">struct</span> pt_regs *ctx)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">char</span> fmt[] = <span class="string">&quot;FNAME: %s\n&quot;</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">dentry</span> *<span class="title">dentry</span> =</span> (<span class="keyword">struct</span> dentry *) PT_REGS_PARM2(ctx);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">qstr</span> <span class="title">d_name</span> =</span> &#123;&#125;;</span><br><span class="line"></span><br><span class="line">    bpf_probe_read(&amp;d_name, <span class="keyword">sizeof</span>(d_name), &amp;dentry-&gt;d_name);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (d_name.len == <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    bpf_trace_printk(fmt, <span class="keyword">sizeof</span>(fmt), d_name.name);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">char</span> _license[] SEC(<span class="string">&quot;license&quot;</span>) = <span class="string">&quot;GPL&quot;</span>;</span><br><span class="line">u32 _version <span class="title function_">SEC</span><span class="params">(<span class="string">&quot;version&quot;</span>)</span> = LINUX_VERSION_CODE;</span><br></pre></td></tr></table></figure>
+
+<p>程序逻辑和之前文章中类似，可以看到和写在<code>BCC</code>中的<code>C</code>代码是不同的。例如，这里使用的<code>eBPF</code>程序的参数只有一个<code>struct pt_regs *ctx</code>, 其他的参数需要从<code>ctx</code>中获取到，而<code>BCC</code>中的<code>C</code>代码的函数参数中就已经带有相关参数了。因为<code>BCC</code>会在编译代码前对代码进行处理，可以使用文章开头所说的<code>debug=4</code>来查看这些细节。</p>
+<p>然后编写<code>Makefile</code>:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">OBJS = vfs_create.o</span><br><span class="line"></span><br><span class="line">LLC ?= llc</span><br><span class="line">CLANG ?= clang</span><br><span class="line">INC_FLAGS = -nostdinc -isystem `<span class="variable">$(CLANG)</span> -print-file-name=<span class="keyword">include</span>`</span><br><span class="line">EXTRA_CFLAGS ?= -O2 -emit-llvm</span><br><span class="line"></span><br><span class="line">linuxhdrs ?= /usr/src/kernels/`uname -r`</span><br><span class="line">LINUXINCLUDE =  -I<span class="variable">$(linuxhdrs)</span>/<span class="keyword">include</span> \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/<span class="keyword">include</span>/uapi \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/<span class="keyword">include</span>/generated \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/<span class="keyword">include</span>/generated/uapi \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/arch/x86/<span class="keyword">include</span> \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/arch/x86/<span class="keyword">include</span>/uapi \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/arch/x86/<span class="keyword">include</span>/generated \</span><br><span class="line">                -I<span class="variable">$(linuxhdrs)</span>/arch/x86/<span class="keyword">include</span>/generated/uapi</span><br><span class="line"></span><br><span class="line">prefix ?= /usr/local</span><br><span class="line"></span><br><span class="line">INSTALLPATH = <span class="variable">$(prefix)</span>/lib/bpf</span><br><span class="line"></span><br><span class="line">install_PROGRAM = install</span><br><span class="line">install_DIR = install -dv</span><br><span class="line"></span><br><span class="line"><span class="section">all: <span class="variable">$(OBJS)</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta"><span class="keyword">.PHONY</span>: clean</span></span><br><span class="line"></span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">    rm -f <span class="variable">$(OBJS)</span></span><br><span class="line"></span><br><span class="line">INC_FLAGS = -nostdinc -isystem `<span class="variable">$(CLANG)</span> -print-file-name=<span class="keyword">include</span>`</span><br><span class="line"></span><br><span class="line"><span class="variable">$(OBJS)</span>:  %.o:%.c</span><br><span class="line">    <span class="variable">$(CLANG)</span> <span class="variable">$(INC_FLAGS)</span> \</span><br><span class="line">    -D__KERNEL__ -D__ASM_SYSREG_H -D__BPF_TRACING__ \</span><br><span class="line">    -Wno-unused-value -Wno-pointer-sign \</span><br><span class="line">    -Wno-compare-distinct-pointer-types \</span><br><span class="line">    -Wno-gnu-variable-sized-type-not-at-end \</span><br><span class="line">    -Wno-address-of-packed-member -Wno-tautological-compare \</span><br><span class="line">    -Wno-unknown-warning-option \</span><br><span class="line">    -I../<span class="keyword">include</span> <span class="variable">$(LINUXINCLUDE)</span> \</span><br><span class="line">    <span class="variable">$(EXTRA_CFLAGS)</span> -c <span class="variable">$&lt;</span> -o -| <span class="variable">$(LLC)</span> -march=bpf -filetype=obj -o <span class="variable">$@</span></span><br><span class="line"></span><br><span class="line"><span class="section">install: <span class="variable">$(OBJS)</span></span></span><br><span class="line">    <span class="variable">$(install_DIR)</span> -d <span class="variable">$(INSTALLPATH)</span> ; \</span><br><span class="line">    <span class="variable">$(install_PROGRAM)</span> <span class="variable">$^</span> -t <span class="variable">$(INSTALLPATH)</span></span><br><span class="line"></span><br><span class="line"><span class="section">uninstall: <span class="variable">$(OBJS)</span></span></span><br><span class="line">    rm -rf <span class="variable">$(INSTALLPATH)</span></span><br></pre></td></tr></table></figure>
+
+<p>编译我们编写的<code>eBPF</code>程序，这需要提前安装好相应内核版本的<code>kernel-devel</code>包：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
+
+<p>这会在当前目录生成<code>vfs_create.o</code>文件, 使用<code>llvm-objdump</code>查看生成的<code>eBPF</code>程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">[root@default bpf]<span class="comment"># llvm-objdump -S ./vfs_create.o</span></span><br><span class="line"></span><br><span class="line">./vfs_create.o:	file format ELF64-BPF</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Disassembly of section kprobe/vfs_create:</span><br><span class="line"></span><br><span class="line">0000000000000000 kprobe__vfs_create:</span><br><span class="line">       0:	b7 02 00 00 73 0a 00 00	r2 = 2675</span><br><span class="line">       1:	6b 2a f8 ff 00 00 00 00	*(u16 *)(r10 - 8) = r2</span><br><span class="line">       2:	18 02 00 00 46 4e 41 4d 00 00 00 00 45 3a 20 25	r2 = 2675202247981354566 ll</span><br><span class="line">       4:	7b 2a f0 ff 00 00 00 00	*(u64 *)(r10 - 16) = r2</span><br><span class="line">       5:	b7 02 00 00 00 00 00 00	r2 = 0</span><br><span class="line">       6:	73 2a fa ff 00 00 00 00	*(u8 *)(r10 - 6) = r2</span><br><span class="line">       7:	79 13 68 00 00 00 00 00	r3 = *(u64 *)(r1 + 104)</span><br><span class="line">       8:	7b 2a e8 ff 00 00 00 00	*(u64 *)(r10 - 24) = r2</span><br><span class="line">       9:	7b 2a e0 ff 00 00 00 00	*(u64 *)(r10 - 32) = r2</span><br><span class="line">      10:	07 03 00 00 20 00 00 00	r3 += 32</span><br><span class="line">      11:	bf a1 00 00 00 00 00 00	r1 = r10</span><br><span class="line">      12:	07 01 00 00 e0 ff ff ff	r1 += -32</span><br><span class="line">      13:	b7 02 00 00 10 00 00 00	r2 = 16</span><br><span class="line">      14:	85 00 00 00 04 00 00 00	call 4</span><br><span class="line">      15:	61 a1 e4 ff 00 00 00 00	r1 = *(u32 *)(r10 - 28)</span><br><span class="line">      16:	15 01 05 00 00 00 00 00	<span class="keyword">if</span> r1 == 0 goto +5 &lt;LBB0_2&gt;</span><br><span class="line">      17:	79 a3 e8 ff 00 00 00 00	r3 = *(u64 *)(r10 - 24)</span><br><span class="line">      18:	bf a1 00 00 00 00 00 00	r1 = r10</span><br><span class="line">      19:	07 01 00 00 f0 ff ff ff	r1 += -16</span><br><span class="line">      20:	b7 02 00 00 0b 00 00 00	r2 = 11</span><br><span class="line">      21:	85 00 00 00 06 00 00 00	call 6</span><br><span class="line"></span><br><span class="line">00000000000000b0 LBB0_2:</span><br><span class="line">      22:	b7 00 00 00 00 00 00 00	r0 = 0</span><br><span class="line">      23:	95 00 00 00 00 00 00 00	<span class="built_in">exit</span></span><br></pre></td></tr></table></figure>
+
+<p>至此我们完成了上述典型过程的第一步。接下来看如何加载<code>eBPF</code>程序。</p>
+<p>可以直接使用<code>bpftool</code>来加载程序，具体的使用信息可以参考<code>man bpftool-prog</code>。</p>
+<p>执行<code>bpftool</code>之前需要加挂载<code>/sys/fs/bpf</code>目录，这是因为内核中的<code>eBPF</code>对象由一个<code>文件描述符</code>引用,当<code>bpftool</code>工具退出时，相应的文件描述符关闭时，<code>eBPF</code>程序也就销毁了，因而内核提供了<code>/sys/fs/bpf</code>机制，保证程序退出后，<code>eBPF</code>程序依然存在，对细节感兴趣可以参考<code>LWN</code>的<a target="_blank" rel="noopener" href="https://lwn.net/Articles/664688/">这篇</a>。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mount -t bpf none /sys/fs/bpf</span><br></pre></td></tr></table></figure>
+
+<p>加载<code>eBPF</code>程序, 使用<code>show</code>命令可以看到我们创建的<code>eBPF</code>程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@default bpf]<span class="comment"># bpftool prog load vfs_create.o /sys/fs/bpf/vfs_create</span></span><br><span class="line">[root@default bpf]<span class="comment"># bpftool prog show</span></span><br><span class="line">41: kprobe  name kprobe__vfs_cre  tag f7facf2555238156  gpl</span><br><span class="line">	loaded_at 2022-03-21T17:06:01+0000  uid 0</span><br><span class="line">	xlated 192B  jited 153B  memlock 4096B</span><br></pre></td></tr></table></figure>
+
+<p>要删除<code>eBPF</code>程序只需要移除<code>bpffs</code>里的文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">rm</span> /sys/fs/bpf/vfs_create</span><br></pre></td></tr></table></figure>
+
+<p>为了更好的说明加载的过程，我们使用<code>C</code>语言调用<code>bpf</code>系统调用实现一个简单的加载器<code>loader.c</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> _GNU_SOURCE</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/stat.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/bpf.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> bfd, pfd;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> buf[<span class="number">1024</span>] = &#123;&#125;;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">bpf_insn</span> *<span class="title">insn</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> <span class="title">bpf_attr</span> <span class="title">attr</span> =</span> &#123;&#125;;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> log_buf[<span class="number">4096</span>] = &#123;&#125;;</span><br><span class="line">    <span class="type">int</span> ret, n, i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc != <span class="number">3</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Usage: loader &lt;ebpf file&gt; &lt;pathname&gt;\n&quot;</span>);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    bfd = open(argv[<span class="number">1</span>], O_RDONLY);</span><br><span class="line">    <span class="keyword">if</span> (bfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;open eBPF program error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    n = read(bfd, buf, <span class="number">1024</span>);</span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; n; ++i) &#123;</span><br><span class="line">        <span class="keyword">if</span> (i % <span class="number">8</span> == <span class="number">0</span>)</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;\n%03x: &quot;</span>, i);</span><br><span class="line"></span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;%02x &quot;</span>, buf[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    close(bfd);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    insn = (<span class="keyword">struct</span> bpf_insn*)buf;</span><br><span class="line"></span><br><span class="line">    attr.prog_type = BPF_PROG_TYPE_KPROBE;</span><br><span class="line">    attr.insns = (<span class="type">unsigned</span> <span class="type">long</span>)insn;</span><br><span class="line">    attr.insn_cnt = n / <span class="keyword">sizeof</span>(<span class="keyword">struct</span> bpf_insn);</span><br><span class="line">    attr.license = (<span class="type">unsigned</span> <span class="type">long</span>) <span class="string">&quot;GPL&quot;</span>;</span><br><span class="line">    attr.log_size = <span class="keyword">sizeof</span>(log_buf);</span><br><span class="line">    attr.log_buf = (<span class="type">unsigned</span> <span class="type">long</span>)log_buf;</span><br><span class="line">    attr.log_level = <span class="number">1</span>;</span><br><span class="line">    attr.kern_version = LINUX_VERSION_CODE;</span><br><span class="line">    <span class="built_in">memcpy</span>(attr.prog_name, <span class="string">&quot;vfs_create&quot;</span>, <span class="keyword">sizeof</span>(<span class="string">&quot;vfs_create&quot;</span>));</span><br><span class="line"></span><br><span class="line">    pfd = syscall(SYS_bpf, BPF_PROG_LOAD, &amp;attr, <span class="keyword">sizeof</span>(attr));</span><br><span class="line">    <span class="keyword">if</span> (pfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;bpf syscall load error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;log_buf = %s\n&quot;</span>, log_buf);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    bzero(&amp;attr, <span class="keyword">sizeof</span>(attr));</span><br><span class="line">    attr.pathname = (<span class="type">unsigned</span> <span class="type">long</span>)((<span class="type">void</span> *)argv[<span class="number">2</span>]);</span><br><span class="line">    attr.bpf_fd = pfd;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (syscall(SYS_bpf, BPF_OBJ_PIN, &amp;attr, <span class="keyword">sizeof</span>(attr)) &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;bpf syscall pin error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;eBPF prog loaded\n&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>为了简单没有在代码中处理<code>ELF</code>文件格式，而直接使用<code>eBPF</code>的字节码。我们可以使用<code>dd</code>程序从<code>vfs_create.o</code>这个<code>ELF</code>文件中抽取出字节码。<br>使用<code>llvm-readelf</code>查看<code>vfs_create.o</code>, 可以看到<code>kprobe/vfs_create</code>段的偏移量是<code>000040</code>，也就是<code>64</code>, 大小是<code>0000c0</code>, 也就是<code>192</code>字节:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">[root@default bpf]<span class="comment"># llvm-readelf -S ./vfs_create.o</span></span><br><span class="line"></span><br><span class="line">There are 10 section headers, starting at offset 0x280:</span><br><span class="line"></span><br><span class="line">Section Headers:</span><br><span class="line">  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al</span><br><span class="line">  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0</span><br><span class="line">  [ 1] .strtab           STRTAB          0000000000000000 000200 00007f 00      0   0  1</span><br><span class="line">  [ 2] .text             PROGBITS        0000000000000000 000040 000000 00  AX  0   0  4</span><br><span class="line">  [ 3] kprobe/vfs_create PROGBITS        0000000000000000 000040 0000c0 00  AX  0   0  8</span><br><span class="line">  [ 4] .rodata.str1.1    PROGBITS        0000000000000000 000100 00000b 01 AMS  0   0  1</span><br><span class="line">  [ 5] license           PROGBITS        0000000000000000 00010b 000004 00  WA  0   0  1</span><br><span class="line">  [ 6] version           PROGBITS        0000000000000000 000110 000004 00  WA  0   0  4</span><br><span class="line">  [ 7] .eh_frame         PROGBITS        0000000000000000 000118 000030 00   A  0   0  8</span><br><span class="line">  [ 8] .rel.eh_frame     REL             0000000000000000 0001f0 000010 10      9   7  8</span><br><span class="line">  [ 9] .symtab           SYMTAB          0000000000000000 000148 0000a8 18      1   4  8</span><br><span class="line">Key to Flags:</span><br><span class="line">  W (write), A (alloc), X (execute), M (merge), S (strings), l (large)</span><br><span class="line">  I (info), L (<span class="built_in">link</span> order), G (group), T (TLS), E (exclude), x (unknown)</span><br><span class="line">  O (extra OS processing required) o (OS specific), p (processor specific)</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>dd</code>命令抽取字节码部分:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@default bpf]<span class="comment"># dd if=./vfs_create.o of=vfs_create.bpf bs=1 count=192 skip=64</span></span><br><span class="line">192+0 records <span class="keyword">in</span></span><br><span class="line">192+0 records out</span><br><span class="line">192 bytes (192 B) copied, 0.0136997 s, 14.0 kB/s</span><br></pre></td></tr></table></figure>
+
+<p>编译我们编写的<code>loader</code>, 并加载<code>eBPF</code>程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">[root@default bpf]<span class="comment"># ./loader ./vfs_create.bpf /sys/fs/bpf/vfs_create</span></span><br><span class="line"></span><br><span class="line">000: b7 02 00 00 73 0a 00 00</span><br><span class="line">008: 6b 2a f8 ff 00 00 00 00</span><br><span class="line">010: 18 02 00 00 46 4e 41 4d</span><br><span class="line">018: 00 00 00 00 45 3a 20 25</span><br><span class="line">020: 7b 2a f0 ff 00 00 00 00</span><br><span class="line">028: b7 02 00 00 00 00 00 00</span><br><span class="line">030: 73 2a fa ff 00 00 00 00</span><br><span class="line">038: 79 13 68 00 00 00 00 00</span><br><span class="line">040: 7b 2a e8 ff 00 00 00 00</span><br><span class="line">048: 7b 2a e0 ff 00 00 00 00</span><br><span class="line">050: 07 03 00 00 20 00 00 00</span><br><span class="line">058: bf a1 00 00 00 00 00 00</span><br><span class="line">060: 07 01 00 00 e0 ff ff ff</span><br><span class="line">068: b7 02 00 00 10 00 00 00</span><br><span class="line">070: 85 00 00 00 04 00 00 00</span><br><span class="line">078: 61 a1 e4 ff 00 00 00 00</span><br><span class="line">080: 15 01 05 00 00 00 00 00</span><br><span class="line">088: 79 a3 e8 ff 00 00 00 00</span><br><span class="line">090: bf a1 00 00 00 00 00 00</span><br><span class="line">098: 07 01 00 00 f0 ff ff ff</span><br><span class="line">0a0: b7 02 00 00 0b 00 00 00</span><br><span class="line">0a8: 85 00 00 00 06 00 00 00</span><br><span class="line">0b0: b7 00 00 00 00 00 00 00</span><br><span class="line">0b8: 95 00 00 00 00 00 00 00</span><br><span class="line">eBPF prog loaded</span><br></pre></td></tr></table></figure>
+
+<p>此时使用<code>bpftool</code>查看<code>eBPF</code>程序, 可以看到我们的程序被成功加载:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@default user]<span class="comment"># bpftool prog show</span></span><br><span class="line">43: kprobe name vfs_create tag f7facf2555238156  gpl</span><br><span class="line">	loaded_at 2022-03-21T17:18:36+0000  uid 0</span><br><span class="line">	xlated 192B  jited 153B  memlock 4096B</span><br></pre></td></tr></table></figure>
+
+<p>至此第二步完成。</p>
+<p>第三步是要内核事件与加载的<code>eBPF</code>程序进行关联。我们使用的事件源是<code>kprobe</code>。每个<code>kprobe</code>或<code>kretprobe</code>被创建时都会关联一个<code>id</code>, 存储在<code>/sys/kernel/debug/tracing/events/[uk]probe/xxxxxx/id</code>或<code>/sys/kernel/debug/tracing/events/[uk]retprobe/xxxxxx/id</code>中。具体怎样使用<code>sysfs</code>创建<code>kprobe</code>可以参考<a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/trace/kprobetrace.txt">内核文档</a>。我们需要使用这个<code>id</code>打开一个<code>perf_event</code>并启用它，关联到指定的<code>eBPF</code>程序做为我们的事件处理程序。</p>
+<p>首先创建<code>vfs_create</code>的<code>kprobe</code>, 并查看相应<code>probe</code>的<code>id</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default user]<span class="comment"># echo &#x27;p:vfs_create vfs_create&#x27; &gt;&gt; /sys/kernel/debug/tracing/kprobe_events</span></span><br><span class="line">[root@default user]<span class="comment"># cat /sys/kernel/debug/tracing/events/kprobes/vfs_create/id</span></span><br><span class="line">1462</span><br></pre></td></tr></table></figure>
+
+<p>编写关联逻辑的代码<code>attacher.c</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> _GNU_SOURCE</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/stat.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/bpf.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/perf_event.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/hw_breakpoint.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> ret, efd, pfd;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">perf_event_attr</span> <span class="title">pattr</span> =</span> &#123;&#125;;</span><br><span class="line">    <span class="type">long</span> event_id, ebpf_id;</span><br><span class="line">    <span class="class"><span class="keyword">union</span> <span class="title">bpf_attr</span> <span class="title">attr</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc != <span class="number">3</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Usage: attacher &lt;event id&gt; &lt;eBPF id&gt;\n&quot;</span>);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    event_id = strtol(argv[<span class="number">1</span>], <span class="literal">NULL</span>, <span class="number">10</span>);</span><br><span class="line">    ebpf_id = strtol(argv[<span class="number">2</span>], <span class="literal">NULL</span>, <span class="number">10</span>);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Event: %ld, eBPF: %ld\n&quot;</span>, event_id, ebpf_id);</span><br><span class="line"></span><br><span class="line">    bzero(&amp;attr, <span class="keyword">sizeof</span>(attr));</span><br><span class="line">    attr.prog_id = ebpf_id;</span><br><span class="line"></span><br><span class="line">    pfd = syscall(SYS_bpf, BPF_PROG_GET_FD_BY_ID, &amp;attr, <span class="keyword">sizeof</span>(attr));</span><br><span class="line">    <span class="keyword">if</span> (pfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;bpf error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pattr.type = PERF_TYPE_TRACEPOINT;</span><br><span class="line">    pattr.sample_type = PERF_SAMPLE_RAW;</span><br><span class="line">    pattr.sample_period = <span class="number">1</span>;</span><br><span class="line">    pattr.wakeup_events = <span class="number">1</span>;</span><br><span class="line">    pattr.config = event_id;</span><br><span class="line">    pattr.size = <span class="keyword">sizeof</span>(pattr);</span><br><span class="line">    efd = syscall(SYS_perf_event_open, &amp;pattr, <span class="number">-1</span>, <span class="number">0</span>, <span class="number">-1</span>, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (efd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;perf_event_open error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ret = ioctl(efd, PERF_EVENT_IOC_SET_BPF, pfd);</span><br><span class="line">    <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;PERF_EVENT_IOC_SET_BPF error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ret = ioctl(efd, PERF_EVENT_IOC_ENABLE, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;PERF_EVENT_IOC_ENABLE error: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;attach success\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        sleep(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@default user]<span class="comment"># gcc attacher.c -o attacher</span></span><br><span class="line">[root@default user]<span class="comment"># ./attacher 1462 43</span></span><br><span class="line">Event: 1462, eBPF: 43</span><br><span class="line">attach success</span><br></pre></td></tr></table></figure>
+
+<p><code>bpf_trace_printk</code>会将信息写入到文件<code>/sys/kernel/debug/tracing/trace_pipe</code>。我们打开一个终端读取它的内容, 在另一个终端上，在<code>/tmp</code>目录下创建文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">touch</span> /tmp/dummy.xxx</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>trace_pipe</code>内容中看到相应的文件记录:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default tmp]<span class="comment"># cat /sys/kernel/debug/tracing/trace_pipe</span></span><br><span class="line">           touch-5892  [000] d... 116854.904439: : FNAME: dummy.xxx</span><br></pre></td></tr></table></figure>
+
+<p><code>eBPF</code>现在发展很快，不同的内核版本上，这里所用的代码可能需要有所调整。想要具体的了解<code>eBPF</code>编程相关的内容还是要熟悉内核中<code>eBPF</code>相关的代码，而且在不同的内核版本上，文件目录可能都会有所不同。</p>
+<p>参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1749470?from=article.detail.1757600">https://cloud.tencent.com/developer/article/1749470?from=article.detail.1757600</a></li>
+<li><a target="_blank" rel="noopener" href="https://goteleport.com/blog/what-is-ebpf/">https://goteleport.com/blog/what-is-ebpf/</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1916561?from=article.detail.1749470">https://cloud.tencent.com/developer/article/1916561?from=article.detail.1749470</a></li>
+<li><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s?__biz=MzA4MjM3NzE5MQ==&mid=2649662456&idx=1&sn=de53747b1ca74f0f15398f118b78026a&chksm=879ca370b0eb2a661bfd48242ec2f66b1f58e4ac1a76fe712fbf7181ddfb69f0a79509625f2d&scene=21#wechat_redirect">https://mp.weixin.qq.com/s?__biz=MzA4MjM3NzE5MQ==&amp;mid=2649662456&amp;idx=1&amp;sn=de53747b1ca74f0f15398f118b78026a&amp;chksm=879ca370b0eb2a661bfd48242ec2f66b1f58e4ac1a76fe712fbf7181ddfb69f0a79509625f2d&amp;scene=21#wechat_redirect</a></li>
+<li><a target="_blank" rel="noopener" href="https://ebpf.io/">https://ebpf.io/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.njcx.bid/posts/S6.html">https://www.njcx.bid/posts/S6.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://cyral.com/blog/how-to-ebpf-accelerating-cloud-native/">https://cyral.com/blog/how-to-ebpf-accelerating-cloud-native/</a></li>
+<li><a target="_blank" rel="noopener" href="https://qmonnet.github.io/whirl-offload/2020/04/12/llvm-ebpf-asm/">https://qmonnet.github.io/whirl-offload/2020/04/12/llvm-ebpf-asm/</a></li>
+<li><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/ebpf-assembly-with-llvm-zh/">https://arthurchiao.art/blog/ebpf-assembly-with-llvm-zh/</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloudnative.to/blog/bpf-intro/">https://cloudnative.to/blog/bpf-intro/</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloudnative.to/blog/compile-bpf-examples/">https://cloudnative.to/blog/compile-bpf-examples/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.lijiaocn.com/%E6%8A%80%E5%B7%A7/2019/02/25/ebpf-introduction-1.html">https://www.lijiaocn.com/%E6%8A%80%E5%B7%A7/2019/02/25/ebpf-introduction-1.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/599755/">https://lwn.net/Articles/599755/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.collabora.com/news-and-blog/blog/2019/04/05/an-ebpf-overview-part-1-introduction/">https://www.collabora.com/news-and-blog/blog/2019/04/05/an-ebpf-overview-part-1-introduction/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.raymond.burkholder.net/index.php?/archives/1000-eBPF-Basics.html">https://blog.raymond.burkholder.net/index.php?/archives/1000-eBPF-Basics.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/664688/">https://lwn.net/Articles/664688/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-a-tour-of-program-types">https://blogs.oracle.com/linux/post/bpf-a-tour-of-program-types</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-in-depth-bpf-helper-functions">https://blogs.oracle.com/linux/post/bpf-in-depth-bpf-helper-functions</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-in-depth-communicating-with-userspace">https://blogs.oracle.com/linux/post/bpf-in-depth-communicating-with-userspace</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-in-depth-building-bpf-programs">https://blogs.oracle.com/linux/post/bpf-in-depth-building-bpf-programs</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-in-depth-the-bpf-bytecode-and-the-bpf-verifier">https://blogs.oracle.com/linux/post/bpf-in-depth-the-bpf-bytecode-and-the-bpf-verifier</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/bpf-using-bpf-to-do-packet-transformation">https://blogs.oracle.com/linux/post/bpf-using-bpf-to-do-packet-transformation</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.oracle.com/linux/post/notes-on-bpf-7-bpf-tc-and-generic-segmentation-offload">https://blogs.oracle.com/linux/post/notes-on-bpf-7-bpf-tc-and-generic-segmentation-offload</a></li>
+<li><a target="_blank" rel="noopener" href="http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2020/01/18/ebpf-in-c">http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2020/01/18/ebpf-in-c</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/48721256/error-while-loading-a-bpf-program-that-copies-a-buffer-to-the-bpf-stack">https://stackoverflow.com/questions/48721256/error-while-loading-a-bpf-program-that-copies-a-buffer-to-the-bpf-stack</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/html/latest/bpf/verifier.html#understanding-ebpf-verifier-messages">https://www.kernel.org/doc/html/latest/bpf/verifier.html#understanding-ebpf-verifier-messages</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/trace/kprobetrace.txt">https://www.kernel.org/doc/Documentation/trace/kprobetrace.txt</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/eBPF/" rel="tag"># eBPF</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/03/19/ebpf-bcc/" rel="prev" title="使用eBPF和BCC调查创建文件的进程">
+      <i class="fa fa-chevron-left"></i> 使用eBPF和BCC调查创建文件的进程
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/03/22/totp/" rel="next" title="TOTP介绍">
+      TOTP介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

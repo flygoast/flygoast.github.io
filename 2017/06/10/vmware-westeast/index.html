@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VMware vSphere虚拟网络防护&gt;&gt;介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware vSphere东西向网络防护">
+<meta property="og:url" content="http://just4coding.com/2017/06/10/vmware-westeast/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VMware vSphere虚拟网络防护&gt;&gt;介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vS">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/7.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/8.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-06-10/9.png">
+<meta property="article:published_time" content="2017-06-10T15:24:22.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.482Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-06-10/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/06/10/vmware-westeast/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware vSphere东西向网络防护 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/06/10/vmware-westeast/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware vSphere东西向网络防护
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-06-10 23:24:22" itemprop="dateCreated datePublished" datetime="2017-06-10T23:24:22+08:00">2017-06-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/05/01/vmvare/">VMware vSphere虚拟网络防护</a>&gt;&gt;介绍了VMware vSphere的网络基础知识和南北向网络安全防护的思路。南北向网络防护是在网络边界进行安全隔离和流量过滤。那么怎样对网络内部的东西向流量如何进行安全防护呢？VMware NSX提供了东西向安全防护的能力。不过NSX的License价格很贵，很多企业并没有购买意愿。本文介绍在非NSX环境中只依赖vSphere提供的能力将流量引至虚拟安全设备实现东西向网络安全防护的思路。</p>
+<p>我们当前一台ESXi上的环境如图:</p>
+<img src="/images/2017-06-10/1.png" class="">
+
+<span id="more"></span>
+
+<p>我们在<code>10.187.160.40</code>上使用PING访问<code>10.187.160.41</code>。由于两IP为同一子网，首先通过ARP广播确定<code>10.187.160.41</code>对应的MAC地址，然后由虚拟交换机<code>vswitch0</code>将ICMP数据包转发给<code>10.187.160.41</code>。为了进行东西向安全防护，我们可以将流量引至虚拟安全设备，由虚拟安全设备执行安全策略。对于虚拟交换机OpenvSwitch, 我们可以使用OpenFlow协议实现引流，但是vSphere的虚拟交换机不具备这种能力，因而不能使用这种方案。&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/05/01/vmvare/">VMware vSphere虚拟网络防护</a>&gt;&gt;中我们介绍了vSphere虚拟交换机的基础知识。它支持端口组粒度的VLAN设置，我们可以基于不同VLAN之间网络的二层网络隔离性来实现引流。</p>
+<p>下面来看具体实现。我们在ESXi主机上新建虚拟交换机<code>vss_internal</code>, 在<code>vss_internal</code>上创建VLAN TAG分别为<code>100</code>和<code>200</code>的端口组<code>vlan100</code>和<code>vlan200</code>。<code>10.187.160.40</code>的网卡接入<code>vlan100</code>, <code>10.187.160.41</code>的网卡接入<code>vlan200</code>。我们在新建的虚拟交换机<code>vss_internal</code>和原有的虚拟交换机<code>vswitch0上</code>各创建一个TAG为<code>4095</code>的TRUNK端口组，并开启其<code>混杂模式</code>, <code>MAC地址更改</code>， <code>伪传输</code>等三个安全选项。我们的虚拟安全设备的两个网络接口分别接入其中。在接入<code>vss_internal</code>的网络接口上创建两个TAG分别为<code>100</code>和<code>200</code>的VLAN子接口。在虚拟安全设备上创建一个OVS bridge，并将两个VLAN子接口和接入<code>vswitch0</code>的网络接口接入OVS bridge。整体结构如下:</p>
+<img src="/images/2017-06-10/2.png" class="">
+
+<p>我们来分析<code>10.187.160.40</code>访问<code>10.187.160.41</code>的流程。首先<code>10.187.160.40</code>的接口发送ARP广播查询<code>10.187.10.41</code>的MAC地址。因为两个接口分属不同VLAN，虚拟交换机<code>vss_internal</code>不会将ARP数据包转发至<code>10.187.160.41</code>的端口。由于虚拟安全设备的<code>ens192</code>接口的端口组为trunk, 因而它会收到上述ARP数据包。子接口<code>vlan100</code>将VLAN TAG剥去，并发送到<code>ovs_bridge</code>，<code>ovs_bridge</code>按正常广播逻辑将数据包发送到<code>vlan200</code>子接口。<code>vlan200</code>子接口给数据包添加VLAN TAG将数据包由<code>ens192</code>发出，再次回到虚拟交换机<code>vss_internal</code>。此时数据包的VLAN TAG为<code>200</code>，因而<code>vss_internal</code>将数据包转发至<code>10.187.160.41</code>所在接口。<code>10.187.160.41</code>发送ARP响应，此时数据包的目的MAC地址为<code>10.187.160.40</code>的MAC地址。数据包到达<code>vss_internal</code>之后，由于VLAN不同，<code>vss_internal</code>并不会将数据包转发至<code>10.187.160.40</code>。但是由于<code>ens192</code>所在的端口组开启了混杂模式且为trunk模式，<code>ens192</code>会收到该数据包。子接口<code>vlan200</code>剥去VLAN后，将数据包发送至<code>ovs_bridge</code>。<code>ovs_bridge</code>会学习到MAC与PORT的对应关系，因而会将数据包发送至<code>vlan100</code>。子接口<code>vlan100</code>添加VLAN TAG将数据包发送回<code>vss_internal</code>。<br><code>vss_internal</code>再将数据包转发至<code>10.187.160.40</code>。ARP请求与响应的流程结束。ICMP的请求与回应的流程与ARP响应流程相似。</p>
+<p>ICMP请求包路径如图:</p>
+<img src="/images/2017-06-10/3.png" class="">
+
+<p>下面看一下<code>10.187.160.40</code>访问ESXi主机外的IP(如网关IP:10.187.160.1)的情形。ARP广播数据包到达<code>ovs_bridge</code>后，也会从<code>ens160</code>接口发出，<code>vswitch0</code>会将广播包由uplink发送至物理交换机。<code>10.187.160.1</code>的接口返回ARP响应后，再次从uplink进入<code>vswitch0</code>, <code>vswitch0</code>将数据包发送至<code>ens160</code>。<code>ens160</code>将数据包发送到<code>ovs_bridge</code>。<code>ovs_bridge</code>根据学习到MAC与PORT的对应关系，将数据包发送至<code>vlan100</code>。后续流程与上述流程一致。接下来的ICMP请求包流程如下图所示:</p>
+<img src="/images/2017-06-10/4.png" class="">
+
+<p>下面来看虚拟安全设备上的具体操作实现。</p>
+<p>首先创建两个VLAN子接口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens192 name ens192.100 <span class="built_in">type</span> vlan <span class="built_in">id</span> 100</span><br><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens192 name ens192.200 <span class="built_in">type</span> vlan <span class="built_in">id</span> 200</span><br></pre></td></tr></table></figure>
+<p>创建OVS bridge, 并连接相应接口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br ovsbr1</span><br><span class="line">ovs-vsctl add-port ovsbr1 ens192.100</span><br><span class="line">ovs-vsctl add-port ovsbr1 ens192.200</span><br><span class="line">ovs-vsctl add-port ovsbr1 ens160</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up ens192.100</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up ens192.200</span><br></pre></td></tr></table></figure>
+<p>如果我们需要完成<code>10.187.160.40</code>和<code>10.187.160.41</code>之间的访问控制，如何实现呢？可以有两种方式:</p>
+<ol>
+<li>因为所有流量都要经过OVS bridge, 我们可以直接通过OpenFlow流表来添加ACL规则。</li>
+<li>参考OpenStack安全组实现，在OVS bridge和子接间添加一个Linux Bridge，然后由iptables实现访问控制。</li>
+</ol>
+<p>首先介绍直接通过OpenFlow流表实现。</p>
+<p>默认流表如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ovs-ofctl dump-flows ovsbr1</span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x0, duration=159533.885s, table=0, n_packets=2612761, n_bytes=196489634, idle_age=0, hard_age=65534, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+<p>我们添加一条流将从10.187.160.40访问10.187.160.41的ICMP数据包丢弃:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow ovsbr1 <span class="string">&quot;table=0, priority=10, dl_type=0x0800, nw_proto=0x01, nw_src=10.187.160.40, nw_dst=10.187.160.41, actions=drop”</span></span><br></pre></td></tr></table></figure>
+<p>添加后的流表结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ovs-ofctl dump-flows ovsbr1</span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x0, duration=1.840s, table=0, n_packets=1, n_bytes=98, idle_age=1, priority=10,icmp,nw_src=10.187.160.40,nw_dst=10.187.160.41 actions=drop</span><br><span class="line">cookie=0x0, duration=159565.427s, table=0, n_packets=2613181, n_bytes=196523744, idle_age=0, hard_age=65534, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+<p>随后再删除该流:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl del-flows ovsbr1 “icmp<span class="string">&quot; </span></span><br></pre></td></tr></table></figure>
+<p>我们查看<code>10.187.160.40</code>上的测试结果, 添加流时数据包被丢弃了，删除流后，访问再次正常。</p>
+<img src="/images/2017-06-10/5.png" class="">
+
+<p>下面介绍基于iptables实现。<br>首先开启Linux bridge上的iptables:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> 1 &gt; /proc/sys/net/bridge/bridge-nf-call-iptables</span><br></pre></td></tr></table></figure>
+<p>接下来调整网络结构，在OVS bridge与VLAN子接口之间添加Linux Bridge。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl del-port ovsbr1 ens192.100</span><br><span class="line">ovs-vsctl del-port ovsbr1 ens192.200</span><br><span class="line">brctl addbr br100</span><br><span class="line">brctl addif br100 r100</span><br><span class="line">brctl addif br100 ens192.100</span><br><span class="line">brctl addbr br200</span><br><span class="line">brctl addif br200 r200</span><br><span class="line">brctl addif br200 ens192.200</span><br><span class="line">ovs-vsctl add-port ovsbr1 o200</span><br><span class="line">ovs-vsctl add-port ovsbr1 o100</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up r200</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up r100</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up o100</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up o200</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up br100</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up br200</span><br></pre></td></tr></table></figure>
+<p>查看OVS bridge结构:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># ovs-vsctl show</span></span><br><span class="line">67c86a45-0c76-4ab9-9f8e-de37545f57fe</span><br><span class="line">    Bridge <span class="string">&quot;ovsbr1&quot;</span> </span><br><span class="line">        Port <span class="string">&quot;ovsbr1&quot;</span> </span><br><span class="line">            Interface <span class="string">&quot;ovsbr1&quot;</span> </span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">        Port <span class="string">&quot;ens160&quot;</span> </span><br><span class="line">            Interface <span class="string">&quot;ens160&quot;</span> </span><br><span class="line">        Port <span class="string">&quot;o100&quot;</span> </span><br><span class="line">            Interface <span class="string">&quot;o100&quot;</span> </span><br><span class="line">        Port <span class="string">&quot;o200&quot;</span> </span><br><span class="line">            Interface <span class="string">&quot;o200&quot;</span> </span><br><span class="line">    ovs_version: “2.4.0<span class="string">&quot; </span></span><br></pre></td></tr></table></figure>
+
+<p>查看Linux Bridge结构:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># brctl show</span></span><br><span class="line">bridge name    bridge <span class="built_in">id</span>        STP enabled    interfaces</span><br><span class="line">br100        8000.000c29c2a2e2    no        ens192.100</span><br><span class="line">                                            r100</span><br><span class="line">br200        8000.000c29c2a2e2    no        ens192.200</span><br><span class="line">                                            r200</span><br></pre></td></tr></table></figure>
+
+<p>调整后结构如图:</p>
+<img src="/images/2017-06-10/6.png" class="">
+
+<p>添加访问控制规则, 并查看:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># iptables -A FORWARD -p icmp -m physdev --physdev-is-bridged --physdev-out ens192.200 -s 10.187.160.40/32 -d 10.187.160.41/32 -j DROP</span></span><br><span class="line">[root@localhost ~]<span class="comment"># iptables -nL</span></span><br><span class="line">Chain INPUT (policy ACCEPT)</span><br><span class="line">target     prot opt <span class="built_in">source</span>               destination</span><br><span class="line"></span><br><span class="line">Chain FORWARD (policy ACCEPT)</span><br><span class="line">target     prot opt <span class="built_in">source</span>               destination</span><br><span class="line">DROP       icmp --  10.187.160.40        10.187.160.41        PHYSDEV match --physdev-out ens192.200 --physdev-is-bridged</span><br><span class="line"></span><br><span class="line">Chain OUTPUT (policy ACCEPT)</span><br><span class="line">target     prot opt <span class="built_in">source</span>               destination</span><br></pre></td></tr></table></figure>
+
+<p>接着再清空规则:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -F</span><br></pre></td></tr></table></figure>
+
+<p>从结果上可以看到, 添加规则时数据包被丢弃了，清空规则后访问恢复:</p>
+<img src="/images/2017-06-10/7.png" class="">
+
+<p>上述方案基于原来vSphere环境上没有配置VLAN，若是原来ESXi主机上就有多个VLAN，则需要创建多个OVS bridge和在ens160接口上创建子接口来完成VLAN区分，架构如图所示:</p>
+<img src="/images/2017-06-10/8.png" class="">
+
+<p>原属于同一个VLAN但分布在不同ESXi的网络接口在这种结构的内部虚拟交换机上可以具备不同的VLAN TAG，只需要虚拟安全设备接入vswitch0的接口上的子接口VLAN一致。此时网络结构与数据包路径如图:</p>
+<img src="/images/2017-06-10/9.png" class="">
+
+<p>除了使用VLAN区分不同的网络，还可以使用VXLAN、GRE等overlay机制构建隔离的逻辑网络。可以参考OpenStack的Neutron实现中的<code>br-int</code>与<code>br-tun</code>实现。本文不再详细说明。</p>
+<p>VMware vSphere提供了相应API来操作端口组，修改虚拟机的网络接口所属端口组等，可以利用这些API自动化完成本文上述的网络结构改动与构建。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/05/21/vxlan/" rel="prev" title="VXLAN原理介绍与实例分析">
+      <i class="fa fa-chevron-left"></i> VXLAN原理介绍与实例分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/06/30/paste-deploy/" rel="next" title="PasteDeploy介绍">
+      PasteDeploy介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

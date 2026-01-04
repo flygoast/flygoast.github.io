@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="近期遇到一个C++程序退出的问题，经过调查发现，程序是由于接收到SIGPIPE信号而退出。该程序是多线程程序，使用libcurl进行HTTPS访问，同时设置了CURLOPT_NOSIGNAL选项，但没有自己处理SIGPIPE信号。在一些情况下，连接已经处理关闭状态，但应用程序不知道，依然向连接发送数据，就会导致SIGPIPE信号产生，进而导致程序退出。修复方法比较简单，只要应用程序设置SIGPIP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="多线程程序设置CURLOPT_NOSIGNAL选项">
+<meta property="og:url" content="http://just4coding.com/2025/01/21/curlopt-nosignal/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="近期遇到一个C++程序退出的问题，经过调查发现，程序是由于接收到SIGPIPE信号而退出。该程序是多线程程序，使用libcurl进行HTTPS访问，同时设置了CURLOPT_NOSIGNAL选项，但没有自己处理SIGPIPE信号。在一些情况下，连接已经处理关闭状态，但应用程序不知道，依然向连接发送数据，就会导致SIGPIPE信号产生，进而导致程序退出。修复方法比较简单，只要应用程序设置SIGPIP">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-01-21T01:35:12.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.511Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2025/01/21/curlopt-nosignal/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>多线程程序设置CURLOPT_NOSIGNAL选项 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2025/01/21/curlopt-nosignal/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          多线程程序设置CURLOPT_NOSIGNAL选项
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2025-01-21 09:35:12" itemprop="dateCreated datePublished" datetime="2025-01-21T09:35:12+08:00">2025-01-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>近期遇到一个C++程序退出的问题，经过调查发现，程序是由于接收到<code>SIGPIPE</code>信号而退出。该程序是多线程程序，使用<code>libcurl</code>进行<code>HTTPS</code>访问，同时设置了<code>CURLOPT_NOSIGNAL</code>选项，但没有自己处理<code>SIGPIPE</code>信号。在一些情况下，连接已经处理关闭状态，但应用程序不知道，依然向连接发送数据，就会导致<code>SIGPIPE</code>信号产生，进而导致程序退出。修复方法比较简单，只要应用程序设置<code>SIGPIPE</code>信号的处理程序即可。</p>
+<p>上述问题要发生的一个前提是<code>CURLOPT_NOSIGNAL</code>选项需要被设置，什么情况下需要设置它呢？<code>libcurl</code>的作者的博文上写到过这个问题:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://daniel.haxx.se/blog/2021/09/27/common-mistakes-when-using-libcurl/">https://daniel.haxx.se/blog/2021/09/27/common-mistakes-when-using-libcurl/</a></li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">12. Understanding CURLOPT_NOSIGNAL</span><br><span class="line">Signals is a Unix concept where an asynchronous notification is sent to a process or to a specific thread within the same process in order to notify it of an event that occurred.</span><br><span class="line"></span><br><span class="line">What does libcurl use signals for?</span><br><span class="line">When using the synchronous name resolver, libcurl uses alarm() to abort slow name resolves (if a timeout is set), which ultimately sends a SIGALARM to the process and is caught by libcurl</span><br><span class="line"></span><br><span class="line">By default, libcurl installs its own sighandler while running, and restores the original one again on return – for SIGALARM and SIGPIPE.</span><br><span class="line"></span><br><span class="line">Closing TLS (with OpenSSL etc) can trigger a SIGPIPE if the connection is dead.</span><br><span class="line"></span><br><span class="line">Unless CURLOPT_NOSIGNAL is set! (default)</span><br><span class="line"></span><br><span class="line">What does CURLOPT_NOSIGNAL do?</span><br><span class="line">It prevents libcurl from triggering signals</span><br><span class="line"></span><br><span class="line">When disabled, it prevents libcurl from installing its own sighandler and…</span><br><span class="line"></span><br><span class="line">Generated signals must then be handled by the libcurl-using application itself</span><br></pre></td></tr></table></figure>
+<span id="more"></span>
+
+<p>解释的比较清楚。<code>libcurl</code>在使用同步DNS解析时，使用的是<code>alarm()</code>函数来实现超时。我们从源码可以看一下, 这里参考的是<code>curl-7.52.0</code>, 位于源码文件<code>lib/hostip.c</code>中函数<code>Curl_resolv_timeout</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">627     /*************************************************************</span><br><span class="line">628      * Set signal handler to catch SIGALRM</span><br><span class="line">629      * Store the old value to be able to set it back later!</span><br><span class="line">630      *************************************************************/</span><br><span class="line">631 #ifdef HAVE_SIGACTION</span><br><span class="line">632     sigaction(SIGALRM, NULL, &amp;sigact);</span><br><span class="line">633     keep_sigact = sigact;</span><br><span class="line">634     keep_copysig = TRUE; /* yes, we have a copy */</span><br><span class="line">635     sigact.sa_handler = alarmfunc;</span><br><span class="line">636 #ifdef SA_RESTART</span><br><span class="line">637     /* HPUX doesn&#x27;t have SA_RESTART but defaults to that behaviour! */</span><br><span class="line">638     sigact.sa_flags &amp;= ~SA_RESTART;</span><br><span class="line">639 #endif</span><br><span class="line">640     /* now set the new struct */</span><br><span class="line">641     sigaction(SIGALRM, &amp;sigact, NULL);</span><br><span class="line">642 #else /* HAVE_SIGACTION */</span><br><span class="line">643     /* no sigaction(), revert to the much lamer signal() */</span><br><span class="line">644 #ifdef HAVE_SIGNAL</span><br><span class="line">645     keep_sigact = signal(SIGALRM, alarmfunc);</span><br><span class="line">646 #endif</span><br><span class="line">647 #endif /* HAVE_SIGACTION */</span><br><span class="line">648</span><br><span class="line">649     /* alarm() makes a signal get sent when the timeout fires off, and that</span><br><span class="line">650        will abort system calls */</span><br><span class="line">651     prev_alarm = alarm(curlx_sltoui(timeout/1000L));</span><br></pre></td></tr></table></figure>
+
+<p><code>libcurl</code>使用<code>alarm()</code>函数设置超时，并且使用配置了自身的信号处理函数。但如果程序是多线程环境，并不能保证是由调用<code>alarm()</code>函数的线程来处理信号。这会导致程序异常行为。</p>
+<p>内核中选择处理信号的线程是由函数<code>complete_signal</code>实现，这里参考<code>CentOS</code>内核版本: <code>3.10.0-957.el7.x86_64</code>的代码:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line">static void complete_signal(int sig, struct task_struct *p, int group)</span><br><span class="line">&#123;</span><br><span class="line">    struct signal_struct *signal = p-&gt;signal;</span><br><span class="line">    struct task_struct *t;</span><br><span class="line"></span><br><span class="line">    /*</span><br><span class="line">     * Now find a thread we can wake up to take the signal off the queue.</span><br><span class="line">     *</span><br><span class="line">     * If the main thread wants the signal, it gets first crack.</span><br><span class="line">     * Probably the least surprising to the average bear.</span><br><span class="line">     */</span><br><span class="line">    if (wants_signal(sig, p))</span><br><span class="line">        t = p;</span><br><span class="line">    else if (!group || thread_group_empty(p))</span><br><span class="line">        /*</span><br><span class="line">         * There is just one thread and it does not need to be woken.</span><br><span class="line">         * It will dequeue unblocked signals before it runs again.</span><br><span class="line">         */</span><br><span class="line">        return;</span><br><span class="line">    else &#123;</span><br><span class="line">        /*</span><br><span class="line">         * Otherwise try to find a suitable thread.</span><br><span class="line">         */</span><br><span class="line">        t = signal-&gt;curr_target;</span><br><span class="line">        while (!wants_signal(sig, t)) &#123;</span><br><span class="line">            t = next_thread(t);</span><br><span class="line">            if (t == signal-&gt;curr_target)</span><br><span class="line">                /*</span><br><span class="line">                 * No thread needs to be woken.</span><br><span class="line">                 * Any eligible threads will see</span><br><span class="line">                 * the signal in the queue soon.</span><br><span class="line">                 */</span><br><span class="line">                return;</span><br><span class="line">        &#125;</span><br><span class="line">        signal-&gt;curr_target = t;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line"></span><br><span class="line">    /*</span><br><span class="line">     * Found a killable thread.  If the signal will be fatal,</span><br><span class="line">     * then start taking the whole group down immediately.</span><br><span class="line">     */</span><br><span class="line">    if (sig_fatal(p, sig) &amp;&amp;</span><br><span class="line">        !(signal-&gt;flags &amp; (SIGNAL_UNKILLABLE | SIGNAL_GROUP_EXIT)) &amp;&amp;</span><br><span class="line">        !sigismember(&amp;t-&gt;real_blocked, sig) &amp;&amp;</span><br><span class="line">        (sig == SIGKILL || !t-&gt;ptrace)) &#123;</span><br><span class="line">        /*</span><br><span class="line">         * This signal will be fatal to the whole group.</span><br><span class="line">         */</span><br><span class="line">        if (!sig_kernel_coredump(sig)) &#123;</span><br><span class="line">            /*</span><br><span class="line">             * Start a group exit and wake everybody up.</span><br><span class="line">             * This way we don&#x27;t have other threads</span><br><span class="line">             * running and doing things after a slower</span><br><span class="line">             * thread has the fatal signal pending.</span><br><span class="line">             */</span><br><span class="line">            signal-&gt;flags = SIGNAL_GROUP_EXIT;</span><br><span class="line">            signal-&gt;group_exit_code = sig;</span><br><span class="line">            signal-&gt;group_stop_count = 0;</span><br><span class="line">            t = p;</span><br><span class="line">            do &#123;</span><br><span class="line">                task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);</span><br><span class="line">                sigaddset(&amp;t-&gt;pending.signal, SIGKILL);</span><br><span class="line">                signal_wake_up(t, 1);</span><br><span class="line">            &#125; while_each_thread(p, t);</span><br><span class="line">            return;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /*</span><br><span class="line">     * The signal is already in the shared-pending queue.</span><br><span class="line">     * Tell the chosen thread to wake up and dequeue it.</span><br><span class="line">     */</span><br><span class="line">    signal_wake_up(t, sig == SIGKILL);</span><br><span class="line">    return;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>根据内核代码，可以确定对于多线程程序，会优先判断是否可以由主线程来处理信号。</p>
+<p>并且，<code>libcurl</code>中使用<code>sigsetjmp/siglongjmp</code>实现<code>SIGALRM</code>的处理。当由其他线程来处理<code>SIGALRM</code>信号，并执行<code>siglongjmp</code>之后，整个线程的执行逻辑就被破坏了，程序会崩溃。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">#ifdef USE_ALARM_TIMEOUT</span><br><span class="line">/*</span><br><span class="line">* This signal handler jumps back into the main libcurl code and continues</span><br><span class="line">* execution.  This effectively causes the remainder of the application to run</span><br><span class="line">* within a signal handler which is nonportable and could lead to problems.</span><br><span class="line">*/</span><br><span class="line">static</span><br><span class="line">RETSIGTYPE alarmfunc(int sig)</span><br><span class="line">&#123;</span><br><span class="line"> /* this is for &quot;-ansi -Wall -pedantic&quot; to stop complaining!   (rabe) */</span><br><span class="line"> (void)sig;</span><br><span class="line"> siglongjmp(curl_jmpenv, 1);</span><br><span class="line"> return;</span><br><span class="line">&#125;</span><br><span class="line">#endif /* USE_ALARM_TIMEOUT */</span><br></pre></td></tr></table></figure>
+
+<p>为了验证上面内容，修改一下<code>libcurl</code>代码，在日志输出中添加上<code>task id</code>, <code>patch</code>文件如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost curl-curl-7_52_0]# diff -ruNp lib/hostip.c.orig lib/hostip.c</span><br><span class="line">--- lib/hostip.c.orig	2025-01-20 21:31:41.370112869 +0800</span><br><span class="line">+++ lib/hostip.c	2025-01-20 21:30:19.317253722 +0800</span><br><span class="line">@@ -22,6 +22,7 @@</span><br><span class="line"></span><br><span class="line"> #include &quot;curl_setup.h&quot;</span><br><span class="line"></span><br><span class="line">+#include &lt;syscall.h&gt;</span><br><span class="line"> #ifdef HAVE_NETINET_IN_H</span><br><span class="line"> #include &lt;netinet/in.h&gt;</span><br><span class="line"> #endif</span><br><span class="line">@@ -619,7 +620,7 @@ int Curl_resolv_timeout(struct connectda</span><br><span class="line">      before we invoke Curl_resolv() (and thus use &quot;volatile&quot;). */</span><br><span class="line">   if(sigsetjmp(curl_jmpenv, 1)) &#123;</span><br><span class="line">     /* this is coming from a siglongjmp() after an alarm signal */</span><br><span class="line">-    failf(data, &quot;name lookup timed out&quot;);</span><br><span class="line">+    failf(data, &quot;%d: name lookup timed out&quot;, syscall(SYS_gettid));</span><br><span class="line">     rc = CURLRESOLV_ERROR;</span><br><span class="line">     goto clean_up;</span><br><span class="line">   &#125;</span><br><span class="line">@@ -646,6 +647,8 @@ int Curl_resolv_timeout(struct connectda</span><br><span class="line"> #endif</span><br><span class="line"> #endif /* HAVE_SIGACTION */</span><br><span class="line"></span><br><span class="line">+    infof(conn-&gt;data, &quot;%d: set alarm\n&quot;, syscall(SYS_gettid));</span><br><span class="line">+</span><br><span class="line">     /* alarm() makes a signal get sent when the timeout fires off, and that</span><br><span class="line">        will abort system calls */</span><br><span class="line">     prev_alarm = alarm(curlx_sltoui(timeout/1000L));</span><br></pre></td></tr></table></figure>
+
+<p>修改代码后，编译使用同步DNS解析的静态库:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">./buildconf</span><br><span class="line">./configure --with-ssl --disable-threaded-resolver --enable-static --without-zlib</span><br><span class="line">make</span><br></pre></td></tr></table></figure>
+
+<p>下面是验证程序源码，主线程调用<code>sleep()</code>, 再创建一个线程调用<code>libcurl</code>执行DNS解析:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;stdio.h&gt;</span><br><span class="line">#include &lt;stdlib.h&gt;</span><br><span class="line">#include &lt;sys/types.h&gt;</span><br><span class="line">#include &lt;unistd.h&gt;</span><br><span class="line">#include &lt;syscall.h&gt;</span><br><span class="line">#include &lt;signal.h&gt;</span><br><span class="line">#include &lt;pthread.h&gt;</span><br><span class="line">#include &lt;curl/curl.h&gt;</span><br><span class="line"></span><br><span class="line">pid_t gettid(void) &#123;</span><br><span class="line">    return syscall(SYS_gettid);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void *t1_main(void *arg) &#123;</span><br><span class="line">    printf(&quot;pthread1 started: %d\n&quot;, gettid());</span><br><span class="line"></span><br><span class="line">    while (1) &#123;</span><br><span class="line">        CURLcode res;</span><br><span class="line">        CURL *curl = curl_easy_init();</span><br><span class="line">        if (!curl) &#123;</span><br><span class="line">            printf(&quot;curl_easy_init failed\n&quot;);</span><br><span class="line">            exit(-1);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        curl_easy_setopt(curl, CURLOPT_URL, &quot;http://nosuchdomain.com/&quot;);</span><br><span class="line">        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);</span><br><span class="line">        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);</span><br><span class="line"></span><br><span class="line">        res = curl_easy_perform(curl);</span><br><span class="line"></span><br><span class="line">        printf(&quot;curl_easy_perform: %d, %s\n&quot;, res, curl_easy_strerror(res));</span><br><span class="line"></span><br><span class="line">        curl_easy_cleanup(curl);</span><br><span class="line"></span><br><span class="line">        sleep(1);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">int main(int argc, char **argv) &#123;</span><br><span class="line">    int ret;</span><br><span class="line">    pthread_t p1;</span><br><span class="line"></span><br><span class="line">    curl_global_init(CURL_GLOBAL_DEFAULT);</span><br><span class="line"></span><br><span class="line">    curl_version_info_data *version = curl_version_info(CURLVERSION_NOW);</span><br><span class="line">    if (version-&gt;features &amp; CURL_VERSION_ASYNCHDNS) &#123;</span><br><span class="line">        printf(&quot;Asynchoronous DNS\n&quot;);</span><br><span class="line">        if (!version-&gt;age || version-&gt;ares_num) &#123;</span><br><span class="line">            printf(&quot;  C-ares\n&quot;);</span><br><span class="line">        &#125; else &#123;</span><br><span class="line">            printf(&quot;  threaded\n&quot;);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; else &#123;</span><br><span class="line">        printf(&quot;Synchoronous DNS\n&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    printf(&quot;main started: %d\n&quot;, gettid());</span><br><span class="line"></span><br><span class="line">    ret = pthread_create(&amp;p1, NULL, t1_main, NULL);</span><br><span class="line">    printf(&quot;create pthread1, ret: %d\n&quot;, ret);</span><br><span class="line"></span><br><span class="line">    while (1) &#123;</span><br><span class="line">        sleep(3600);</span><br><span class="line">        printf(&quot;main waked up\n&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    curl_global_cleanup();</span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>使用编译的<code>libcurl</code>编译验证程序:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -g -O0 t.cpp -lpthread lib/.libs/libcurl.a</span><br></pre></td></tr></table></figure>
+
+<p>为了构造DNS解析超时，使用<code>iptables</code>将DNS响应丢失:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -I INPUT -p udp --sport 53 -j DROP</span><br></pre></td></tr></table></figure>
+
+<p>执行验证程序:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost curl-curl-7_52_0]# ./a.out</span><br><span class="line">Synchoronous DNS</span><br><span class="line">main started: 23755</span><br><span class="line">create pthread1, ret: 0</span><br><span class="line">pthread1 started: 23756</span><br><span class="line">* 23756: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">* 23755: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">* 23755: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">* 23755: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">* 23755: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">* 23755: set alarm</span><br><span class="line">* 23755: name lookup timed out</span><br><span class="line">* Couldn&#x27;t resolve host &#x27;nosuchdomain.com&#x27;</span><br><span class="line">* Closing connection 0</span><br><span class="line">curl_easy_perform: 6, Couldn&#x27;t resolve host name</span><br><span class="line">Segmentation fault (core dumped)</span><br></pre></td></tr></table></figure>
+
+<p>可以看到调用<code>alarm()</code>的线程为<code>23756</code>, 处理信号的线程却是主线程<code>23755</code>。收到<code>SIGALRM</code>信号的线程<code>23755</code>执行信号处理函数，通过<code>siglongjmp</code>开始执行原本应该是<code>23756</code>线程执行的代码。执行一段时间后程序崩溃。</p>
+<p>由于这种原因，在多线程程序中使用同步DNS解析特性的<code>libcurl</code>库时，需要设置<code>CURLOPT_NOSIGNAL</code>选项。但这有一点副作用，就是DNS解析的超时机制就失效了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">if(data-&gt;set.no_signal)</span><br><span class="line">  /* Ignore the timeout when signals are disabled */</span><br><span class="line">  timeout = 0;</span><br><span class="line">else</span><br><span class="line">  timeout = timeoutms;</span><br><span class="line"></span><br><span class="line">if(!timeout)</span><br><span class="line">  /* USE_ALARM_TIMEOUT defined, but no timeout actually requested */</span><br><span class="line">  return Curl_resolv(conn, hostname, port, entry);</span><br></pre></td></tr></table></figure>
+
+<p>但该选项不只影响<code>SIGALRM</code>信号, 设置该选项后，<code>libcurl</code>对<code>SIGPIPE</code>信号也不再处理, 源码位<code>lib/transfer.c</code>的<code>Curl_pretransfer</code>函数:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1333 #if defined(HAVE_SIGNAL) &amp;&amp; defined(SIGPIPE) &amp;&amp; !defined(HAVE_MSG_NOSIGNAL)</span><br><span class="line">1334     /*************************************************************</span><br><span class="line">1335      * Tell signal handler to ignore SIGPIPE</span><br><span class="line">1336      *************************************************************/</span><br><span class="line">1337     if(!data-&gt;set.no_signal)</span><br><span class="line">1338       data-&gt;state.prev_signal = signal(SIGPIPE, SIG_IGN);</span><br><span class="line">1339 #endif</span><br></pre></td></tr></table></figure>
+
+<p>因而，这种情形下，使用<code>libcurl</code>的程序自身必须忽略<code>SIGPIPE</code>信号。这也就是开头所说的我们程序退出的原因。</p>
+<p>另外，如果<code>libcurl</code>编译时指定了异步DNS解析，则<code>CURLOPT_NOSIGNAL</code>选项则没有设置的必要。<code>CentOS7</code>的<code>YUM</code>源中的<code>libcurl</code>实际都是异步DNS解析特性:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost curl-curl-7_52_0]# curl-config  --feature</span><br><span class="line">SSL</span><br><span class="line">IPv6</span><br><span class="line">unix-sockets</span><br><span class="line">libz</span><br><span class="line">AsynchDNS</span><br><span class="line">IDN</span><br><span class="line">NTLM</span><br><span class="line">NTLM_WB</span><br></pre></td></tr></table></figure>
+
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://suntus.github.io/2024/01/27/%E4%BF%A1%E5%8F%B7%E7%9B%B8%E5%85%B3/">https://suntus.github.io/2024/01/27/%E4%BF%A1%E5%8F%B7%E7%9B%B8%E5%85%B3/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.antidebug.cn/get_process_signal_info/">https://www.antidebug.cn/get_process_signal_info&#x2F;</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/curl/curl/discussions/11324">https://github.com/curl/curl/discussions/11324</a></li>
+<li><a target="_blank" rel="noopener" href="https://tianshuang.me/2022/12/RST/">https://tianshuang.me/2022/12/RST/</a></li>
+<li><a target="_blank" rel="noopener" href="https://juejin.cn/post/7440852119014866953">https://juejin.cn/post/7440852119014866953</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_34248705/article/details/92216954">https://blog.csdn.net/weixin_34248705&#x2F;article&#x2F;details&#x2F;92216954</a></li>
+<li><a target="_blank" rel="noopener" href="https://ty-chen.github.io/linux-kernel-signal/">https://ty-chen.github.io/linux-kernel-signal/</a></li>
+<li><a target="_blank" rel="noopener" href="https://daniel.haxx.se/blog/2021/09/27/common-mistakes-when-using-libcurl/">https://daniel.haxx.se/blog/2021/09/27/common-mistakes-when-using-libcurl/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2025/01/02/namespace-inode/" rel="prev" title="内核模块识别network namespace">
+      <i class="fa fa-chevron-left"></i> 内核模块识别network namespace
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2025/02/08/sysctl/" rel="next" title="关于/etc/sysctl.conf生效时机">
+      关于/etc/sysctl.conf生效时机 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

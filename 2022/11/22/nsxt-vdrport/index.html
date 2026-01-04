@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;NSX-T路由逻辑介绍&gt;&gt;主介绍了NSX-T的路由逻辑, 举例介绍的是南北向网络路径, 介绍从逻辑交换机&#x2F;分段到Tire1逻辑路由器, 再到Tire0逻辑路由器的过程. 本文来简要介绍一下两个逻辑交换机之间通过Tire1逻辑路由器通信的东西向路径. 实验拓扑如图:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NSX-T东西向路由">
+<meta property="og:url" content="http://just4coding.com/2022/11/22/nsxt-vdrport/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;NSX-T路由逻辑介绍&gt;&gt;主介绍了NSX-T的路由逻辑, 举例介绍的是南北向网络路径, 介绍从逻辑交换机&#x2F;分段到Tire1逻辑路由器, 再到Tire0逻辑路由器的过程. 本文来简要介绍一下两个逻辑交换机之间通过Tire1逻辑路由器通信的东西向路径. 实验拓扑如图:">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-22/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-22/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-22/3.png">
+<meta property="article:published_time" content="2022-11-22T12:45:44.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.505Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="NSX-T">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-11-22/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/11/22/nsxt-vdrport/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NSX-T东西向路由 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/22/nsxt-vdrport/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NSX-T东西向路由
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-11-22 20:45:44" itemprop="dateCreated datePublished" datetime="2022-11-22T20:45:44+08:00">2022-11-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章<a href="/2020/07/13/nsx-t/">&lt;&lt;NSX-T路由逻辑介绍&gt;&gt;</a>主介绍了<code>NSX-T</code>的路由逻辑, 举例介绍的是南北向网络路径, 介绍从<code>逻辑交换机/分段</code>到<code>Tire1逻辑路由器</code>, 再到<code>Tire0逻辑路由器</code>的过程.</p>
+<p>本文来简要介绍一下两个<code>逻辑交换机</code>之间通过<code>Tire1逻辑路由器</code>通信的东西向路径.</p>
+<p>实验拓扑如图:</p>
+<img src="/images/2022-11-22/1.png" class="">
+
+<span id="more"></span>
+
+<p>虚拟机<code>t1</code>的<code>IP</code>为:<code>6.6.100.11</code>, <code>t2</code>的<code>IP</code>为:<code>6.6.200.12</code>.</p>
+<p><code>N-VDS</code>或者<code>DVS</code>上的端口以<code>Geneve</code>的<code>VNI</code>互相隔离, 因而一个<code>Geneve VNI</code>就决定了一个<code>逻辑交换机/分段</code>. 我的环境的两个逻辑交换机的<code>Geneve VNI</code>如图:</p>
+<img src="/images/2022-11-22/2.png" class="">
+
+<p>可以看到<code>ls-geneve-100</code>的<code>VNI</code>为<code>65537</code>, <code>ls-geneve-200</code>的<code>VNI</code>为<code>65536</code>.</p>
+<p>使用命令<code>net-vdl2 -l</code>查看<code>VNI</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line">[root@esxi-01:~] net-vdl2 -l</span><br><span class="line">Global States:</span><br><span class="line">	Control Plane Out-Of-Sync:	No</span><br><span class="line">	VXLAN UDP Port:	4789</span><br><span class="line">	Geneve UDP Port:	6081</span><br><span class="line">NSX VDS:	DSwitch</span><br><span class="line">	VDS ID:	50 02 70 16 c2 <span class="built_in">cd</span> 74 37-fb a6 ff 0b 1b <span class="built_in">cd</span> 0e ee</span><br><span class="line">	MTU:	1600</span><br><span class="line">	Segment ID:	10.10.10.0</span><br><span class="line">	Transport VLAN ID:	300</span><br><span class="line">	VTEP Count:	1</span><br><span class="line">	CDO status:	enabled (deactivated)</span><br><span class="line">		VTEP Interface:	vmk10</span><br><span class="line">			DVPort ID:	b58c174b-a07f-43a6-b0ca-7830de39f50f</span><br><span class="line">			Switch Port ID:	67108877</span><br><span class="line">			Endpoint ID:	0</span><br><span class="line">			VLAN ID:	300</span><br><span class="line">			Label:		10292</span><br><span class="line">			Uplink Port ID:	2214592537</span><br><span class="line">			Is Uplink Port LAG:	No</span><br><span class="line">			IP:		10.10.10.101</span><br><span class="line">			Netmask:	255.255.255.0</span><br><span class="line">			Segment ID:	10.10.10.0</span><br><span class="line">			GW IP:		10.10.10.1</span><br><span class="line">			GW MAC:		ff:ff:ff:ff:ff:ff</span><br><span class="line">			IP Acquire Timeout:	0</span><br><span class="line">			Multicast Group Count:	0</span><br><span class="line">			Is DRVTEP:	Yes</span><br><span class="line">	Network Count:	3</span><br><span class="line">		Logical Network:	65538</span><br><span class="line">			Routing Domain:	00000000-0000-0000-0000-000000000000</span><br><span class="line">			Multicast Routing Domain: 00000000-0000-0000-0000-000000000000</span><br><span class="line">			Replication Mode:	Source Unicast</span><br><span class="line">			Control Plane:	Enabled (Multicast Proxy,ARP proxy)</span><br><span class="line">			Controller:	10.44.205.85 (up)</span><br><span class="line">			MAC Entry Count:	0</span><br><span class="line">			ARP Entry Count:	0</span><br><span class="line">			Port Count:	1</span><br><span class="line">		Logical Network:	65537</span><br><span class="line">			Routing Domain:	98334210-1ec6-4176-a718-581908b718c5</span><br><span class="line">			Multicast Routing Domain: 00000000-0000-0000-0000-000000000000</span><br><span class="line">			Replication Mode:	MTEP Unicast</span><br><span class="line">			Control Plane:	Enabled (Multicast Proxy,ARP proxy)</span><br><span class="line">			Controller:	10.44.205.85 (up)</span><br><span class="line">			MAC Entry Count:	0</span><br><span class="line">			ARP Entry Count:	1</span><br><span class="line">			Port Count:	2</span><br><span class="line">		Logical Network:	65536</span><br><span class="line">			Routing Domain:	98334210-1ec6-4176-a718-581908b718c5</span><br><span class="line">			Multicast Routing Domain: 00000000-0000-0000-0000-000000000000</span><br><span class="line">			Replication Mode:	MTEP Unicast</span><br><span class="line">			Control Plane:	Enabled (Multicast Proxy,ARP proxy)</span><br><span class="line">			Controller:	10.44.205.85 (up)</span><br><span class="line">			MAC Entry Count:	0</span><br><span class="line">			ARP Entry Count:	0</span><br><span class="line">			Port Count:	2</span><br><span class="line">	Routing Domain Count:	2</span><br><span class="line">		Routing DomainID:	00000000-0000-0000-0000-000000000000</span><br><span class="line">		Routing DomainID:	98334210-1ec6-4176-a718-581908b718c5</span><br></pre></td></tr></table></figure>
+
+<p>可以看到所有的<code>逻辑交换机</code>也都位于该虚拟交换机.</p>
+<p>在<code>ESXi01</code>上查看<code>DVS</code>的端口信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[root@esxi-01:~] nsxdp-cli vswitch instance list</span><br><span class="line">DvsPortset-1 (DSwitch)           50 02 70 16 c2 <span class="built_in">cd</span> 74 37-fb a6 ff 0b 1b <span class="built_in">cd</span> 0e ee</span><br><span class="line">Total Ports:2560 Available:2540</span><br><span class="line">  Client                         PortID          DVPortID                             MAC                  Uplink</span><br><span class="line">  Management                     67108868                                             00:00:00:00:00:00    n/a</span><br><span class="line">  vmnic0                         2214592520      10                                   00:00:00:00:00:00</span><br><span class="line">  Shadow of vmnic0               67108873                                             00:50:56:5c:37:04    n/a</span><br><span class="line">  vmk0                           67108876        1                                    00:50:56:b1:59:3e    vmnic0</span><br><span class="line">  vmk10                          67108877        b58c174b-a07f-43a6-b0ca-7830de39f50f 00:50:56:69:15:41    vmnic1</span><br><span class="line">  vmk50                          67108878        8b2a4724-274f-46d0-a99b-580352399aa9 00:50:56:61:3f:85    void</span><br><span class="line">  vdr-vdrPort                    67108883        vdrPort                              02:50:56:56:44:52    vmnic1</span><br><span class="line">  spf-spfPort                    67108886        spfPort50027016c2cd7437              02:50:56:56:45:52    vmnic1</span><br><span class="line">  vmnic1                         2214592537      11                                   00:00:00:00:00:00</span><br><span class="line">  Shadow of vmnic1               67108890                                             00:50:56:5f:1e:d7    n/a</span><br><span class="line">  t1.eth0                        67108910        e25a8fa7-0c21-4dae-b252-6d22ef33c1c5 00:50:56:82:70:f0    vmnic1</span><br><span class="line">  t3.eth0                        67108917        c932ef38-c49f-4e28-8672-6ca34db2b38c 00:50:56:82:a0:05    vmnic1</span><br></pre></td></tr></table></figure>
+
+<p>可以看到, 所有的<code>逻辑交换机</code>端口都接在同一个虚拟交换机上. <code>逻辑路由器(Logical Router)</code>由<code>SR: Service Router</code>和<code>DR: Distributed Router</code>构成。<code>DR</code>分布在相应<code>传输区域</code>的<code>传输节点</code>上，<code>SR</code>则部署在<code>Edge</code>节点中。上边交换机端口<code>vdrPort</code>是<code>ESXi</code>主机上<code>DR</code>实例接到虚拟交换机的端口, 它可以理解为是<code>trunk</code>端口. 所有<code>逻辑交换机</code>的广播域流量都可以从它通过.</p>
+<p>需要注意的<code>vdrPort</code>的<code>MAC</code>地址在所有<code>传输节点</code>上都是相同的, 默认为<code>02:50:56:56:44:52</code>.</p>
+<p>在<code>ESXi-01</code>主机上查看<code>DR</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@esxi-01:~] nsxcli -c get logical-routers</span><br><span class="line">Tue Nov 22 2022 UTC 03:53:42.083</span><br><span class="line">                                  Logical Routers Summary</span><br><span class="line"> ------------------------------------------------------------------------------------------</span><br><span class="line">               VDR UUID                LIF num  Route num  Max Neighbors  Current Neighbors</span><br><span class="line"> 98334210-1ec6-4176-a718-581908b718c5     2         2          50000              3</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>接着查看<code>DR</code>的接口信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">[root@esxi-01:~] nsxcli -c get logical-router 98334210-1ec6-4176-a718-581908b718c5 interfaces</span><br><span class="line">Tue Nov 22 2022 UTC 03:57:19.784</span><br><span class="line">                         Logical Router Interfaces</span><br><span class="line">---------------------------------------------------------------------------</span><br><span class="line">IPv6 DAD Status Legend:  [A: DAD_Sucess], [F: DAD_Duplicate], [T: DAD_Tentative], [U: DAD_Unavailable]</span><br><span class="line"></span><br><span class="line">LIF UUID                 : 39c68523-a185-49a7-9f86-4792e6696a8f</span><br><span class="line">Mode                     : [b<span class="string">&#x27;Routing&#x27;</span>]</span><br><span class="line">Overlay VNI              : 65536</span><br><span class="line">IP/Mask                  : 6.6.200.1/24</span><br><span class="line">Mac                      : 02:50:56:56:44:52</span><br><span class="line">Connected DVS            : DSwitch</span><br><span class="line">Control plane <span class="built_in">enable</span>     : True</span><br><span class="line">Replication Mode         : 0.0.0.1</span><br><span class="line">Multicast Routing        : [b<span class="string">&#x27;Enabled&#x27;</span>, b<span class="string">&#x27;Oper Down&#x27;</span>]</span><br><span class="line">State                    : [b<span class="string">&#x27;Enabled&#x27;</span>]</span><br><span class="line">Flags                    : 0x80388</span><br><span class="line">DHCP relay               : Not <span class="built_in">enable</span></span><br><span class="line">DAD-mode                 : [<span class="string">&#x27;LOOSE&#x27;</span>]</span><br><span class="line">RA-mode                  : [<span class="string">&#x27;UNKNOWN&#x27;</span>]</span><br><span class="line"></span><br><span class="line">LIF UUID                 : 4adea6ee-5dbf-4ff8-8fa4-6670bb70982f</span><br><span class="line">Mode                     : [b<span class="string">&#x27;Routing&#x27;</span>]</span><br><span class="line">Overlay VNI              : 65537</span><br><span class="line">IP/Mask                  : 6.6.100.1/24</span><br><span class="line">Mac                      : 02:50:56:56:44:52</span><br><span class="line">Connected DVS            : DSwitch</span><br><span class="line">Control plane <span class="built_in">enable</span>     : True</span><br><span class="line">Replication Mode         : 0.0.0.1</span><br><span class="line">Multicast Routing        : [b<span class="string">&#x27;Enabled&#x27;</span>, b<span class="string">&#x27;Oper Down&#x27;</span>]</span><br><span class="line">State                    : [b<span class="string">&#x27;Enabled&#x27;</span>]</span><br><span class="line">Flags                    : 0x80388</span><br><span class="line">DHCP relay               : Not <span class="built_in">enable</span></span><br><span class="line">DAD-mode                 : [<span class="string">&#x27;LOOSE&#x27;</span>]</span><br><span class="line">RA-mode                  : [<span class="string">&#x27;UNKNOWN&#x27;</span>]</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>可以看到<code>6.6.100.1</code>和<code>6.6.200.1</code>两个接口的<code>MAC</code>地址都为:<code>02:50:56:56:44:52</code>.</p>
+<p>现在我们来看<code>6.6.100.11</code>到<code>6.6.200.12</code>的网络路径.</p>
+<p>在<code>t1</code>上清空<code>ARP</code>信息, 然后<code>ping</code>虚拟机<code>t2</code>. 因为目标IP<code>6.6.200.12</code>不在相同子网内, 会先发送<code>ARP</code>请求来确认网关<code>6.6.100.1</code>的<code>MAC</code>地址.</p>
+<p>我们在<code>t1.eth0</code>, <code>vdrPort</code>和<code>uplink</code>上进行抓包.</p>
+<p>只有在<code>t1.eth0</code>端口上抓到<code>ARP</code>请求:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@esxi-01:~] pktcap-uw --switchport 67108910 --<span class="built_in">dir</span> 2 -o - | tcpdump-uw -ner -</span><br><span class="line">The switch port <span class="built_in">id</span> is 0x0400002e.</span><br><span class="line">pktcap: The output file is -.</span><br><span class="line">pktcap: No server port specifed, <span class="keyword">select</span> 7799 as the port.</span><br><span class="line">pktcap: Local CID 2.</span><br><span class="line">pktcap: Listen on port 7799.</span><br><span class="line">reading from file -, link-type EN10MB (Ethernet)</span><br><span class="line">pktcap: Accept...</span><br><span class="line">pktcap: Vsock connection from port 1096 cid 2.</span><br><span class="line">11:45:24.879494 00:50:56:82:70:f0 &gt; ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 6.6.100.1 tell 6.6.100.11, length 46</span><br><span class="line">11:45:24.879541 02:50:56:56:44:52 &gt; 00:50:56:82:70:f0, ethertype ARP (0x0806), length 60: Reply 6.6.100.1 is-at 02:50:56:56:44:52, length 46</span><br></pre></td></tr></table></figure>
+
+<p>猜测虚拟交换机层面对虚拟子网网关实现了<code>ARP</code>代答, 这样发送向网关的流量导向本机的<code>vdrPort</code>, 尽管各个<code>ESXi</code>主机上的<code>vdrPort</code>的<code>MAC</code>地址都相同也不会冲突, 因为这样的<code>ARP</code>请求不会送到其他<code>ESXi</code>主机上.</p>
+<p>接下来, 在虚拟机<code>t1</code>上长<code>ping</code> <code>t2</code>, 我们分别在<code>ESXi-01</code>和<code>ESXi-02</code>的<code>vdrPort</code>上抓包.</p>
+<p>在发送方<code>t1</code>所在<code>ESXi-01</code>上的<code>vdrPort</code>, 可以看到两个<code>request</code>包, 但没有<code>reply</code>包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">12:17:25.381567 00:50:56:82:70:f0 &gt; 02:50:56:56:44:52, ethertype IPv4 (0x0800), length 98: 6.6.100.11 &gt; 6.6.200.12: ICMP <span class="built_in">echo</span> request, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 11, length 64</span><br><span class="line">12:17:25.381593 02:50:56:56:44:52 &gt; 00:50:56:82:a6:ae, ethertype IPv4 (0x0800), length 98: 6.6.100.11 &gt; 6.6.200.12: ICMP <span class="built_in">echo</span> request, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 11, length 64</span><br><span class="line">12:17:26.382613 00:50:56:82:70:f0 &gt; 02:50:56:56:44:52, ethertype IPv4 (0x0800), length 98: 6.6.100.11 &gt; 6.6.200.12: ICMP <span class="built_in">echo</span> request, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 12, length 64</span><br><span class="line">12:17:26.382645 02:50:56:56:44:52 &gt; 00:50:56:82:a6:ae, ethertype IPv4 (0x0800), length 98: 6.6.100.11 &gt; 6.6.200.12: ICMP <span class="built_in">echo</span> request, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 12, length 64</span><br></pre></td></tr></table></figure>
+
+<p>而在虚拟机<code>t2</code>所在的<code>ESXi-02</code>上的<code>vdrPort</code>, 只有<code>reply</code>包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">12:17:25.588603 00:50:56:82:a6:ae &gt; 02:50:56:56:44:52, ethertype IPv4 (0x0800), length 98: 6.6.200.12 &gt; 6.6.100.11: ICMP <span class="built_in">echo</span> reply, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 11, length 64</span><br><span class="line">12:17:25.588627 02:50:56:56:44:52 &gt; 00:50:56:82:70:f0, ethertype IPv4 (0x0800), length 98: 6.6.200.12 &gt; 6.6.100.11: ICMP <span class="built_in">echo</span> reply, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 11, length 64</span><br><span class="line">12:17:26.590845 00:50:56:82:a6:ae &gt; 02:50:56:56:44:52, ethertype IPv4 (0x0800), length 98: 6.6.200.12 &gt; 6.6.100.11: ICMP <span class="built_in">echo</span> reply, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 12, length 64</span><br><span class="line">12:17:26.590873 02:50:56:56:44:52 &gt; 00:50:56:82:70:f0, ethertype IPv4 (0x0800), length 98: 6.6.200.12 &gt; 6.6.100.11: ICMP <span class="built_in">echo</span> reply, <span class="built_in">id</span> 9652, <span class="built_in">seq</span> 12, length 64</span><br></pre></td></tr></table></figure>
+
+<p>因而数据包的路由是在数据包发送方主机上的<code>DR</code>实例来实现, 数据包到达目标主机后, 直接解封装送到目标虚拟机.</p>
+<p>整体路径如图:</p>
+<img src="/images/2022-11-22/3.png" class="">
+
+<p>所有<code>ESXi</code>主机上的<code>vdrPort</code>的<code>MAC</code>地址都一致, 且<code>vdrport</code>上可以接收到<code>uplink</code>所连接物理网络的数据包. 一般情况下该<code>MAC</code>地址并不会暴露到物理网络中, 但当虚拟交换机上的某<code>uplink</code>接口<code>down</code>掉, 启用<code>standby uplink</code>时, <code>ESXi</code>会广播发送<code>Reverse ARP</code>向物理交换机宣告这些<code>MAC</code>在该端口下, 这种情况下会导致<code>vdrPort</code>的<code>MAC</code>地址暴露到物理网络, 如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">14:53:52.919368 00:50:56:6c:e2:6a &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 00:50:56:6c:e2:6a tell 00:50:56:6c:e2:6a, length 46</span><br><span class="line">14:53:52.919379 02:50:56:56:44:52 &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 02:50:56:56:44:52 tell 02:50:56:56:44:52, length 46</span><br><span class="line">14:53:52.919397 00:50:56:6c:e2:6a &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 00:50:56:6c:e2:6a tell 00:50:56:6c:e2:6a, length 46</span><br><span class="line">14:53:52.919397 00:50:56:6c:e2:6a &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 00:50:56:6c:e2:6a tell 00:50:56:6c:e2:6a, length 46</span><br><span class="line">14:53:52.919406 00:50:56:53:71:23 &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 00:50:56:53:71:23 tell 00:50:56:53:71:23, length 46</span><br><span class="line">14:53:52.919409 2c:f0:5d:1d:b0:41 &gt; ff:ff:ff:ff:ff:ff, ethertype Reverse ARP (0x8035), length 60: Reverse Request who-is 2c:f0:5d:1d:b0:41 tell 2c:f0:5d:1d:b0:41, length 46</span><br></pre></td></tr></table></figure>
+
+<p>当不同的<code>uplink</code>异常, 多台<code>ESXi</code>启用不同的<code>uplink</code>后, 该<code>MAC</code>会暴露在不同的物理交换机端口, 因而交换机可能会告警存在<code>mac-address flapping</code>.</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.dclessons.com/virtual-physical-network-connectivity">https://www.dclessons.com/virtual-physical-network-connectivity</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.vmware.com/en/VMware-NSX-T-Data-Center/3.2/migration/GUID-538774C2-DE66-4F24-B9B7-537CA2FA87E9.html">https://docs.vmware.com/en/VMware-NSX-T-Data-Center/3.2/migration/GUID-538774C2-DE66-4F24-B9B7-537CA2FA87E9.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://itdeepdive.com/2020/11/nsx-t-packet-capture-east-west-traffic-on-overlay-segment/">https://itdeepdive.com/2020/11/nsx-t-packet-capture-east-west-traffic-on-overlay-segment/</a></li>
+<li><a target="_blank" rel="noopener" href="https://nielshagoort.com/2018/12/13/understanding-the-esxi-network-iochain/">https://nielshagoort.com/2018/12/13/understanding-the-esxi-network-iochain/</a></li>
+<li><a target="_blank" rel="noopener" href="https://thevirtualunknown.co.uk/2017/02/14/vmware-nsx-iochain-and-how-packets-are-processed-within-the-kernel/">https://thevirtualunknown.co.uk/2017/02/14/vmware-nsx-iochain-and-how-packets-are-processed-within-the-kernel/</a></li>
+<li><a target="_blank" rel="noopener" href="https://y-network.jp/2020/12/13/nsx-t-073/">https://y-network.jp/2020/12/13/nsx-t-073/</a></li>
+<li><a target="_blank" rel="noopener" href="http://notes.doodzzz.net/2017/07/17/vmware-nsx-and-3rd-party-integration-svm-failure-scenarios/">http://notes.doodzzz.net/2017/07/17/vmware-nsx-and-3rd-party-integration-svm-failure-scenarios/</a></li>
+<li><a target="_blank" rel="noopener" href="https://vgandalf.com/2021/05/19/trace-this/">https://vgandalf.com/2021/05/19/trace-this/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/NSX-T/" rel="tag"># NSX-T</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/22/linux-symbol/" rel="prev" title="Linux动态链接库符号冲突解决">
+      <i class="fa fa-chevron-left"></i> Linux动态链接库符号冲突解决
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/11/30/udev/" rel="next" title="udev机制简介">
+      udev机制简介 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

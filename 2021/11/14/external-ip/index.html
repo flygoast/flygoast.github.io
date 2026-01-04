@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;Kubernetes Service网络通信路径&gt;&gt;介绍了kubernetes的几种Service。如果要暴露服务给kubernetes集群外使用，可以选择NodePort和LoadBalancer。但LoadBalancer现在主要在各大公有云厂商上能够原生支持。而使用NodePort暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如my">
+<meta property="og:type" content="article">
+<meta property="og:title" content="基于LVS DR模式的Kubernetes Service External-IP实现">
+<meta property="og:url" content="http://just4coding.com/2021/11/14/external-ip/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;Kubernetes Service网络通信路径&gt;&gt;介绍了kubernetes的几种Service。如果要暴露服务给kubernetes集群外使用，可以选择NodePort和LoadBalancer。但LoadBalancer现在主要在各大公有云厂商上能够原生支持。而使用NodePort暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如my">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-11-14T14:34:27.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.497Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="ExternalIP">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2021/11/14/external-ip/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>基于LVS DR模式的Kubernetes Service External-IP实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/14/external-ip/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          基于LVS DR模式的Kubernetes Service External-IP实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-14 22:34:27" itemprop="dateCreated datePublished" datetime="2021-11-14T22:34:27+08:00">2021-11-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章<a href="/2021/11/07/kubernetes-clusterip/">&lt;&lt;Kubernetes Service网络通信路径&gt;&gt;</a>介绍了<code>kubernetes</code>的几种<code>Service</code>。如果要暴露服务给<code>kubernetes</code>集群外使用，可以选择<code>NodePort</code>和<code>LoadBalancer</code>。但<code>LoadBalancer</code>现在主要在各大公有云厂商上能够原生支持。而使用<code>NodePort</code>暴露服务，将使用一个非常大的端口，无法使用原始的端口号来暴露服务，比如<code>mysql</code>的<code>3306</code>端口。</p>
+<p><code>Service</code>的<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/service/#external-ips">官方文档</a>中介绍了一种辅助方式, 叫<code>External-IP</code>, 可以在<code>worker</code>节点上会通过该<code>IP</code>来暴露服务，而且可以使用在任意类型的<code>service</code>上。集群外的用户就可以通过该<code>IP</code>来访问服务。但如果这个<code>IP</code>只存在于一个<code>worker</code>节点上，那么就不具备高可用的能力了，我们需要在多个<code>worker</code>节点上配置这个<code>VIP:Virtual IP</code>。我们可以使用<code>LVS</code>(也叫做<code>IPVS</code>)的<code>DR(Director Routing)</code>模式作为外部负载均衡器将流量分发到多个<code>worker</code>节点上，同时保持数据包的目的地址为该<code>VIP</code>。</p>
+<p><code>DR</code>模式只会修改数据包的目的<code>MAC</code>地址为后端<code>RealServer</code>的<code>MAC</code>地址，因而要求负载均衡器<code>Director</code>和<code>RealServer</code>在同一个二层网络，而且响应包不会经过<code>Director</code>。</p>
+<span id="more"></span>
+
+<p>下面我们来实验如何使用<code>LVS</code>的<code>DR</code>模式实现<code>service</code>负载均衡。</p>
+<p>我们在之前的实验集群中创建一个类型为<code>ClusterIP</code>(默认类型)的<code>service</code>, 指定一个外部<code>IP</code>:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Service</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">ports:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">port:</span> <span class="number">80</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">web</span></span><br><span class="line">    <span class="attr">protocol:</span> <span class="string">TCP</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">externalIPs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="number">10.240</span><span class="number">.0</span><span class="number">.201</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Deployment</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">replicas:</span> <span class="number">3</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">matchLabels:</span></span><br><span class="line">      <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">template:</span></span><br><span class="line">    <span class="attr">metadata:</span></span><br><span class="line">      <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">    <span class="attr">spec:</span></span><br><span class="line">      <span class="attr">containers:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">        <span class="attr">image:</span> <span class="string">containous/whoami</span></span><br><span class="line">        <span class="attr">ports:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">          <span class="attr">name:</span> <span class="string">web</span></span><br></pre></td></tr></table></figure>
+<p>创建服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl apply -f whoami.yaml</span><br></pre></td></tr></table></figure>
+
+<p>查看服务，可以看到<code>whoami</code>的<code>EXTERNAL-IP</code>为<code>10.240.0.201</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get svc -o wide</span></span><br><span class="line">NAME         TYPE        CLUSTER-IP   EXTERNAL-IP    PORT(S)   AGE   SELECTOR</span><br><span class="line">kubernetes   ClusterIP   10.32.0.1    &lt;none&gt;         443/TCP   24d   &lt;none&gt;</span><br><span class="line"><span class="built_in">whoami</span>       ClusterIP   10.32.0.60   10.240.0.201   80/TCP    30m   app=<span class="built_in">whoami</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>worker</code>节点上检查<code>iptables</code>规则，可以看到在<code>KUBE-SERVICES</code>链中添加了<code>EXTERNAL-IP</code>相关的规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SERVICES ! -s 10.230.0.0/16 -d 10.32.0.60/32 -p tcp -m comment --comment &quot;default/whoami:web cluster IP&quot; -m tcp --dport 80 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SERVICES -d 10.32.0.60/32 -p tcp -m comment --comment &quot;default/whoami:web cluster IP&quot; -m tcp --dport 80 -j KUBE-SVC-225DYIB7Z2N6SCOU</span><br><span class="line">-A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment &quot;default/whoami:web external IP&quot; -m tcp --dport 80 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment &quot;default/whoami:web external IP&quot; -m tcp --dport 80 -m physdev ! --physdev-is-in -m addrtype ! --src-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU</span><br><span class="line">-A KUBE-SERVICES -d 10.240.0.201/32 -p tcp -m comment --comment &quot;default/whoami:web external IP&quot; -m tcp --dport 80 -m addrtype --dst-type LOCAL -j KUBE-SVC-225DYIB7Z2N6SCOU</span><br><span class="line">-A KUBE-SERVICES ! -s 10.230.0.0/16 -d 10.32.0.1/32 -p tcp -m comment --comment &quot;default/kubernetes:https cluster IP&quot; -m tcp --dport 443 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SERVICES -d 10.32.0.1/32 -p tcp -m comment --comment &quot;default/kubernetes:https cluster IP&quot; -m tcp --dport 443 -j KUBE-SVC-NPX46M4PTMTKRN6Y</span><br><span class="line">-A KUBE-SERVICES -m comment --comment &quot;kubernetes service nodeports; NOTE: this must be the last rule in this chain&quot; -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS</span><br></pre></td></tr></table></figure>
+<p>当数据包目的地址为<code>10.240.0.201:80</code>时，跳转到<code>KUBE-SVC-*</code>链，从而分发到相应的<code>pod</code>中。</p>
+<p>我们在节点上添加上这个<code>VIP</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]<span class="comment"># ip addr add 10.240.0.201/32 dev lo</span></span><br><span class="line">[root@node1 ~]<span class="comment"># ip addr show lo</span></span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.201/32 scope global lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p>因为这个<code>VIP</code>需要在多个<code>worker</code>节点上存在，因而把它配置在<code>lo</code>上，并抑制相应网卡上对该<code>VIP</code>的<code>ARP</code>响应:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.conf.eth1.arp_ignore = 1</span><br><span class="line">sysctl -w net.ipv4.conf.eth1.arp_announce = 2</span><br></pre></td></tr></table></figure>
+
+<p>在节点上尝试访问<code>VIP</code>, 可以成功访问:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]<span class="comment"># curl http://10.240.0.201</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-kbv68</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.95.10</span><br><span class="line">IP: fe80::d43a:9eff:fe3e:4425</span><br><span class="line">RemoteAddr: 10.230.74.0:60086</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.201</span><br><span class="line">User-Agent: curl/7.29.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@node1 ~]<span class="comment"># curl http://10.240.0.201</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-n6jmj</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.74.25</span><br><span class="line">IP: fe80::9889:dff:fedf:f376</span><br><span class="line">RemoteAddr: 10.230.74.1:60088</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.201</span><br><span class="line">User-Agent: curl/7.29.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@node1 ~]<span class="comment"># curl http://10.240.0.201</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-2h6qf</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.74.24</span><br><span class="line">IP: fe80::2493:9aff:fe7b:5dbd</span><br><span class="line">RemoteAddr: 10.230.74.1:60090</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.201</span><br><span class="line">User-Agent: curl/7.29.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>接着我们在<code>worker</code>节点所在二层网络再启动一台虚拟机作为<code>LVS</code>的<code>Director</code>。在该机器上给与<code>worker</code>节点二层互通的网卡添加<code>VIP</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 10.240.0.201/32 dev eth1</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>ipvsadm</code>创建负载均衡服务, 并使用<code>DR</code>模式添加两个<code>worker</code>节点做为后端的<code>RealServer</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ipvsadm -A -t 10.240.0.201:80 -s rr</span><br><span class="line">ipvsadm -a -t 10.240.0.201:80 -r 10.240.0.101 -g</span><br><span class="line">ipvsadm -a -t 10.240.0.201:80 -r 10.240.0.102 -g</span><br></pre></td></tr></table></figure>
+
+<p>查看负载均衡服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ~]<span class="comment"># ipvsadm -L -n</span></span><br><span class="line">IP Virtual Server version 1.2.1 (size=4096)</span><br><span class="line">Prot LocalAddress:Port Scheduler Flags</span><br><span class="line">  -&gt; RemoteAddress:Port           Forward Weight ActiveConn InActConn</span><br><span class="line">TCP  10.240.0.201:80 rr</span><br><span class="line">  -&gt; 10.240.0.101:80              Route   1      0          0</span><br><span class="line">  -&gt; 10.240.0.102:80              Route   1      0          0</span><br></pre></td></tr></table></figure>
+
+<p>环境配置完成。我们找一台客户端访问<code>VIP:10.240.0.201</code>, 同时在<code>Director</code>机器上抓包，可以看到:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ~]<span class="comment"># tcpdump -ieth1 -nn -e tcp port 80</span></span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv <span class="keyword">for</span> full protocol decode</span><br><span class="line">listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">11:50:01.024615 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">seq</span> 1959573689, win 29200, options [mss 1460,sackOK,TS val 304318064 ecr 0,nop,wscale 6], length 0</span><br><span class="line">11:50:01.024640 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 74: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">seq</span> 1959573689, win 29200, options [mss 1460,sackOK,TS val 304318064 ecr 0,nop,wscale 6], length 0</span><br><span class="line">11:50:01.026358 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 3346334225, win 457, options [nop,nop,TS val 304318066 ecr 304104626], length 0</span><br><span class="line">11:50:01.026406 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 1, win 457, options [nop,nop,TS val 304318066 ecr 304104626], length 0</span><br><span class="line">11:50:01.027197 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 142: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [P.], <span class="built_in">seq</span> 0:76, ack 1, win 457, options [nop,nop,TS val 304318067 ecr 304104626], length 76: HTTP: GET / HTTP/1.1</span><br><span class="line">11:50:01.027210 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 142: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [P.], <span class="built_in">seq</span> 0:76, ack 1, win 457, options [nop,nop,TS val 304318067 ecr 304104626], length 76: HTTP: GET / HTTP/1.1</span><br><span class="line">11:50:01.032443 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 327, win 473, options [nop,nop,TS val 304318070 ecr 304104630], length 0</span><br><span class="line">11:50:01.032468 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 327, win 473, options [nop,nop,TS val 304318070 ecr 304104630], length 0</span><br><span class="line">11:50:01.036452 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [F.], <span class="built_in">seq</span> 76, ack 327, win 473, options [nop,nop,TS val 304318072 ecr 304104630], length 0</span><br><span class="line">11:50:01.037159 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [F.], <span class="built_in">seq</span> 76, ack 327, win 473, options [nop,nop,TS val 304318072 ecr 304104630], length 0</span><br><span class="line">11:50:01.047556 08:00:27:2d:af:18 &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 328, win 473, options [nop,nop,TS val 304318087 ecr 304104647], length 0</span><br><span class="line">11:50:01.047583 08:00:27:48:90:6c &gt; 08:00:27:23:1b:95, ethertype IPv4 (0x0800), length 66: 10.240.0.10.38482 &gt; 10.240.0.201.80: Flags [.], ack 328, win 473, options [nop,nop,TS val 304318087 ecr 304104647], length 0</span><br></pre></td></tr></table></figure>
+
+<p>数据包的目的<code>MAC</code>地址被修改为<code>node2</code>上<code>eth1</code>的<code>MAC</code>地址, 而且响应包并不经过<code>Director</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@node2 ~]<span class="comment"># ip link show dev eth1</span></span><br><span class="line">3: eth1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP mode DEFAULT group default qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/ether 08:00:27:23:1b:95 brd ff:ff:ff:ff:ff:ff</span><br></pre></td></tr></table></figure>
+
+
+<p>根据之前网上的<a target="_blank" rel="noopener" href="https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/">这篇文章</a>, <code>worker</code>节点可以不设置<code>VIP</code>，因为<code>VIP</code>并不需要由用户态程序来接收流量，而是直接由<code>iptables</code>来进行数据包转换。</p>
+<p>在大多数场景下这是正确的。但是如果需要直接从<code>worker</code>节点上通过<code>VIP</code>访问该服务时就需要在<code>worker</code>节点上配置<code>VIP</code>了。数据包在从<code>worker</code>节点发送出去时，会经由<code>nat:OUTPUT</code>和<code>nat:POSTROUTING</code>来处理。<code>iptables</code>的<code>NAT</code>实现是基于<code>conntrack</code>来实现的，发出时系统会建立<code>conntrack</code>条目。<code>iptables</code>的<code>nat:PREROUTING</code>和<code>nat:POSTROUTING</code>的处理都会调用<code>nf_nat_ipv4_fn</code>函数。当数据包由<code>LVS Director</code>把数据包返回到自身这台<code>RealServer</code>时, <code>nat:PREROUTING</code>阶段调用<code>nf_nat_ipv4_fn</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">switch</span> (ctinfo) &#123;</span><br><span class="line"><span class="keyword">case</span> IP_CT_RELATED:</span><br><span class="line"><span class="keyword">case</span> IP_CT_RELATED_REPLY:</span><br><span class="line">    <span class="keyword">if</span> (ip_hdr(skb)-&gt;protocol == IPPROTO_ICMP) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!nf_nat_icmp_reply_translation(skb, ct, ctinfo,</span><br><span class="line">                           ops-&gt;hooknum))</span><br><span class="line">            <span class="keyword">return</span> NF_DROP;</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/* Fall thru... (Only ICMPs can be IP_CT_IS_REPLY) */</span></span><br><span class="line"><span class="keyword">case</span> IP_CT_NEW:</span><br><span class="line">    <span class="comment">/* Seen it before?  This can happen for loopback, retrans,</span></span><br><span class="line"><span class="comment">     * or local packets.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (!nf_nat_initialized(ct, maniptype)) &#123;</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> ret;</span><br><span class="line"></span><br><span class="line">        ret = do_chain(ops, skb, state, ct);</span><br><span class="line">        <span class="keyword">if</span> (ret != NF_ACCEPT)</span><br><span class="line">            <span class="keyword">return</span> ret;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (nf_nat_initialized(ct, HOOK2MANIP(ops-&gt;hooknum)))</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        ret = nf_nat_alloc_null_binding(ct, ops-&gt;hooknum);</span><br><span class="line">        <span class="keyword">if</span> (ret != NF_ACCEPT)</span><br><span class="line">            <span class="keyword">return</span> ret;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        pr_debug(<span class="string">&quot;Already setup manip %s for ct %p\n&quot;</span>,</span><br><span class="line">             maniptype == NF_NAT_MANIP_SRC ? <span class="string">&quot;SRC&quot;</span> : <span class="string">&quot;DST&quot;</span>,</span><br><span class="line">             ct);</span><br><span class="line">        <span class="keyword">if</span> (nf_nat_oif_changed(ops-&gt;hooknum, ctinfo, nat,</span><br><span class="line">                       state-&gt;out))</span><br><span class="line">            <span class="keyword">goto</span> oif_changed;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">default</span>:</span><br><span class="line">    <span class="comment">/* ESTABLISHED */</span></span><br><span class="line">    NF_CT_ASSERT(ctinfo == IP_CT_ESTABLISHED ||</span><br><span class="line">             ctinfo == IP_CT_ESTABLISHED_REPLY);</span><br><span class="line">    <span class="keyword">if</span> (nf_nat_oif_changed(ops-&gt;hooknum, ctinfo, nat, state-&gt;out))</span><br><span class="line">        <span class="keyword">goto</span> oif_changed;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这时<code>nf_nat_initialized</code>会返回<code>0</code>, 因而跳过<code>do_chain</code>的调用，也就不再会执行<code>nat:PREROUTING</code>所设置的链和规则，放行通过进入到路由决策阶段。但由于数据包的源<code>IP</code>是本机地址，默认情况下Linux路由实现不允许非<code>loopback</code>设备之外的设备所进入的数据包源地址为本机地址, 因而该数据包会被丢弃。</p>
+<p>但内核提供了参数<code>accept_local</code>可以允许这种包通过:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">accept_local - BOOLEAN</span><br><span class="line">    Accept packets with local source addresses. In combination</span><br><span class="line">    with suitable routing, this can be used to direct packets</span><br><span class="line">    between two local interfaces over the wire and have them</span><br><span class="line">    accepted properly.</span><br><span class="line"></span><br><span class="line">    rp_filter must be set to a non-zero value in order for</span><br><span class="line">    accept_local to have an effect.</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">rp_filter - INTEGER</span><br><span class="line">    0 - No source validation.</span><br><span class="line">    1 - Strict mode as defined in RFC3704 Strict Reverse Path</span><br><span class="line">        Each incoming packet is tested against the FIB and if the interface</span><br><span class="line">        is not the best reverse path the packet check will fail.</span><br><span class="line">        By default failed packets are discarded.</span><br><span class="line">    2 - Loose mode as defined in RFC3704 Loose Reverse Path</span><br><span class="line">        Each incoming packet&#x27;s source address is also tested against the FIB</span><br><span class="line">        and if the source address is not reachable via any interface</span><br><span class="line">        the packet check will fail.</span><br><span class="line"></span><br><span class="line">    Current recommended practice in RFC3704 is to enable strict mode</span><br><span class="line">    to prevent IP spoofing from DDos attacks. If using asymmetric routing</span><br><span class="line">    or other complicated routing, then loose mode is recommended.</span><br><span class="line"></span><br><span class="line">    The max value from conf/&#123;all,interface&#125;/rp_filter is used</span><br><span class="line">    when doing source validation on the &#123;interface&#125;.</span><br><span class="line"></span><br><span class="line">    Default value is 0. Note that some distributions enable it</span><br><span class="line">    in startup scripts.</span><br></pre></td></tr></table></figure>
+
+<p>修改相应参数放行数据包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.conf.eth1.rp_filter=1</span><br><span class="line">sysctl -w net.ipv4.conf.eth1.accept_local=1</span><br></pre></td></tr></table></figure>
+
+<p>再次从<code>worker</code>节点访问<code>VIP</code>, 同时开启<code>tcpdump</code>抓包分析:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]<span class="comment"># curl http://10.240.0.201</span></span><br><span class="line">curl: (7) Failed connect to 10.240.0.201:80; No route to host</span><br></pre></td></tr></table></figure>
+
+<p>可以看到返回路由错误，而从抓包结果看，我们放行数据包后，根据目的地址，数据包会再被发送出去，从而形成环路。直到<code>IP</code>包的<code>ttl</code>减为<code>0</code>返回了路由错误。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]<span class="comment"># tcpdump -ieth1 tcp port 80 -nn -e -v</span></span><br><span class="line">tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">02:57:18.801428 08:00:27:3a:25:<span class="built_in">df</span> &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0x173c (incorrect -&gt; 0xc00b), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:18.801803 08:00:27:48:90:6c &gt; 08:00:27:3a:25:<span class="built_in">df</span>, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 64, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:18.814275 08:00:27:3a:25:<span class="built_in">df</span> &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 63, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:18.814579 08:00:27:48:90:6c &gt; 08:00:27:3a:25:<span class="built_in">df</span>, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 63, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line"></span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">02:57:19.054672 08:00:27:3a:25:<span class="built_in">df</span> &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 2, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:19.054982 08:00:27:48:90:6c &gt; 08:00:27:3a:25:<span class="built_in">df</span>, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 2, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:19.057681 08:00:27:3a:25:<span class="built_in">df</span> &gt; 08:00:27:48:90:6c, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 1, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br><span class="line">02:57:19.057978 08:00:27:48:90:6c &gt; 08:00:27:3a:25:<span class="built_in">df</span>, ethertype IPv4 (0x0800), length 74: (tos 0x0, ttl 1, <span class="built_in">id</span> 48372, offset 0, flags [DF], proto TCP (6), length 60)</span><br><span class="line">    10.240.0.101.39700 &gt; 10.240.0.201.80: Flags [S], <span class="built_in">cksum</span> 0xc00b (correct), <span class="built_in">seq</span> 542364503, win 29200, options [mss 1460,sackOK,TS val 2387875 ecr 0,nop,wscale 7], length 0</span><br></pre></td></tr></table></figure>
+
+<p>本文只是简单实验可行性。如果用于生产环境，需要额外的方案考虑，比如:</p>
+<ul>
+<li><code>LVS</code>本身可以配合<code>keepalived</code>使用主备模式保证<code>Director</code>的HA</li>
+<li>使用<code>OSPF</code>的<code>ECMP</code>来配置多主的<code>Director</code>集群(可以参考之前的文章<a href="/2020/05/05/emcp-ospf-cumulus/">&lt;&lt;基于Cumulus VX实验ECMP+OSPF负载均衡&gt;&gt;</a>)</li>
+<li>省略<code>LVS</code>的<code>Director</code>层，直接使用<code>OSPF</code>的<code>ECMP</code>将流量分发到<code>worker</code>节点的<code>VIP</code></li>
+</ul>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://medium.com/swlh/kubernetes-external-ip-service-type-5e5e9ad62fcd">https://medium.com/swlh/kubernetes-external-ip-service-type-5e5e9ad62fcd</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.361way.com/lvs-dr-theory/5195.html">http://www.361way.com/lvs-dr-theory/5195.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/">https://jishu.io/kubernetes/ipvs-loadbalancer-for-kubernetes/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt">https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/ExternalIP/" rel="tag"># ExternalIP</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/11/07/kubernetes-clusterip/" rel="prev" title="Kubernetes Service网络通信分析">
+      <i class="fa fa-chevron-left"></i> Kubernetes Service网络通信分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/11/21/custom-loadbalancer/" rel="next" title="本地环境Kubernetes LoadBalancer实现">
+      本地环境Kubernetes LoadBalancer实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

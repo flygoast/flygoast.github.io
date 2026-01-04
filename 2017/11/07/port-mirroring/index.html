@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="端口镜像是物理交换机上的一种特性，用于将交换机上某一端口的流量发送至其他目的地。镜像的流量通常可以用于网络调试、性能监测、安全防护等方面。 Cisco将端口镜像分为三种形式:  SPAN(Switch Port Analyzer): 将流量从源端口镜像至同一交换机上的目的端口。 RSPAN(Remote SPAN): 这种形式扩展了SPAN方式，允许镜像流量经过多个二层网络设备。RSPAN将流量镜">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware vSphere平台端口镜像">
+<meta property="og:url" content="http://just4coding.com/2017/11/07/port-mirroring/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="端口镜像是物理交换机上的一种特性，用于将交换机上某一端口的流量发送至其他目的地。镜像的流量通常可以用于网络调试、性能监测、安全防护等方面。 Cisco将端口镜像分为三种形式:  SPAN(Switch Port Analyzer): 将流量从源端口镜像至同一交换机上的目的端口。 RSPAN(Remote SPAN): 这种形式扩展了SPAN方式，允许镜像流量经过多个二层网络设备。RSPAN将流量镜">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-07/7.png">
+<meta property="article:published_time" content="2017-11-07T08:23:16.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.485Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-11-07/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/11/07/port-mirroring/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware vSphere平台端口镜像 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/07/port-mirroring/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware vSphere平台端口镜像
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-07 16:23:16" itemprop="dateCreated datePublished" datetime="2017-11-07T16:23:16+08:00">2017-11-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>端口镜像是物理交换机上的一种特性，用于将交换机上某一端口的流量发送至其他目的地。镜像的流量通常可以用于网络调试、性能监测、安全防护等方面。</p>
+<p>Cisco将端口镜像分为三种形式:</p>
+<ul>
+<li>SPAN(Switch Port Analyzer): 将流量从源端口镜像至同一交换机上的目的端口。</li>
+<li>RSPAN(Remote SPAN): 这种形式扩展了SPAN方式，允许镜像流量经过多个二层网络设备。RSPAN将流量镜像至特定VLAN，流经的交换机需要允许该VLAN通过，流量到达目标交换机时镜像至目的端口。</li>
+<li>ERSPAN(Encapsulated RSPAN): ERSPAN允许将流量镜像至三层网络设备。ERSPAN将原始流量封装到GRE(Generic Routing Encapsulation)中经由3层网络发送至目标设备。</li>
+</ul>
+<p>VMware vSphere的VDS(Virtual Distributed Switch)也能够支持这些特性。VMware VDS有5种可用的端口镜像选项, 如图:</p>
+<img src="/images/2017-11-07/1.png" class="">
+
+<span id="more"></span>
+
+<p><code>分布式端口镜像</code>对应<code>SPAN</code>, 它将流量从一个端口镜像到同一分布式交换机的另一端口，两个端口还必须位于同一个宿主机上。</p>
+<p>下面我们具体实验来说明，实验环境如图:</p>
+<img src="/images/2017-11-07/2.png" class="">
+
+<p>虚拟机<code>t1</code>和<code>t2</code>位于同一个VDS:<code>DSwitch</code>上，我们将<code>t1</code>的流量镜像至<code>t2</code>。</p>
+<p>我们在分布式交换机<code>DSwitch</code>上添加一个<code>分布式端口镜像</code>会话，将<code>状态</code>选为<code>已启用</code>。若目标端口不只单纯接收镜像的流量，还有自身的网络流量，则需要将<code>目标端口上的正常I/O</code>选为<code>允许</code>, 如图:</p>
+<img src="/images/2017-11-07/3.png" class="">
+
+<p>接下来，选择<code>t1</code>的端口做为源端口, 如图:</p>
+<img src="/images/2017-11-07/4.png" class="">
+
+<p>接着选择<code>t2</code>的端口做为目标端口, 如图:</p>
+<img src="/images/2017-11-07/5.png" class="">
+
+
+<p>此时结果如图, 点击完成:</p>
+<img src="/images/2017-11-07/6.png" class="">
+
+
+<p>我们在<code>t2</code>上使用tcpdump抓包, 在<code>t1</code>上执行PING操作。</p>
+<p>在<code>t1</code>上执行PING操作:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ping 114.114.114.114 -c 2</span><br><span class="line">PING 114.114.114.114 (114.114.114.114) 56(84) bytes of data.</span><br><span class="line">64 bytes from 114.114.114.114: icmp_seq=1 ttl=67 time=27.7 ms</span><br><span class="line">64 bytes from 114.114.114.114: icmp_seq=2 ttl=63 time=26.9 ms</span><br><span class="line"></span><br><span class="line">--- 114.114.114.114 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1001ms</span><br><span class="line">rtt min/avg/max/mdev = 26.924/27.341/27.759/0.449 ms</span><br></pre></td></tr></table></figure>
+<p>在<code>t2</code>上查看抓包结果:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# tcpdump -iens160 -nn icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on ens160, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">01:44:33.311035 IP 10.95.48.150 &gt; 114.114.114.114: ICMP echo request, id 18475, seq 1, length 64</span><br><span class="line">01:44:33.338740 IP 114.114.114.114 &gt; 10.95.48.150: ICMP echo reply, id 18475, seq 1, length 64</span><br><span class="line">01:44:34.312885 IP 10.95.48.150 &gt; 114.114.114.114: ICMP echo request, id 18475, seq 2, length 64</span><br><span class="line">01:44:34.339760 IP 114.114.114.114 &gt; 10.95.48.150: ICMP echo reply, id 18475, seq 2, length 64</span><br></pre></td></tr></table></figure>
+<p>可以看到<code>t2</code>上完整拿到了<code>t1</code>的流量。</p>
+<p><code>远程镜像源</code>和<code>远程镜像目的</code>两个选项对应<code>RSPAN</code>。当源端口和目的端口位于不同的分布式交换机或者ESXi宿主机上时，可以使用这两个选项。远程镜像源选项将源端口的流量以特定VLAN封装发送到指定的上行链路上，远程镜像目的选项再将特定VLAN的数据镜像到目的端口。这两个选项本身还涉及物理交换机配置VLAN，不再具体说明。</p>
+<p><code>已封装远程镜像(L3)源</code>对应<code>ERSPAN</code>, 可以将源端口流量通过三层网络发送到指定的目的设备。</p>
+<p>下面，我们将<code>t1</code>的流量镜像到三层网络地址: <code>10.95.30.43</code>。</p>
+<p>创建步骤与上边类似，配置完结果如图:</p>
+<img src="/images/2017-11-07/7.png" class="">
+
+<p>我们在目标机器<code>10.95.30.43</code>上抓包，可以看到<code>t1</code>上的以太网帧数据以GRE形式封装镜像了过来(<code>10.95.30.31</code>为<code>t1</code>宿主机IP):</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# tcpdump -i br0 -e -nn proto GRE</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on br0, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">15:28:20.615095 2c:9d:1e:5c:27:98 &gt; 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 &gt; 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 00:50:56:b1:2c:bb &gt; ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.47.50 tell 10.95.47.49, length 46</span><br><span class="line">15:28:20.640046 2c:9d:1e:5c:27:98 &gt; 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 &gt; 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: e8:61:1f:1b:9a:a8 &gt; ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.31.252 tell 10.95.30.19, length 46</span><br><span class="line">15:28:20.705853 2c:9d:1e:5c:27:98 &gt; 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 &gt; 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 00:50:56:a0:34:ce &gt; ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.138.151 tell 10.95.46.20, length 46</span><br><span class="line">15:28:20.727207 2c:9d:1e:5c:27:98 &gt; 9c:e3:74:d0:9f:d9, ethertype IPv4 (0x0800), length 102: 10.95.30.31 &gt; 10.95.30.43: GREv0, key=0x0, proto TEB (0x6558), length 68: 6c:92:bf:58:5c:e0 &gt; ff:ff:ff:ff:ff:ff, ethertype ARP (0x0806), length 60: Request who-has 10.95.31.252 tell 10.95.30.18, length 46</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/10/12/vmware-find-mac/" rel="prev" title="VMware环境中根据虚拟机IP找寻所在ESXi主机">
+      <i class="fa fa-chevron-left"></i> VMware环境中根据虚拟机IP找寻所在ESXi主机
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/11/09/timewait/" rel="next" title="TIME_WAIT状态实验分析">
+      TIME_WAIT状态实验分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;NSX分布式逻辑路由器介绍&gt;&gt;简要介绍了NSX-V(NSX for vSphere)中的分布式逻辑路由器。NSX-V只支持vSphere平台，对VMware vCenter强依赖。NSX-T是针对异构虚拟化平台以及多Hypervisor环境来设计的，不仅支持vSphere平台，还支持KVM、Docker、Kubernetes等平台。当前来看，NSX-T更像是V">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NSX-T路由逻辑介绍">
+<meta property="og:url" content="http://just4coding.com/2020/07/13/nsx-t/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;NSX分布式逻辑路由器介绍&gt;&gt;简要介绍了NSX-V(NSX for vSphere)中的分布式逻辑路由器。NSX-V只支持vSphere平台，对VMware vCenter强依赖。NSX-T是针对异构虚拟化平台以及多Hypervisor环境来设计的，不仅支持vSphere平台，还支持KVM、Docker、Kubernetes等平台。当前来看，NSX-T更像是V">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/7.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/8.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/9.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-13/10.png">
+<meta property="article:published_time" content="2020-07-13T02:34:22.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.493Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="NSX-T">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-07-13/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/07/13/nsx-t/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NSX-T路由逻辑介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/13/nsx-t/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NSX-T路由逻辑介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-07-13 10:34:22" itemprop="dateCreated datePublished" datetime="2020-07-13T10:34:22+08:00">2020-07-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;NSX分布式逻辑路由器介绍&gt;&gt;简要介绍了<code>NSX-V(NSX for vSphere)</code>中的分布式逻辑路由器。<code>NSX-V</code>只支持vSphere平台，对<code>VMware vCenter</code>强依赖。<code>NSX-T</code>是针对异构虚拟化平台以及多Hypervisor环境来设计的，不仅支持vSphere平台，还支持KVM、Docker、Kubernetes等平台。当前来看，<code>NSX-T</code>更像是<code>VMware</code>未来的主要投入方向。<a target="_blank" rel="noopener" href="https://www.nakivo.com/blog/nsx-v-vs-nsx-t-comprehensive-comparison/">这篇文章</a>很透彻地介绍了<code>NSX-V</code>和<code>NSX-T</code>的差别，但文章中的内容是基于<code>NSX-T</code>的<code>2.3</code>版本，当前已经是<code>3.0</code>, 有些内容已经不太适用。</p>
+<p><code>NSX-T</code>的路由实现与<code>NSX-V</code>有较大不同，本文来简要介绍<code>NSX-T</code>平台下逻辑路由器的概念。</p>
+<p>在<code>NSX-T</code>中，逻辑路由器分为<code>Tier-0</code>网关和<code>Tier-1</code>网关。<code>Tire-0</code>网关用于连接<code>NSX-T</code>虚拟网络与外部网络，主要处理南北向路由。<code>Tier-1</code>网关用于处理不同<code>分段: Segment</code>(以前版本叫做<code>逻辑交换机: Logical Switch</code>, 虚拟二层网络)之间的东西向路由。从概念上来看，<code>Tire-1</code>网关对应<code>NSX-V</code>中的<code>LDR: Logical Distributed Router</code>, <code>Tire-0</code>对应<code>NSX-V</code>中的<code>ESG: Edge Service Gateway</code>。</p>
+<p>典型的部署结构如下图, 图片来自<a target="_blank" rel="noopener" href="https://blogs.vmware.com/networkvirtualization/2018/02/nsx-t-multi-tiered-routing-architecture.html/">VMware官方博客</a>:</p>
+<img src="/images/2020-07-13/1.png" class="">
+
+<span id="more"></span>
+
+<p>之前我们介绍过，在<code>NSX-V</code>中<code>LDR</code>当需要运行动态路由协议时，需要创建<code>Control VM</code>来做为<code>LDR</code>的统一控制面。而在<code>NSX-T</code>的实现，无论是<code>Tire-0</code>网关还是<code>Tire-1</code>网关, 它们都是一个<code>逻辑路由器(Logical Router)</code>，都由<code>SR: Service Router</code>和<code>DR: Distributed Router</code>构成。<code>DR</code>分布在相应<code>传输区域</code>的<code>传输节点</code>上，<code>SR</code>则部署在<code>Edge节点</code>中。<code>SR</code>实例只有在该逻辑路由器上开启不能分布式部署的服务时才会被创建, 如，与外部网络连接、NAT、DHCP、负载均衡等。</p>
+<p>对于<code>Tire-1网关</code>来说，当一个<code>分段</code>连接这个逻辑路由器时，它的DR组件就会在所有<code>传输节点</code>上创建。而当它被配置DNAT, 边界防火墙、负载均衡等功能时，<code>SR</code>组件在<code>Edge节点</code>上创建。<br><code>DR</code>和<code>SR</code>之间的连通是由<code>NSX-T</code>自动创建的传输分段来实现，可用地址段为<code>169.254.0.0/24</code>。而<code>Tire-1</code>与<code>Tier-0</code>之间传输子网也是<code>NSX-T</code>自动创建，子网地址使用为<code>100.64.0.0/16</code>。</p>
+<p>对于<code>Tire-0网关</code>来说，当<code>Tire-1网关</code>连接到它时，<code>DR</code>组件在所需的<code>传输节点</code>上创建。而当这个<code>Tire-0网关</code>连接到外部网络、配置DNAT、配置边界防火墙等服务时，<code>SR</code>组件在<code>Edge节点</code>上被创建。</p>
+<p><code>Tire-1网关</code>与<code>Tire-0网关</code>之间不运行动态路由协议，是由<code>NSX-T</code>自动构建静态路由实现路由转发。</p>
+<p>我们上边所说的<code>SR</code>组件并不是以虚拟机形式存在，而是在<code>Edge节点</code>中的独立服务，这些<code>Edge节点</code>构成<code>Edge集群</code>来提供<code>Active-Active</code>或<code>Active-Standby</code>形式的高可用能力。<code>Edge节点</code>同时做为<code>Overlay</code>传输区域和<code>VLAN传输区域</code>的传输节点实现<code>Overlay网络</code>到<code>VLAN网络</code>的转发。</p>
+<p>在实验中发现，只要<code>Tire-1网关</code>关联上<code>Edge集群</code>，在没有配置NAT等服务时，相应<code>SR</code>组件也会创建，如下图操作:</p>
+<img src="/images/2020-07-13/2.png" class="">
+
+<p>这是因为网关防火墙功能默认是开启的，当关联上<code>Edge集群</code>后，<code>SR</code>组件即会自动创建, 可以参考<a target="_blank" rel="noopener" href="https://vkamino.com/part-1-nsx-t-routing-deep-dive-how-a-stateful-service-drastically-changes-routing/">这篇文章</a>。</p>
+<p>我的实验环境的网络拓扑如图所示:</p>
+<img src="/images/2020-07-13/3.png" class="">
+
+<p>没有给<code>Tire-1网关</code>关联<code>Edge集群</code>时，简化的结构如图:</p>
+<img src="/images/2020-07-13/4.png" class="">
+
+<p>从虚拟机<code>t1</code>访问外部时，数据包首先到达<code>T1-GW-01</code>在<code>t1</code>所在<code>ESXi</code>主机上的<code>DR</code>。此时，<code>DR-T1-GW-01</code>的路由表如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">localhost&gt; get logical-router 9ddc145a-f076-4d2e-9280-bebdbeb250de forwarding</span><br><span class="line">                                       Logical Routers Forwarding Table</span><br><span class="line">--------------------------------------------------------------------------------------------------------------</span><br><span class="line">Flags Legend: [U: Up], [G: Gateway], [C: Connected], [I: Interface]</span><br><span class="line">[H: Host], [R: Reject], [B: Blackhole], [F: Soft Flush], [E: ECMP]</span><br><span class="line"></span><br><span class="line">                   Network                               Gateway                Type               Interface UUID</span><br><span class="line">==============================================================================================================</span><br><span class="line">0.0.0.0/0                                              100.64.80.0              UGE     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">100.64.80.0/31                                           0.0.0.0                UCI     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">169.254.0.0/28                                           0.0.0.0                UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">192.168.0.0/24                                           0.0.0.0                UCI     53e3d461-7fb2-4fba-a495-4e51dbcdccf1</span><br><span class="line">192.168.1.0/24                                           0.0.0.0                UCI     aac47f48-4233-424a-8503-6e41801e86f8</span><br><span class="line">::/0                                              fc15:7264:6244:2800::1        UGE     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">fc15:7264:6244:2800::/64                                    ::                  UCI     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">fe80::50:56ff:fe56:5300/128                                 ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">fe80:820:100:0:50:56ff:fe56:4455/128                        ::                  UCI     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">fe80:c20:100:0:50:56ff:fe56:4452/128                        ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">ff02:820:100::1:ff00:2/128                                  ::                  UCI     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">ff02:820:100::1:ff56:4455/128                               ::                  UCI     85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">ff02:c20:100::1:ff56:4452/128                               ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">ff02:c20:100::1:ff56:5300/128                               ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br></pre></td></tr></table></figure>
+<p>因而通过默认路由，到达<code>DR-T0-GW-01</code>的接口<code>100.64.80.0/31</code>。</p>
+<p>查看此时<code>DR-T0-GW-1</code>的路由表:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">localhost&gt; get logical-router d70e64df-c577-473b-ac7a-89665d623a57 forwarding</span><br><span class="line">                                       Logical Routers Forwarding Table</span><br><span class="line">--------------------------------------------------------------------------------------------------------------</span><br><span class="line">Flags Legend: [U: Up], [G: Gateway], [C: Connected], [I: Interface]</span><br><span class="line">[H: Host], [R: Reject], [B: Blackhole], [F: Soft Flush], [E: ECMP]</span><br><span class="line"></span><br><span class="line">                   Network                               Gateway                Type               Interface UUID</span><br><span class="line">==============================================================================================================</span><br><span class="line">0.0.0.0/0                                              169.254.0.2               UG     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">10.10.10.0/24                                          169.254.0.2               UG     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">10.10.10.100/32                                        169.254.0.2              UGH     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">100.64.80.0/31                                           0.0.0.0                UCI     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">100.64.80.2/31                                           0.0.0.0                UCI     837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">169.254.0.0/24                                           0.0.0.0                UCI     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">192.168.0.0/24                                         100.64.80.1               UG     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">192.168.1.0/24                                         100.64.80.1               UG     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">192.168.2.0/24                                         100.64.80.3               UG     837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">::/0                                             fe80::50:56ff:fe56:5300         UG     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">fc15:7264:6244:2800::/64                                    ::                  UCI     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">fc15:7264:6244:2801::/64                                    ::                  UCI     837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">fe80::50:56ff:fe56:5300/128                                 ::                  UCI     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">fe80:820:100:0:50:56ff:fe56:4452/128                        ::                  UCI     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">fe80:920:100:0:50:56ff:fe56:4452/128                        ::                  UCI     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">fe80:a20:100:0:50:56ff:fe56:4452/128                        ::                  UCI     837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">ff02:820:100::1:ff00:1/128                                  ::                  UCI     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">ff02:820:100::1:ff56:4452/128                               ::                  UCI     28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">ff02:920:100::1:ff56:4452/128                               ::                  UCI     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">ff02:920:100::1:ff56:5300/128                               ::                  UCI     33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">ff02:a20:100::1:ff00:1/128                                  ::                  UCI     837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">ff02:a20:100::1:ff56:4452/128                               ::                  UCI     837fe706-17b9-429f-8049-963609181d9b</span><br></pre></td></tr></table></figure>
+<p>默认路由是<code>169.254.0.2</code>, 此时本地ESXi主机已经找不到该接口，通过传输节点隧道到达<code>Edge节点</code>上<code>SR-T0-GW-01</code>的接口<code>169.254.0.2/24</code>。</p>
+<p><code>SR-T0-GW-01</code>的路由表如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">edge-01(tier0_sr)&gt; get route</span><br><span class="line"></span><br><span class="line">Flags: t0c - Tier0-Connected, t0s - Tier0-Static, b - BGP,</span><br><span class="line">t0n - Tier0-NAT, t1s - Tier1-Static, t1c - Tier1-Connected,</span><br><span class="line">t1n: Tier1-NAT, t1l: Tier1-LB VIP, t1ls: Tier1-LB SNAT,</span><br><span class="line">t1d: Tier1-DNS FORWARDER, t1ipsec: Tier1-IPSec, isr: Inter-SR,</span><br><span class="line">&gt; - selected route, * - FIB route</span><br><span class="line"></span><br><span class="line">Total number of routes: 11</span><br><span class="line"></span><br><span class="line">t0s&gt; * 0.0.0.0/0 [1/0] via 10.10.100.1, uplink-363, 00:00:30</span><br><span class="line">t0c&gt; * 10.10.10.0/24 is directly connected, uplink-363, 00:12:13</span><br><span class="line">t0c&gt; * 100.64.80.0/31 is directly connected, linked-361, 00:12:13</span><br><span class="line">t0c&gt; * 100.64.80.2/31 is directly connected, linked-371, 00:12:13</span><br><span class="line">t0c&gt; * 169.254.0.0/24 is directly connected, downlink-353, 00:12:13</span><br><span class="line">t1c&gt; * 192.168.0.0/24 [3/0] via 100.64.80.1, linked-361, 00:12:11</span><br><span class="line">t1c&gt; * 192.168.1.0/24 [3/0] via 100.64.80.1, linked-361, 00:12:11</span><br><span class="line">t1c&gt; * 192.168.2.0/24 [3/0] via 100.64.80.3, linked-371, 00:12:11</span><br><span class="line">t0c&gt; * fc15:7264:6244:2800::/64 is directly connected, linked-361, 00:12:13</span><br><span class="line">t0c&gt; * fc15:7264:6244:2801::/64 is directly connected, linked-371, 00:12:13</span><br><span class="line">t0c&gt; * fe80::/64 is directly connected, linked-361, 00:12:13</span><br></pre></td></tr></table></figure>
+<p>因而数据包通过<code>SR-T0-GW-01</code>的上联VLAN接口流向外部网络。</p>
+<p>整体过程如图:</p>
+<img src="/images/2020-07-13/5.png" class="">
+
+<p>逻辑架构图如下:</p>
+<img src="/images/2020-07-13/6.png" class="">
+
+<p>而给<code>T1-GW-01</code>和<code>T1-GW-02</code>两个<code>Tire1网关</code>关联<code>Edge集群</code>后，整体结构变化为:</p>
+<img src="/images/2020-07-13/7.png" class="">
+
+<p>此时虚拟机<code>t1</code>访问外部网络的数据包同样到达<code>DR-T1-GW-01</code>, <code>DR-T1-GW-01</code>的路由表如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">localhost&gt; get logical-router 9ddc145a-f076-4d2e-9280-bebdbeb250de forwarding</span><br><span class="line">                                       Logical Routers Forwarding Table</span><br><span class="line">--------------------------------------------------------------------------------------------------------------</span><br><span class="line">Flags Legend: [U: Up], [G: Gateway], [C: Connected], [I: Interface]</span><br><span class="line">[H: Host], [R: Reject], [B: Blackhole], [F: Soft Flush], [E: ECMP]</span><br><span class="line"></span><br><span class="line">                   Network                               Gateway                Type               Interface UUID</span><br><span class="line">==============================================================================================================</span><br><span class="line">0.0.0.0/0                                              169.254.0.2               UG     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">169.254.0.0/28                                           0.0.0.0                UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">192.168.0.0/24                                           0.0.0.0                UCI     53e3d461-7fb2-4fba-a495-4e51dbcdccf1</span><br><span class="line">192.168.1.0/24                                           0.0.0.0                UCI     aac47f48-4233-424a-8503-6e41801e86f8</span><br><span class="line">::/0                                             fe80::50:56ff:fe56:5300         UG     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">fe80::50:56ff:fe56:5300/128                                 ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">fe80:c20:100:0:50:56ff:fe56:4452/128                        ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">ff02:c20:100::1:ff56:4452/128                               ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br><span class="line">ff02:c20:100::1:ff56:5300/128                               ::                  UCI     45fbe9fd-85aa-481f-adf0-372ce979198c</span><br></pre></td></tr></table></figure>
+<p>默认路由为<code>169.254.0.2</code>, 数据包通过传输节点隧道到达Edge节点上<code>SR-T1-GW-01</code>的<code>169.254.0.2/24</code>接口。<code>SR-T1-GW-01</code>的路由表为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">edge-02(tier1_sr)&gt; get forwarding</span><br><span class="line">Logical Router</span><br><span class="line">UUID                                   VRF    LR-ID  Name                              Type</span><br><span class="line">970176ea-8d00-4ceb-92f5-9cd05c8860c0   27     20     SR-T1-GW-01                       SERVICE_ROUTER_TIER1</span><br><span class="line">IPv4 Forwarding Table</span><br><span class="line">IP Prefix          Gateway IP      Type     UUID                                   Gateway MAC</span><br><span class="line">0.0.0.0/0          100.64.80.0     route    85e139ef-0f86-434f-8862-63e421c3e738   02:50:56:56:44:52</span><br><span class="line">100.64.80.0/31                     route    85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">100.64.80.1/32                     route    c09945ce-2748-5413-9fc7-e4a7280126b5</span><br><span class="line">127.0.0.1/32                       route    80bd72cf-40d8-4a30-8472-fed4a7f61695</span><br><span class="line">169.254.0.0/28                     route    befd48ee-0bc1-4cf6-8416-39f5a3ed8911</span><br><span class="line">169.254.0.1/32                     route    3f66a5a0-5f8e-5d63-b574-f5a3fbe6d6b3</span><br><span class="line">169.254.0.2/32                     route    c09945ce-2748-5413-9fc7-e4a7280126b5</span><br><span class="line">192.168.0.0/24                     route    53e3d461-7fb2-4fba-a495-4e51dbcdccf1</span><br><span class="line">192.168.0.1/32                     route    3f66a5a0-5f8e-5d63-b574-f5a3fbe6d6b3</span><br><span class="line">192.168.1.0/24                     route    aac47f48-4233-424a-8503-6e41801e86f8</span><br><span class="line">192.168.1.1/32                     route    3f66a5a0-5f8e-5d63-b574-f5a3fbe6d6b3</span><br><span class="line">IPv6 Forwarding Table</span><br><span class="line">IP Prefix                                     Gateway IP                                Type        UUID                                   Gateway MAC</span><br><span class="line">::/0                                          fc15:7264:6244:2800::1                    route       85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">::1/128                                                                                 route       80bd72cf-40d8-4a30-8472-fed4a7f61695</span><br><span class="line">fc15:7264:6244:2800::/64                                                                route       85e139ef-0f86-434f-8862-63e421c3e738</span><br><span class="line">fc15:7264:6244:2800::2/128                                                              route       c09945ce-2748-5413-9fc7-e4a7280126b5</span><br></pre></td></tr></table></figure>
+<p>数据包经过默认路由<code>100.64.80.0</code>到达<code>DR-T0-GW-01</code>的接口<code>100.64.80.0/31</code>接口。<code>DR-T0-GW-01</code>的路由表如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">edge-02(vrf)&gt; get forwarding</span><br><span class="line">Logical Router</span><br><span class="line">UUID                                   VRF    LR-ID  Name                              Type</span><br><span class="line">d70e64df-c577-473b-ac7a-89665d623a57   21     10     DR-T0-GW-01                       DISTRIBUTED_ROUTER_TIER0</span><br><span class="line">IPv4 Forwarding Table</span><br><span class="line">IP Prefix          Gateway IP      Type     UUID                                   Gateway MAC</span><br><span class="line">0.0.0.0/0          169.254.0.2     route    33698a52-a0d4-4fd3-9b32-3f903f36d88c   02:50:56:56:53:00</span><br><span class="line">10.44.204.0/22     169.254.0.2     route    33698a52-a0d4-4fd3-9b32-3f903f36d88c   02:50:56:56:53:00</span><br><span class="line">10.44.205.85/32    169.254.0.2     route    33698a52-a0d4-4fd3-9b32-3f903f36d88c   02:50:56:56:53:00</span><br><span class="line">10.44.205.86/32    169.254.0.2     route    33698a52-a0d4-4fd3-9b32-3f903f36d88c   02:50:56:56:53:00</span><br><span class="line">100.64.80.0/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">100.64.80.0/31                     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">100.64.80.2/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">100.64.80.2/31                     route    837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">169.254.0.0/24                     route    33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">169.254.0.1/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">192.168.0.0/24     100.64.80.1     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">192.168.1.0/24     100.64.80.1     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">192.168.2.0/24     100.64.80.3     route    837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">IPv6 Forwarding Table</span><br><span class="line">IP Prefix                                     Gateway IP                                Type        UUID                                   Gateway MAC</span><br><span class="line">::/0                                          fe80::50:56ff:fe56:5300                   route       33698a52-a0d4-4fd3-9b32-3f903f36d88c</span><br><span class="line">fc15:7264:6244:2800::/64                                                                route       28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">fc15:7264:6244:2800::1/128                                                              route       76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">fc15:7264:6244:2801::/64                                                                route       837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">fc15:7264:6244:2801::1/128                                                              route       76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br></pre></td></tr></table></figure>
+<p>经由默认路由到达<code>SR-T0-GW-01</code>。我们再查看<code>SR-T0-GW-01</code>的路由表:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">edge-01(tier0_sr)&gt; get forwarding</span><br><span class="line">Logical Router</span><br><span class="line">UUID                                   VRF    LR-ID  Name                              Type</span><br><span class="line">6ff30c16-57f7-4a8b-a43d-0b207e38e798   11     16     SR-T0-GW-01                       SERVICE_ROUTER_TIER0</span><br><span class="line">IPv4 Forwarding Table</span><br><span class="line">IP Prefix          Gateway IP      Type     UUID                                   Gateway MAC</span><br><span class="line">0.0.0.0/0          10.44.204.1     route    baa91ad9-2afb-47dd-805c-f0c5e9f32886</span><br><span class="line">10.10.10.0/22                      route    baa91ad9-2afb-47dd-805c-f0c5e9f32886</span><br><span class="line">10.10.10.100/32                    route    a1dd8b2c-75e9-59a6-8d9c-c618d6e8df48</span><br><span class="line">100.64.80.0/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">100.64.80.0/31                     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">100.64.80.2/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">100.64.80.2/31                     route    837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">127.0.0.1/32                       route    bfb3edcb-69fd-4aa4-b78e-d3f79a5fb098</span><br><span class="line">169.254.0.0/24                     route    e7c718e2-f2f4-4686-bb70-bc183e22ac17</span><br><span class="line">                                            e7c718e2-f2f4-4686-bb70-bc183e22ac17</span><br><span class="line">169.254.0.1/32                     route    76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">169.254.0.2/32                     route    a1dd8b2c-75e9-59a6-8d9c-c618d6e8df48</span><br><span class="line">192.168.0.0/24     100.64.80.1     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae   02:50:56:56:44:55</span><br><span class="line">192.168.1.0/24     100.64.80.1     route    28d42bfc-81ad-4424-8dd4-f2b63d339bae   02:50:56:56:44:55</span><br><span class="line">192.168.2.0/24     100.64.80.3     route    837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">IPv6 Forwarding Table</span><br><span class="line">IP Prefix                                     Gateway IP                                Type        UUID                                   Gateway MAC</span><br><span class="line">::1/128                                                                                 route       bfb3edcb-69fd-4aa4-b78e-d3f79a5fb098</span><br><span class="line">fc15:7264:6244:2800::/64                                                                route       28d42bfc-81ad-4424-8dd4-f2b63d339bae</span><br><span class="line">fc15:7264:6244:2800::1/128                                                              route       76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br><span class="line">fc15:7264:6244:2801::/64                                                                route       837fe706-17b9-429f-8049-963609181d9b</span><br><span class="line">fc15:7264:6244:2801::1/128                                                              route       76e6ae82-1527-5af6-a14c-6ee80dd52125</span><br></pre></td></tr></table></figure>
+<p>数据包经由默认路由由上联接口进入到外部网络。</p>
+<p>整体的转发路径如图:</p>
+<img src="/images/2020-07-13/8.png" class="">
+
+<p>逻辑路径图如下:</p>
+<img src="/images/2020-07-13/9.png" class="">
+
+<p>整体上<code>NSX-T</code>的路由逻辑不太容易理解，还可能涉及到Edge集群内多个实例之间的通信，需要多实践多分析。<code>NSX-T</code>平台上有<code>流跟踪</code>功能，该功能对于分析数据包走向非常有价值。</p>
+<img src="/images/2020-07-13/10.png" class="">
+
+<p><code>NSX-T</code>安装参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://vdives.com/2019/06/19/nsx-t-lab-install-series/">https://vdives.com/2019/06/19/nsx-t-lab-install-series/</a></li>
+<li><a target="_blank" rel="noopener" href="https://vdives.com/2020/06/01/nsx-t-3-0-lab-changes-to-3-0-build/">https://vdives.com/2020/06/01/nsx-t-3-0-lab-changes-to-3-0-build/</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.velements.net/2020/05/18/nsx-t-3-0-deep-dive/">http://www.velements.net/2020/05/18/nsx-t-3-0-deep-dive/</a></li>
+<li><a target="_blank" rel="noopener" href="https://shuttletitan.com/nsx-t/nsx-t-installation-series/journey-to-nsx-t-vcp-nv-and-beyond-nsx-t-installation-series/">https://shuttletitan.com/nsx-t/nsx-t-installation-series/journey-to-nsx-t-vcp-nv-and-beyond-nsx-t-installation-series/</a></li>
+</ul>
+<p>路由原理参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://blogs.vmware.com/networkvirtualization/2017/09/nsx-t-routing-where-you-need-it.html/">https://blogs.vmware.com/networkvirtualization/2017/09/nsx-t-routing-where-you-need-it.html/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.vmware.com/networkvirtualization/2018/01/nsx-t-routing-part-2.html/">https://blogs.vmware.com/networkvirtualization/2018/01/nsx-t-routing-part-2.html/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.vmware.com/networkvirtualization/2018/02/nsx-t-multi-tiered-routing-architecture.html/">https://blogs.vmware.com/networkvirtualization/2018/02/nsx-t-multi-tiered-routing-architecture.html/</a></li>
+</ul>
+<p>NSX-T Client文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://vdc-download.vmware.com/vmwb-repository/dcr-public/cc42e3c1-eb34-4567-a916-147e79798957/8fff776d-fabd-4157-9c79-fdec07a5599f/nsxt_30_cli.htm">https://vdc-download.vmware.com/vmwb-repository/dcr-public/cc42e3c1-eb34-4567-a916-147e79798957/8fff776d-fabd-4157-9c79-fdec07a5599f/nsxt_30_cli.htm</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/NSX-T/" rel="tag"># NSX-T</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/06/21/NSX/" rel="prev" title="NSX分布式逻辑路由器介绍">
+      <i class="fa fa-chevron-left"></i> NSX分布式逻辑路由器介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/07/25/kubernetes-cni/" rel="next" title="Kubernetes网络和CNI">
+      Kubernetes网络和CNI <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

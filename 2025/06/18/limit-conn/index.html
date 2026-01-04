@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="多年前写过介绍nginx限制连接模块的文章&lt;&lt;ngx_http_limit_conn_module模块分析&gt;&gt;, 最近业务中用到limit_conn指令限制请求，重新了解了一下它的用法。 根据nginx文档, 可以理解主要逻辑是根据limit_conn_zone所指定的key值计算连接数，当连接数超过limit_conn所指定的值时，则返回错误码。 由于限制值是在limit">
+<meta property="og:type" content="article">
+<meta property="og:title" content="关于nginx中的limit_conn指令">
+<meta property="og:url" content="http://just4coding.com/2025/06/18/limit-conn/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="多年前写过介绍nginx限制连接模块的文章&lt;&lt;ngx_http_limit_conn_module模块分析&gt;&gt;, 最近业务中用到limit_conn指令限制请求，重新了解了一下它的用法。 根据nginx文档, 可以理解主要逻辑是根据limit_conn_zone所指定的key值计算连接数，当连接数超过limit_conn所指定的值时，则返回错误码。 由于限制值是在limit">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-06-18T02:34:45.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.512Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="nginx">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2025/06/18/limit-conn/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>关于nginx中的limit_conn指令 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2025/06/18/limit-conn/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          关于nginx中的limit_conn指令
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2025-06-18 10:34:45" itemprop="dateCreated datePublished" datetime="2025-06-18T10:34:45+08:00">2025-06-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>多年前写过介绍<code>nginx</code>限制连接模块的文章<a href="2015/09/13/ngx-http-limit-conn-module/">&lt;&lt;ngx_http_limit_conn_module模块分析&gt;&gt;</a>, 最近业务中用到<code>limit_conn</code>指令限制请求，重新了解了一下它的用法。</p>
+<p>根据<a target="_blank" rel="noopener" href="https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html#limit_conn"><code>nginx</code>文档</a>, 可以理解主要逻辑是根据<code>limit_conn_zone</code>所指定的<code>key</code>值计算连接数，当连接数超过<code>limit_conn</code>所指定的值时，则返回错误码。</p>
+<p>由于限制值是在<code>limit_conn</code>指令而不是在<code>limit_conn_zone</code>指令中设置的，而<code>limit_conn</code>是可以配置多次的，当配置多次相同<code>zone</code>的<code>limit_conn</code>指令并且限制值不同，那么生效的是哪个限制值呢？</p>
+<p>如果在同一个<code>location</code>中配置多个相同<code>zone</code>的<code>limit_conn</code>指令，示例配置为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">location /a &#123;</span><br><span class="line">    limit_conn perserver 2;</span><br><span class="line">    limit_conn perserver 5;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>当启动<code>nginx</code>会检测到这种情况直接报错:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nginx: [emerg] &quot;limit_conn&quot; directive is duplicate in /usr/local/nginx/conf/nginx.conf:52</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>nginx</code>源码，在处理<code>limit_conn</code>指令配置时，会对相同<code>zone</code>的情况进行检测，当有重复的<code>zone</code>, 则直接报错:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">char</span> *</span><br><span class="line"><span class="title function_">ngx_http_limit_conn</span><span class="params">(<span class="type">ngx_conf_t</span> *cf, <span class="type">ngx_command_t</span> *cmd, <span class="type">void</span> *conf)</span></span><br><span class="line">&#123;</span><br><span class="line">    ......</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; lccf-&gt;limits.nelts; i++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (shm_zone == limits[i].shm_zone) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot;is duplicate&quot;</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果在不同<code>location</code>下配置相同<code>zone</code>的<code>limit_conn</code>指令，如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">limit_conn_zone $server_name zone=perserver:10m;</span><br><span class="line"></span><br><span class="line">server &#123;</span><br><span class="line">    ...</span><br><span class="line">    location /a &#123;</span><br><span class="line">        limit_conn perserver 2;</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    location /b &#123;</span><br><span class="line">        limit_conn perserver 5;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这种情况下，<code>nginx</code>可以正常启动，限制值如何生效呢？</p>
+<p>根据<code>nginx</code>源码, 配置的限制值存储在<code>ngx_http_limit_conn_limit_t</code>结构中，该结构是一个<code>location</code>级别的结构，因而对于不同的<code>location</code>是各自独立的:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_shm_zone_t</span>               *shm_zone;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                    conn;</span><br><span class="line">&#125; <span class="type">ngx_http_limit_conn_limit_t</span>;</span><br></pre></td></tr></table></figure>
+
+<p>实际的检测逻辑注册在<code>PREACCESS</code>阶段:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_limit_conn_init</span><span class="params">(<span class="type">ngx_conf_t</span> *cf)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_handler_pt        *h;</span><br><span class="line">    <span class="type">ngx_http_core_main_conf_t</span>  *cmcf;</span><br><span class="line"></span><br><span class="line">    cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);</span><br><span class="line"></span><br><span class="line">    h = ngx_array_push(&amp;cmcf-&gt;phases[NGX_HTTP_PREACCESS_PHASE].handlers);</span><br><span class="line">    <span class="keyword">if</span> (h == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    *h = ngx_http_limit_conn_handler;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>检测时，会从对应的<code>location</code>结构中获取<code>ngx_http_limit_conn_limit_t</code>结构，因而使用的是自身<code>location</code>中所配置的限制值:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_limit_conn_handler</span><span class="params">(<span class="type">ngx_http_request_t</span> *r)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">size_t</span>                          n;</span><br><span class="line">    <span class="type">uint32_t</span>                        hash;</span><br><span class="line">    <span class="type">ngx_str_t</span>                       key;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                      i;</span><br><span class="line">    <span class="type">ngx_rbtree_node_t</span>              *node;</span><br><span class="line">    <span class="type">ngx_pool_cleanup_t</span>             *cln;</span><br><span class="line">    <span class="type">ngx_http_limit_conn_ctx_t</span>      *ctx;</span><br><span class="line">    <span class="type">ngx_http_limit_conn_node_t</span>     *lc;</span><br><span class="line">    <span class="type">ngx_http_limit_conn_conf_t</span>     *lccf;</span><br><span class="line">    <span class="type">ngx_http_limit_conn_limit_t</span>    *limits;</span><br><span class="line">    <span class="type">ngx_http_limit_conn_cleanup_t</span>  *lccln;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (r-&gt;main-&gt;limit_conn_status) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_DECLINED;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    lccf = ngx_http_get_module_loc_conf(r, ngx_http_limit_conn_module);</span><br><span class="line">    limits = lccf-&gt;limits.elts;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; lccf-&gt;limits.nelts; i++) &#123;</span><br><span class="line">    ......</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>因而, 对于上述的配置示例，并发连接数是基于<code>zone</code>中的<code>key</code>计算的，因而无论访问<code>/a</code>还是<code>/b</code>都会增加对应<code>zone: perserver</code>的并发连接数，但实际是否超过限制值是每个<code>location</code>单独计算的。</p>
+<p>比如，当前已经有了一个<code>/a</code>和一个<code>/b</code>的连接，此时再访问<code>/a</code>, 由于<code>location /a</code>配置的限制值为<code>2</code>, 已达到上限，新连接被限制，返回<code>503</code>或指定的错误码，而这时对于<code>/b</code>的新连接，由于总连接数小于<code>5</code>, 可以正常进行。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/nginx/" rel="tag"># nginx</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2025/03/19/bridge-isolation/" rel="prev" title="相同网桥上的网络隔离">
+      <i class="fa fa-chevron-left"></i> 相同网桥上的网络隔离
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2025/06/18/nfqueue-dns/" rel="next" title="NFQUEUE机制导致DNS请求超时">
+      NFQUEUE机制导致DNS请求超时 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

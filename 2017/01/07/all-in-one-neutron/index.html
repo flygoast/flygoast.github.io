@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="RDO是在RHEL，Fedora, CentOS等系统上部署OpenStack的方案。简单的试用或研究OpenStack可以选择all-in-one模式安装。这种模式将所有的OpenStack组件都部署在同一台机器上。本文来分析这种模式下虚拟网络的架构。 all-in-one模式安装完成时，RDO自动完成了以下工作:  创建了外部网络public: 172.24.4.224&#x2F;28 创建了租户dem">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RDO安装all-in-one模式OpenStack虚拟网络架构分析">
+<meta property="og:url" content="http://just4coding.com/2017/01/07/all-in-one-neutron/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="RDO是在RHEL，Fedora, CentOS等系统上部署OpenStack的方案。简单的试用或研究OpenStack可以选择all-in-one模式安装。这种模式将所有的OpenStack组件都部署在同一台机器上。本文来分析这种模式下虚拟网络的架构。 all-in-one模式安装完成时，RDO自动完成了以下工作:  创建了外部网络public: 172.24.4.224&#x2F;28 创建了租户dem">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-07/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-07/2.png">
+<meta property="article:published_time" content="2017-01-07T15:45:09.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.479Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-01-07/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/01/07/all-in-one-neutron/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>RDO安装all-in-one模式OpenStack虚拟网络架构分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/01/07/all-in-one-neutron/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          RDO安装all-in-one模式OpenStack虚拟网络架构分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-01-07 23:45:09" itemprop="dateCreated datePublished" datetime="2017-01-07T23:45:09+08:00">2017-01-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>RDO是在RHEL，Fedora, CentOS等系统上部署OpenStack的方案。简单的试用或研究OpenStack可以选择all-in-one模式安装。这种模式将所有的OpenStack组件都部署在同一台机器上。本文来分析这种模式下虚拟网络的架构。</p>
+<p>all-in-one模式安装完成时，RDO自动完成了以下工作:</p>
+<ul>
+<li>创建了外部网络public: <code>172.24.4.224/28</code></li>
+<li>创建了租户demo</li>
+<li>为租户demo创建了私有网络private: <code>10.0.0.0/24</code></li>
+<li>为租户demo创建路由器router1, 将private和public连接在一起</li>
+</ul>
+<p>我们登录demo租户，创建两个虚拟机，网络拓朴图如下:</p>
+<img src="/images/2017-01-07/1.png" class="">
+
+<p>本文基于该拓朴分析虚拟网络架构。</p>
+<span id="more"></span>
+
+<p>首先导入租户demo的keystone RC文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">source</span> ./keystonerc_demo</span><br></pre></td></tr></table></figure>
+<p>查看虚拟机列表:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># nova list</span></span><br><span class="line">+--------------------------------------+------+--------+------------+-------------+------------------+</span><br><span class="line">| ID                                   | Name | Status | Task State | Power State | Networks         |</span><br><span class="line">+--------------------------------------+------+--------+------------+-------------+------------------+</span><br><span class="line">| bd6cc17d-9128-49aa-8834-734e9cac0b80 | vm0  | ACTIVE | -          | Running     | private=10.0.0.5 |</span><br><span class="line">| 1b61b896-3c10-4237-85c1-0ee46a79036b | vm1  | ACTIVE | -          | Running     | private=10.0.0.6 |</span><br><span class="line">+--------------------------------------+------+--------+------------+-------------+------------------+</span><br></pre></td></tr></table></figure>
+<p>查看Port列表:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># neutron port-list</span></span><br><span class="line">+--------------------------------------+------+-------------------+---------------------------------------------------------------------------------+</span><br><span class="line">| <span class="built_in">id</span>                                   | name | mac_address       | fixed_ips                                                                       |</span><br><span class="line">+--------------------------------------+------+-------------------+---------------------------------------------------------------------------------+</span><br><span class="line">| 55e885f5-932f-4a24-bedd-c08fc6a3aeb3 |      | fa:16:3e:89:a4:48 | &#123;<span class="string">&quot;subnet_id&quot;</span>: <span class="string">&quot;f805a609-da7c-4a79-98a4-1aefb6aca2a2&quot;</span>, <span class="string">&quot;ip_address&quot;</span>: <span class="string">&quot;10.0.0.6&quot;</span>&#125; |</span><br><span class="line">| aa048a76-f7bf-4d92-ad0c-538ea54c4080 |      | fa:16:3e:ae:16:12 | &#123;<span class="string">&quot;subnet_id&quot;</span>: <span class="string">&quot;f805a609-da7c-4a79-98a4-1aefb6aca2a2&quot;</span>, <span class="string">&quot;ip_address&quot;</span>: <span class="string">&quot;10.0.0.5&quot;</span>&#125; |</span><br><span class="line">| af6b8f51-4650-4a13-b31c-5d12d2939d8e |      | fa:16:3e:f7:d8:ef | &#123;<span class="string">&quot;subnet_id&quot;</span>: <span class="string">&quot;f805a609-da7c-4a79-98a4-1aefb6aca2a2&quot;</span>, <span class="string">&quot;ip_address&quot;</span>: <span class="string">&quot;10.0.0.1&quot;</span>&#125; |</span><br><span class="line">| be7511c5-68f6-4a0d-a1b3-3c5ae225789a |      | fa:16:3e:e3:eb:66 | &#123;<span class="string">&quot;subnet_id&quot;</span>: <span class="string">&quot;f805a609-da7c-4a79-98a4-1aefb6aca2a2&quot;</span>, <span class="string">&quot;ip_address&quot;</span>: <span class="string">&quot;10.0.0.2&quot;</span>&#125; |</span><br><span class="line">+--------------------------------------+------+-------------------+---------------------------------------------------------------------------------+</span><br></pre></td></tr></table></figure>
+<p>VM0的Port为: <code>aa048a76-f7bf-4d92-ad0c-538ea54c4080</code>, VM1的Port为: <code>55e885f5-932f-4a24-bedd-c08fc6a3aeb3</code></p>
+<p>查看TAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip link |grep tap</span></span><br><span class="line">21: tapaa048a76-f7: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master qbraa048a76-f7 state UNKNOWN mode DEFAULT qlen 500</span><br><span class="line">25: tap55e885f5-93: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master qbr55e885f5-93 state UNKNOWN mode DEFAULT qlen 500</span><br></pre></td></tr></table></figure>
+<p>TAP设备根据Port的UUID前11位命名，VM0的虚拟网络接口为<code>tapaa048a76-f7</code>, VM1的虚拟网络接口为<code>tap55e885f5-93</code>。</p>
+<p>接着，查看Linux bridge信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># brctl show</span></span><br><span class="line">bridge name    bridge <span class="built_in">id</span>        STP enabled    interfaces</span><br><span class="line">qbr55e885f5-93        8000.e68f141893fa    no        qvb55e885f5-93</span><br><span class="line">                                                     tap55e885f5-93</span><br><span class="line">qbraa048a76-f7        8000.d6c6d2e7f411    no        qvbaa048a76-f7</span><br><span class="line">                                                     tapaa048a76-f7</span><br></pre></td></tr></table></figure>
+<p>接口<code>tapaa048a76-f7</code>挂接到了Linux bridge: <code>qbraa048a76-f7</code>上，而且bridge: <code>qbraa048a76-f7</code>还挂接了<code>qvbaa048a76-f7</code>。neutron中，Linux bridge设备以qbr命名，qvb和qvo表示分示veth pair设备的两端。qvb表示Linux bridge端，qvo表示OVS bridge端。</p>
+<p>查看veth设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip a |grep qvb</span></span><br><span class="line">19: qvoaa048a76-f7@qvbaa048a76-f7: &lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master ovs-system state UP qlen 1000</span><br><span class="line">20: qvbaa048a76-f7@qvoaa048a76-f7: &lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master qbraa048a76-f7 state UP qlen 1000</span><br><span class="line">23: qvo55e885f5-93@qvb55e885f5-93: &lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master ovs-system state UP qlen 1000</span><br><span class="line">24: qvb55e885f5-93@qvo55e885f5-93: &lt;BROADCAST,MULTICAST,PROMISC,UP,LOWER_UP&gt; mtu 1450 qdisc pfifo_fast master qbr55e885f5-93 state UP qlen 1000</span><br></pre></td></tr></table></figure>
+<p>可以看到veth pair的对应关系，再来查看OVS bridge：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ovs-vsctl show</span></span><br><span class="line">723d8ad6-f2dd-4955-a7b3-3b8ec602cb05</span><br><span class="line">    Manager <span class="string">&quot;ptcp:6640:127.0.0.1&quot;</span> </span><br><span class="line">        is_connected: <span class="literal">true</span></span><br><span class="line">    Bridge br-ex</span><br><span class="line">        Port <span class="string">&quot;qg-9395e4c9-54&quot;</span> </span><br><span class="line">            Interface <span class="string">&quot;qg-9395e4c9-54&quot;</span> </span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">        Port br-ex</span><br><span class="line">            Interface br-ex</span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">    Bridge br-int</span><br><span class="line">        Controller <span class="string">&quot;tcp:127.0.0.1:6633&quot;</span> </span><br><span class="line">            is_connected: <span class="literal">true</span></span><br><span class="line">        fail_mode: secure</span><br><span class="line">        Port <span class="string">&quot;qvo55e885f5-93&quot;</span> </span><br><span class="line">            tag: 1</span><br><span class="line">            Interface <span class="string">&quot;qvo55e885f5-93&quot;</span> </span><br><span class="line">        Port patch-tun</span><br><span class="line">            Interface patch-tun</span><br><span class="line">                <span class="built_in">type</span>: patch</span><br><span class="line">                options: &#123;peer=patch-int&#125;</span><br><span class="line">        Port <span class="string">&quot;qr-af6b8f51-46&quot;</span> </span><br><span class="line">            tag: 1</span><br><span class="line">            Interface <span class="string">&quot;qr-af6b8f51-46&quot;</span> </span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">        Port br-int</span><br><span class="line">            Interface br-int</span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">        Port <span class="string">&quot;tapbe7511c5-68&quot;</span> </span><br><span class="line">            tag: 1</span><br><span class="line">            Interface <span class="string">&quot;tapbe7511c5-68&quot;</span> </span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">        Port <span class="string">&quot;qvoaa048a76-f7&quot;</span> </span><br><span class="line">            tag: 1</span><br><span class="line">            Interface <span class="string">&quot;qvoaa048a76-f7&quot;</span> </span><br><span class="line">    Bridge br-tun</span><br><span class="line">        Controller <span class="string">&quot;tcp:127.0.0.1:6633&quot;</span> </span><br><span class="line">            is_connected: <span class="literal">true</span></span><br><span class="line">        fail_mode: secure</span><br><span class="line">        Port patch-int</span><br><span class="line">            Interface patch-int</span><br><span class="line">                <span class="built_in">type</span>: patch</span><br><span class="line">                options: &#123;peer=patch-tun&#125;</span><br><span class="line">        Port br-tun</span><br><span class="line">            Interface br-tun</span><br><span class="line">                <span class="built_in">type</span>: internal</span><br><span class="line">    ovs_version: <span class="string">&quot;2.5.0&quot;</span> </span><br></pre></td></tr></table></figure>
+<p>可以发现qvo开头的设备挂载到OVS bridge: <code>br-int</code>上。</p>
+<p>之所以在TAP设备和OVS bridge之间添加一层Linux bridge，是因为OpenStack基于IPTABLES实现安全组，而OVS目前不支持在OVS bridge上直接挂接的TAP设备上配置IPTABLES规则。</p>
+<p>从上述OVS bridge信息可以看到，挂接到<code>br-int</code>上的qvo设备配置了VLAN ID:1。neutron在<code>br-int</code>上基于VLAN来实现不同私有网络隔离。<code>br-int</code>上挂接的设备除了veth设备，还有设备<code>tapbe7511c5-68</code>和<code>qr-af6b8f51-46</code>。</p>
+<p>其中TAP设备: <code>tapbe7511c5-68</code>为DHCP服务器使用的网络接口。neutron基于network namespace和dnsmasq来实现DHCP。</p>
+<p>查看network namespace:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip netns list</span></span><br><span class="line">qrouter-a8f68832-ba0f-4176-9536-86fa6fd6ef1e</span><br><span class="line">qdhcp-1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca</span><br></pre></td></tr></table></figure>
+<p>DHCP的namespace为<code>qdhcp-1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca</code>。</p>
+<p>查看namespace中的设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip netns exec qdhcp-1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca ip a</span></span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">11: tapbe7511c5-68: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/ether fa:16:3e:e3:eb:66 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.0.0.2/24 brd 10.0.0.255 scope global tapbe7511c5-68</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fee3:eb66/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>再来查看dnsmasq进程:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ps aux |grep dnsmasq</span></span><br><span class="line">nobody   13598  0.0  0.0  15556   940 ?        S    Jan02   0:00 dnsmasq --no-hosts --no-resolv --strict-order --except-interface=lo --pid-file=/var/lib/neutron/dhcp/1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca/pid --dhcp-hostsfile=/var/lib/neutron/dhcp/1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca/host --addn-hosts=/var/lib/neutron/dhcp/1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca/addn_hosts --dhcp-optsfile=/var/lib/neutron/dhcp/1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca/opts --dhcp-leasefile=/var/lib/neutron/dhcp/1ced55ea-d30f-4c1d-ba97-6a7bbbd9ecca/leases --dhcp-match=<span class="built_in">set</span>:ipxe,175 --bind-interfaces --interface=tapbe7511c5-68 --dhcp-range=<span class="built_in">set</span>:tag0,10.0.0.0,static,86400s --dhcp-option-force=option:mtu,1450 --dhcp-lease-max=256 --conf-file= --domain=openstacklocal</span><br><span class="line">root     32126  0.0  0.0 112652   976 pts/0    S+   09:11   0:00 grep --color=auto dnsmasq</span><br></pre></td></tr></table></figure>
+
+<p>可以确认dnsmasq进程基于接口<code>tapbe7511c5-68</code>发送和接收DHCP数据包。</p>
+<p><code>br-int</code>上还挂接着设备:<code>qr-af6b8f51-46</code>，qr设备属于qrouter的namespace: <code>qrouter-a8f68832-ba0f-4176-9536-86fa6fd6ef1e</code></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip netns exec qrouter-a8f68832-ba0f-4176-9536-86fa6fd6ef1e ip a</span></span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">12: qr-af6b8f51-46: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/ether fa:16:3e:f7:d8:ef brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.0.0.1/24 brd 10.0.0.255 scope global qr-af6b8f51-46</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fef7:d8ef/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">13: qg-9395e4c9-54: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/ether fa:16:3e:52:<span class="built_in">dd</span>:06 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 172.24.4.229/28 brd 172.24.4.239 scope global qg-9395e4c9-54</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fe52:dd06/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p>虚拟机的默认网关为<code>10.0.0.1</code>, 配置在设备<code>qr-af6b8f51-46</code>上。虚拟机访问外网时，数据包会由该接口进入qrouter的namespace。</p>
+<p>查看namespace内的路由信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip netns exec qrouter-a8f68832-ba0f-4176-9536-86fa6fd6ef1e ip route</span></span><br><span class="line">default via 172.24.4.225 dev qg-9395e4c9-54</span><br><span class="line">10.0.0.0/24 dev qr-af6b8f51-46  proto kernel  scope <span class="built_in">link</span>  src 10.0.0.1</span><br><span class="line">172.24.4.224/28 dev qg-9395e4c9-54  proto kernel  scope <span class="built_in">link</span>  src 172.24.4.229</span><br></pre></td></tr></table></figure>
+<p>可以看到qrouter的默认路由为从接口<code>qg-9395e4c9-54</code>发送至<code>172.24.4.225</code>。</p>
+<p>从上边的OVS bridge信息看到: 接口<code>qg-9395e4c9-54</code>挂接在OVS bridge: <code>br-ex</code>上。OVS bridge默认存在一个同名的网络接口，来查看<code>br-ex</code>接口信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># ip addr show br-ex</span></span><br><span class="line">9: br-ex: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UNKNOWN</span><br><span class="line">    <span class="built_in">link</span>/ether 0a:c0:1c:ac:17:4f brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 172.24.4.225/28 scope global br-ex</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::8c0:1cff:feac:174f/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p><code>br-ex</code>上配置了IP：<code>172.24.4.225</code>。可以看到，虚拟机访问外网的数据包会由qrouter发送到<code>br-ex</code>接口。</p>
+<p>再来查看IPTABLES规则:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~(keystone_demo)]<span class="comment"># iptables -t nat -S POSTROUTING</span></span><br><span class="line">-P POSTROUTING ACCEPT</span><br><span class="line">-A POSTROUTING -j neutron-openvswi-POSTROUTING</span><br><span class="line">-A POSTROUTING -j neutron-postrouting-bottom</span><br><span class="line">-A POSTROUTING -j nova-api-POSTROUTING</span><br><span class="line">-A POSTROUTING -s 172.24.4.224/28 -o eth0 -m comment --comment <span class="string">&quot;000 nat&quot;</span> -j MASQUERADE</span><br><span class="line">-A POSTROUTING -j nova-postrouting-bottom</span><br></pre></td></tr></table></figure>
+<p>可以发现IPTABLES会将源地址为网段<code>172.24.4.224/28</code>的数据包进行NAT由接口eth0发出。</p>
+<p>经过上述分析，all-in-one模式的整体网络架构如图:</p>
+<img src="/images/2017-01-07/2.png" class="">
+
+<p>私有网络内的两个VM之间的数据通信，直接由<code>br-int</code>转发。虚拟机访问外网时，数据包则通过qrouter发送到<code>br-ex</code>接口，再由IPTABLES完成NAT从物理网卡发出。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/01/01/openflow-based-on-ovs/" rel="prev" title="Open vSwitch上OpenFlow流表操作示例">
+      <i class="fa fa-chevron-left"></i> Open vSwitch上OpenFlow流表操作示例
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/01/18/wsgi/" rel="next" title="WSGI介绍">
+      WSGI介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

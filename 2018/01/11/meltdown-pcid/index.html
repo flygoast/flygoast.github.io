@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Meltdown漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级Guest是否有较大的性能影响, 是否应该升级Guest虚拟机等问题又困扰着云租户们。 本文基于实例来分析Guest虚拟机的性能影响。 首先来看Meltdown的原理。现代CPU架构在不同的安全等级运行指令。内核需要直接操作硬件，运行于最高权限，而几乎所有的应用程序都运行于各低权限上。用户态进程通过系统调用访问内核数据。一般情况下，C">
+<meta property="og:type" content="article">
+<meta property="og:title" content="虚拟机KPTI性能影响分析">
+<meta property="og:url" content="http://just4coding.com/2018/01/11/meltdown-pcid/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Meltdown漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级Guest是否有较大的性能影响, 是否应该升级Guest虚拟机等问题又困扰着云租户们。 本文基于实例来分析Guest虚拟机的性能影响。 首先来看Meltdown的原理。现代CPU架构在不同的安全等级运行指令。内核需要直接操作硬件，运行于最高权限，而几乎所有的应用程序都运行于各低权限上。用户态进程通过系统调用访问内核数据。一般情况下，C">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-01-10T19:52:34.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.487Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2018/01/11/meltdown-pcid/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>虚拟机KPTI性能影响分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/01/11/meltdown-pcid/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          虚拟机KPTI性能影响分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-01-11 03:52:34" itemprop="dateCreated datePublished" datetime="2018-01-11T03:52:34+08:00">2018-01-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>Meltdown</code>漏洞暴发之后，各云厂商已陆陆续续升级宿主机，升级<code>Guest</code>是否有较大的性能影响, 是否应该升级<code>Guest</code>虚拟机等问题又困扰着云租户们。</p>
+<p>本文基于实例来分析<code>Guest</code>虚拟机的性能影响。</p>
+<p>首先来看<code>Meltdown</code>的原理。现代CPU架构在不同的安全等级运行指令。内核需要直接操作硬件，运行于最高权限，而几乎所有的应用程序都运行于各低权限上。用户态进程通过系统调用访问内核数据。一般情况下，CPU在执行时使用虚拟内存地址，内核使用页表来控制虚拟内存与物理内存的映射。用户态进程不能访问映射给内核的内存页。这些映射关系的计算较为耗时，因而CPU使用<code>TLB(Translation lookaside buffer)</code>来存储计算后的映射关系。从<code>TLB</code>中移除这些映射再重新计算并缓存会消耗性能，因而内核实现上会尽可能减少刷新TLB，于是内核将用户态和内核的数据都映射进用户态页表中。正常情况下，这不存在安全风险，页表的权限可以阻止用户态进程访问内核数据。</p>
+<span id="more"></span>
+
+<p>现代CPU追求运行速度，会从所有的内存映射关系中预取数据，而CPU本身会乱序执行，且乱序执行时不会验证是否有权限访问内存，且CPU缓存不会被恢复，因而<code>Meltdown</code>的研究者构造乱序执行的场景将内核内存地址的内容获取到CPU缓存中，再通过侧信道攻击获取到相应内容。</p>
+<p>Linux内核采用<code>KPTI(Kernel Page Table Isolation)</code>机制，将内核页表和用户空间页表隔离开，避免CPU在预取和乱序执行时用户态进程时获取到内核页表中的数据，从而缓解<code>Meltdown</code>利用。</p>
+<p>这样当进程用户在用户空间时，使用用户态页表，发生中断或者异常陷入内核时，将切换到内核页表。页表的切换将导致性能下降。</p>
+<p>Intel在<code>Haswell</code>架构后增加了一个特性叫做<code>PCID(Process-Context Identifiers)</code>。在没有该特性时，切换页表时将需要刷新整个<code>TLB</code>，而在CPU支持PCID时，内核用不同ID来区分两个页表将其关联PCID不再需要刷新整个TLB，这样会大大减小页表切换带来的性能损失。</p>
+<p>在Linux中查看<code>PCID</code>的方法:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cat</span> /proc/cpuinfo |grep pcid</span><br></pre></td></tr></table></figure>
+<p>根据上述分析，如果<code>Guest</code>虚拟机的CPU支持<code>PCID</code>，则<code>KPTI</code>引发的性能下降应会更小一些。。<code>VMware ESXi</code>平台上的<code>Guest</code>虚拟机CPU支持<code>PCID</code>，而KVM平台上<code>Guest</code>虚拟机CPU是否支持<code>PCID</code>由<code>QEMU/KVM</code>进程的<code>-cpu</code>选项决定。</p>
+<p>查看KVM支持的CPU选项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">root@dummy:~<span class="comment"># /usr/bin/kvm -cpu help</span></span><br><span class="line">x86           qemu64  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86           phenom  AMD Phenom(tm) 9550 Quad-Core Processor</span><br><span class="line">x86         core2duo  Intel(R) Core(TM)2 Duo CPU     T7700  @ 2.40GHz</span><br><span class="line">x86            kvm64  Common KVM processor</span><br><span class="line">x86           qemu32  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86            kvm32  Common 32-bit KVM processor</span><br><span class="line">x86          coreduo  Genuine Intel(R) CPU           T2600  @ 2.16GHz</span><br><span class="line">x86              486</span><br><span class="line">x86          pentium</span><br><span class="line">x86         pentium2</span><br><span class="line">x86         pentium3</span><br><span class="line">x86           athlon  Intel(R) Xeon(R) CPU E5-2630 v4 @ 2.20GHz</span><br><span class="line">x86             n270  Intel(R) Atom(TM) CPU N270   @ 1.60GHz</span><br><span class="line">x86           Conroe  Intel Celeron_4x0 (Conroe/Merom Class Core 2)</span><br><span class="line">x86           Penryn  Intel Core 2 Duo P9xxx (Penryn Class Core 2)</span><br><span class="line">x86          Nehalem  Intel Core i7 9xx (Nehalem Class Core i7)</span><br><span class="line">x86         Westmere  Westmere E56xx/L56xx/X56xx (Nehalem-C)</span><br><span class="line">x86      SandyBridge  Intel Xeon E312xx (Sandy Bridge)</span><br><span class="line">x86          Haswell  Intel Core Processor (Haswell)</span><br><span class="line">x86        Broadwell  Intel Core Processor (Broadwell)</span><br><span class="line">x86       Opteron_G1  AMD Opteron 240 (Gen 1 Class Opteron)</span><br><span class="line">x86       Opteron_G2  AMD Opteron 22xx (Gen 2 Class Opteron)</span><br><span class="line">x86       Opteron_G3  AMD Opteron 23xx (Gen 3 Class Opteron)</span><br><span class="line">x86       Opteron_G4  AMD Opteron 62xx class CPU</span><br><span class="line">x86       Opteron_G5  AMD Opteron 63xx class CPU</span><br><span class="line">x86             host  KVM processor with all supported host features (only available <span class="keyword">in</span> KVM mode)</span><br><span class="line"></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>若需要<code>Guest</code>支持<code>PCID</code>, 启动<code>QEMU/KVM</code>进程时，需要将<code>-cpu</code>选项设置为<code>Haswell</code>, <code>Broadwell</code>或者使用<code>host-model</code>,<code>host-passthrough</code>等模式。</p>
+<p>在我们的KVM平台创建了一台<code>CentOS6.8</code>的<code>Guest</code>虚拟机来验证一下升级更新支持KPTI后在是否支持PCID两种情况下的性能影响。</p>
+<p>测试方式为记录在该虚拟机上执行编译内核的时间，测试两种情况:</p>
+<ul>
+<li>原生内核</li>
+<li>支持<code>KPTI</code>的内核，升级完后内核版本为: <code>2.6.32-696.18.7.el6.x86_64</code></li>
+</ul>
+<p>在虚拟机CPU不支持<code>PCID</code>的情况下测试结果如下:</p>
+<p>1）原生内核:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       10m10.618s</span><br><span class="line">user       9m10.398s</span><br><span class="line">sys        0m55.487s</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li><code>KPTI</code>内核:<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real       11m10.861s</span><br><span class="line">user       9m51.371s</span><br><span class="line">sys        1m22.248s</span><br></pre></td></tr></table></figure>
+升级后性能下降约9.8%。</li>
+</ol>
+<p>在虚拟机CPU支持<code>PCID</code>的情况下测试结果如下:</p>
+<p>1）原生内核:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m24.469s</span><br><span class="line">user    9m12.507s</span><br><span class="line">sys     0m59.281s</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li><code>KPTI</code>内核:<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">real    10m40.750s</span><br><span class="line">user    9m19.495s</span><br><span class="line">sys     1m11.286s</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p>升级后性能下降约2.5%</p>
+<p>从我们的实例可以看到，<code>Guest</code>虚拟机CPU是否支持<code>PCID</code>对于性能下降有较大影响。</p>
+<p>若用户的<code>Guest</code>虚拟机CPU不支持<code>PCID</code>可与云提供方沟通，并根据实际业务负载进行性能影响评估，综合考虑安全与性能决定是否升级更新Guest虚拟机。</p>
+<p>在升级完Guest性能测试不理想的情况下，也可以在内核启动参数加添加<code>noibrs noibpb nopti</code>等参数禁用该特性。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/12/19/vsphere-api/" rel="prev" title="VMware vSphere平台下API操作虚拟交换机及虚拟接口">
+      <i class="fa fa-chevron-left"></i> VMware vSphere平台下API操作虚拟交换机及虚拟接口
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/07/31/dbus/" rel="next" title="D-Bus实例介绍">
+      D-Bus实例介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

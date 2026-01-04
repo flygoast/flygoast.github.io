@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="近期遇到一个服务器上内核模块无法卸载的问题。执行rmmod命令返回错误信息: 1Device or resource busy  通过Google搜索，发现其他人也遇到过类似的问题，原因基本指向是编译内核模块的gcc版本和编译内核的gcc版本不一致。  https:&#x2F;&#x2F;goodcommand.readthedocs.io&#x2F;zh_CN&#x2F;latest&#x2F;bs&#x2F;rmmod_device_or_resour">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux内核模块无法卸载分析与修复">
+<meta property="og:url" content="http://just4coding.com/2022/04/20/fix-exit/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="近期遇到一个服务器上内核模块无法卸载的问题。执行rmmod命令返回错误信息: 1Device or resource busy  通过Google搜索，发现其他人也遇到过类似的问题，原因基本指向是编译内核模块的gcc版本和编译内核的gcc版本不一致。  https:&#x2F;&#x2F;goodcommand.readthedocs.io&#x2F;zh_CN&#x2F;latest&#x2F;bs&#x2F;rmmod_device_or_resour">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-04-20T15:56:33.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.500Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="gcc">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2022/04/20/fix-exit/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Linux内核模块无法卸载分析与修复 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/20/fix-exit/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux内核模块无法卸载分析与修复
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-04-20 23:56:33" itemprop="dateCreated datePublished" datetime="2022-04-20T23:56:33+08:00">2022-04-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>近期遇到一个服务器上内核模块无法卸载的问题。执行<code>rmmod</code>命令返回错误信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Device or resource busy</span><br></pre></td></tr></table></figure>
+
+<p>通过Google搜索，发现其他人也遇到过类似的问题，原因基本指向是编译内核模块的<code>gcc</code>版本和编译内核的<code>gcc</code>版本不一致。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://goodcommand.readthedocs.io/zh_CN/latest/bs/rmmod_device_or_resource_busy.html">https://goodcommand.readthedocs.io/zh_CN/latest/bs/rmmod_device_or_resource_busy.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/17251822/not-able-to-remove-a-loadable-kernel-module">https://stackoverflow.com/questions/17251822/not-able-to-remove-a-loadable-kernel-module</a></li>
+</ul>
+<p>于是开始检查我们的环境。</p>
+<span id="more"></span>
+
+<p>我们的服务器系统是<code>CentOS 7.8 ARM</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># cat /etc/redhat-release</span></span><br><span class="line">CentOS Linux release 7.8.2003 (AltArch)</span><br><span class="line">[root@localhost ~]<span class="comment"># uname -a</span></span><br><span class="line">Linux localhost.localdomain 4.18.0-147.8.1.el7.aarch64 <span class="comment">#1 SMP Wed Apr 15 18:13:44 UTC 2020 aarch64 aarch64 aarch64 GNU/Linux</span></span><br></pre></td></tr></table></figure>
+
+<p>查看编译内核的<code>gcc</code>版本，使用的是<code>gcc 8.3.1</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># cat /proc/version</span></span><br><span class="line">Linux version 4.18.0-147.8.1.el7.aarch64 (mockbuild@aarch64-02.bsys.centos.org) (gcc version 8.3.1 20190311 (Red Hat 8.3.1-3) (GCC)) <span class="comment">#1 SMP Wed Apr 15 18:13:44 UTC 2020</span></span><br></pre></td></tr></table></figure>
+
+<p>查看内核模块的<code>gcc</code>版本, 使用的是<code>gcc 4.8.5</code>, 确实不一致:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># readelf -p .comment xxx.ko</span></span><br><span class="line"></span><br><span class="line">String dump of section <span class="string">&#x27;.comment&#x27;</span>:</span><br><span class="line">  [     1]  GCC: (GNU) 4.8.5 20150623 (Red Hat 4.8.5-39)</span><br><span class="line">  [    2f]  GCC: (GNU) 4.8.5 20150623 (Red Hat 4.8.5-39)</span><br></pre></td></tr></table></figure>
+
+<p>再去查看模块编译机器的<code>gcc</code>版本，确实是<code>gcc 4.8.5</code>, 而这个版本是直接通过<code>yum</code>安装的。<code>CentOS</code>的DVD镜像中自带的<code>gcc</code>也是这个版本:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># rpm -qa |grep gcc</span></span><br><span class="line">gcc-4.8.5-39.el7.aarch64</span><br><span class="line">libgcc-4.8.5-39.el7.aarch64</span><br><span class="line">gcc-gfortran-4.8.5-39.el7.aarch64</span><br><span class="line">gcc-c++-4.8.5-39.el7.aarch64</span><br></pre></td></tr></table></figure>
+
+<p>现在看，大概率的确是<code>gcc</code>版本的问题，但是具体原因需要继续定位。为了进一步缩小排查范围，写了一个只有基础骨架的示例模块来复现问题。</p>
+<p><code>kdemo.c</code>代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">kdemo_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __exit <span class="title function_">kdemo_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(kdemo_init);</span><br><span class="line">module_exit(kdemo_exit);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p><code>Makefile</code>内容:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">KBUILD_CFLAGS += -O0</span><br><span class="line"></span><br><span class="line">obj-m += kdemo.o</span><br><span class="line"></span><br><span class="line"><span class="section">all:</span></span><br><span class="line">        make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> modules</span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">        make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> clean</span><br></pre></td></tr></table></figure>
+
+<p>我们安装内核编译使用的<code>gcc 8</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">yum install -y devtoolset-8-gcc devtoolset-8-gcc-c++</span><br><span class="line"><span class="built_in">source</span> /opt/rh/devtoolset-8/enable</span><br></pre></td></tr></table></figure>
+<p>此时<code>gcc</code>版本为:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost kdemo2]<span class="comment"># gcc --version</span></span><br><span class="line">gcc (GCC) 8.3.1 20190311 (Red Hat 8.3.1-3)</span><br><span class="line">Copyright (C) 2018 Free Software Foundation, Inc.</span><br><span class="line">This is free software; see the <span class="built_in">source</span> <span class="keyword">for</span> copying conditions.  There is NO</span><br><span class="line">warranty; not even <span class="keyword">for</span> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.</span><br></pre></td></tr></table></figure>
+
+<p>经过尝试，<code>gcc 8.3.1</code>编译的<code>kdemo.ko</code>可以正常卸载，而<code>gcc 4.8.5</code>编译的<code>kdemo.ko</code>也无法卸载。这个最简单的内核模块只有骨架，没有任何逻辑代码，于是推测可能和内核模块加载和卸载过程有关系。那就着手从卸载过程分析。</p>
+<p>卸载模块的命令<code>rmmod</code>会调用<code>delete_module</code>系统调用。<code>Device or resource busy</code>错误消息来源于错误码<code>EBUSY</code>, 而<code>delete_module</code>源码中返回<code>EBUSY</code>的位置只有如下两处:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Doing init or already dying? */</span></span><br><span class="line"><span class="keyword">if</span> (mod-&gt;state != MODULE_STATE_LIVE) &#123;</span><br><span class="line">        <span class="comment">/* <span class="doctag">FIXME:</span> if (force), slam module count damn the torpedoes */</span></span><br><span class="line">        pr_debug(<span class="string">&quot;%s already dying\n&quot;</span>, mod-&gt;name);</span><br><span class="line">        ret = -EBUSY;</span><br><span class="line">        <span class="keyword">goto</span> out;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* If it has an init func, it must have an exit func to unload */</span></span><br><span class="line"><span class="keyword">if</span> (mod-&gt;init &amp;&amp; !mod-&gt;<span class="built_in">exit</span>) &#123;</span><br><span class="line">        forced = try_force_unload(flags);</span><br><span class="line">        <span class="keyword">if</span> (!forced) &#123;</span><br><span class="line">                <span class="comment">/* This module can&#x27;t be removed */</span></span><br><span class="line">                ret = -EBUSY;</span><br><span class="line">                <span class="keyword">goto</span> out;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们可以通过开发额外的内核模块来调用<code>find_module</code>找到无法卸载的模块来查看具体结构内容。模块代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">ms_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">module</span> *<span class="title">mod</span>;</span></span><br><span class="line"></span><br><span class="line">    mod = find_module(<span class="string">&quot;kdemo&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (mod == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        printk(KERN_INFO <span class="string">&quot;kdemo not found\n&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;MOD: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod);</span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;STATE: %d\n&quot;</span>, mod-&gt;state);</span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;INIT: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;init);</span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;EXIT: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;<span class="built_in">exit</span>);</span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;REFCOUNT: %u\n&quot;</span>, <span class="type">atomic_read</span>(&amp;mod-&gt;refcnt));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(ms_init);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>gcc 8.3.1</code>来编译模块。加载编译后的<code>ms.ko</code>模块, 可以从<code>dmesg</code>或者<code>/var/log/messages</code>中看到模块输出:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[  703.450481] MOD: 0xffff00000a570000</span><br><span class="line">[  703.450771] STATE: 0</span><br><span class="line">[  703.450913] INIT: 0xffff0000089f0000</span><br><span class="line">[  703.451152] EXIT: 0x0</span><br><span class="line">[  703.451302] REFCOUNT: 1</span><br></pre></td></tr></table></figure>
+
+<p>可以确认内核模块无法卸载的原因是由于<code>mod-&gt;exit</code>函数指针为空。</p>
+<p>接下来需要分析<code>mod-&gt;exit</code>为空的原因。</p>
+<p>在内核实现中，模块由<code>struct module</code>结构表示(位于<code>include/linux/module.h</code>，省略部分成员):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">module</span> &#123;</span></span><br><span class="line">        <span class="class"><span class="keyword">enum</span> <span class="title">module_state</span> <span class="title">state</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Member of list of modules */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">list</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Unique handle for this module */</span></span><br><span class="line">        <span class="type">char</span> name[MODULE_NAME_LEN];</span><br><span class="line"></span><br><span class="line">        ......</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Startup function. */</span></span><br><span class="line">        <span class="type">int</span> (*init)(<span class="type">void</span>);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_MODULE_UNLOAD</span></span><br><span class="line">        <span class="comment">/* What modules depend on me? */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">source_list</span>;</span></span><br><span class="line">        <span class="comment">/* What modules do I depend on? */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">target_list</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Destruction function. */</span></span><br><span class="line">        <span class="type">void</span> (*<span class="built_in">exit</span>)(<span class="type">void</span>);</span><br><span class="line"></span><br><span class="line">        <span class="type">atomic_t</span> refcnt;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译内核模块时，内核的<code>modpost</code>工具会自动生成<code>&lt;module&gt;.mod.c</code>文件，这个文件会包含模块的基础信息，之后会将内核模块源码文件生成的<code>xxx.o</code>和<code>&lt;module&gt;.mod.c</code>生成的<code>&lt;module&gt;.mod.o</code>文件一起链接成<code>&lt;module&gt;.ko</code>。</p>
+<p>我们的示例模块生成的<code>kdemo.mod.c</code>内容如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/vermagic.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/compiler.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">MODULE_INFO(vermagic, VERMAGIC_STRING);</span><br><span class="line">MODULE_INFO(name, KBUILD_MODNAME);</span><br><span class="line"></span><br><span class="line">__visible <span class="class"><span class="keyword">struct</span> <span class="title">module</span> __<span class="title">this_module</span></span></span><br><span class="line"><span class="class">__<span class="title">attribute__</span>((<span class="title">section</span>(&quot;.<span class="title">gnu</span>.<span class="title">linkonce</span>.<span class="title">this_module</span>&quot;))) =</span> &#123;</span><br><span class="line">        .name = KBUILD_MODNAME,</span><br><span class="line">        .init = init_module,</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_MODULE_UNLOAD</span></span><br><span class="line">        .<span class="built_in">exit</span> = cleanup_module,</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        .arch = MODULE_ARCH_INIT,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> RETPOLINE</span></span><br><span class="line">MODULE_INFO(retpoline, <span class="string">&quot;Y&quot;</span>);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">modversion_info</span> ____<span class="title">versions</span>[]</span></span><br><span class="line"><span class="class">__<span class="title">used</span></span></span><br><span class="line"><span class="class">__<span class="title">attribute__</span>((<span class="title">section</span>(&quot;__<span class="title">versions</span>&quot;))) =</span> &#123;</span><br><span class="line">        &#123; <span class="number">0x2c122b9f</span>, <span class="string">&quot;module_layout&quot;</span> &#125;,</span><br><span class="line">        &#123; <span class="number">0x1fdc7df2</span>, <span class="string">&quot;_mcount&quot;</span> &#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">char</span> __module_depends[]</span><br><span class="line">__used</span><br><span class="line">__attribute__((section(<span class="string">&quot;.modinfo&quot;</span>))) =</span><br><span class="line"><span class="string">&quot;depends=&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">MODULE_INFO(srcversion, <span class="string">&quot;4D3060AD906F1906629370C&quot;</span>);</span><br><span class="line">MODULE_INFO(rhelversion, <span class="string">&quot;8.1&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>这个文件在<code>.gnu.linkonce.this_module</code>节(<code>section</code>)里存储了<code>struct module</code>结构, 而<code>.init</code>和<code>.exit</code>分别被初始化为<code>init_module</code>和<code>cleanup_module</code>函数。这和我们代码里的<code>kdemo_init</code>和<code>kdemo_exit</code>的关系是什么呢？</p>
+<p>宏<code>module_init</code>和<code>module_exit</code>定义在<code>include/linux/module.h</code>中:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Each module must use one module_init(). */</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> module_init(initfn)                                     \</span></span><br><span class="line"><span class="meta">        static inline initcall_t __maybe_unused __inittest(void)                \</span></span><br><span class="line"><span class="meta">        &#123; return initfn; &#125;                                      \</span></span><br><span class="line"><span class="meta">        int init_module(void) __attribute__((alias(#initfn)));</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* This is only required if you want to be unloadable. */</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> module_exit(exitfn)                                     \</span></span><br><span class="line"><span class="meta">        static inline exitcall_t __maybe_unused __exittest(void)                \</span></span><br><span class="line"><span class="meta">        &#123; return exitfn; &#125;                                      \</span></span><br><span class="line"><span class="meta">        void cleanup_module(void) __attribute__((alias(#exitfn)));</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这样<code>kdemo.c</code>中就通过这两个宏定义了<code>init_module</code>和<code>cleanup_module</code>作为<code>kdemo_init</code>和<code>kdemo_exit</code>的别名</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">module_init(kdemo_init);</span><br><span class="line">module_exit(kdemo_exit);</span><br></pre></td></tr></table></figure>
+
+<p>因为内核模块是动态装载进内核执行的，在编译阶段模块函数地址是不确定的，需要在加载进内核后完成<code>ELF</code>符号重定向，<code>struct module</code>的<code>.init</code>和<code>.exit</code>应该是在加载的时候完成赋值的。</p>
+<p>我们实际验证一下。</p>
+<p>使用<code>readelf -S kdemo.ko</code>查看<code>kdemo.ko</code>的结构，获取到<code>.gnu.linkonce.this_module</code>节的偏移位置<code>0x000001c0</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[11] .gnu.linkonce.thi PROGBITS         0000000000000000  000001c0</span><br><span class="line">     0000000000000380  0000000000000000  WA       0     0     64</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>od -Ax -j 0x000001c0 -tx1z ./kdemo.ko</code>查看<code>.gnu.linkonce.this_module</code>节的内容:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0001c0 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  &gt;................&lt;</span><br><span class="line">0001d0 00 00 00 00 00 00 00 00 6b 64 65 6d 6f 00 00 00  &gt;........kdemo...&lt;</span><br><span class="line">0001e0 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  &gt;................&lt;</span><br><span class="line">*</span><br><span class="line">000540 64 11 00 00 04 00 00 00 00 00 08 01 00 00 00 00  &gt;d...............&lt;</span><br></pre></td></tr></table></figure>
+
+<p>可以确认整个<code>section</code>除了<code>.name</code>数组中的<code>kdemo</code>几个字符外全部为<code>\0</code>。</p>
+<p>那么接下来分析模块加载过程中<code>.init</code>和<code>.exit</code>是如何初始化的。</p>
+<p>内核模块的加载过程非常复杂，这两篇资料比较详细:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://python.iitter.com/other/166243.html">https://python.iitter.com/other/166243.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.researchgate.net/publication/261599172_Robust_Linux_memory_acquisition_with_minimal_target_impact/fulltext/53d20bd40cf228d363e8fe21/Robust-Linux-memory-acquisition-with-minimal-target-impact.pdf">https://www.researchgate.net/publication/261599172_Robust_Linux_memory_acquisition_with_minimal_target_impact/fulltext/53d20bd40cf228d363e8fe21/Robust-Linux-memory-acquisition-with-minimal-target-impact.pdf</a></li>
+</ul>
+<p>过程可以简化为如下步骤:</p>
+<ol>
+<li>用户态进程把<code>ko</code>文件加载到内存，然后调用<code>init_module</code>系统调用。内核会动态分配内存并把<code>ko</code>文件内容复制到内核空间。</li>
+<li>内核校验<code>ELF</code>头以及<code>.modinfo</code>和<code>__version</code>节中的版本信息。</li>
+<li>版本校验通过后，内核调用自己的链接器解析所有符号重定位，把模块内的所有符号引用替换为这些符号在内存中的实际地址。</li>
+<li>内核把模块的<code>struct module</code>结构加入到内核维护的所有模块的链表中，然后调用<code>struct module</code>的<code>.init</code>函数。</li>
+</ol>
+<p>内核实现了自己的链接器，源码实现在文件<code>kernel/module.c</code>的<code>load_module</code>函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Fix up syms, so that st_value is a pointer to location. */</span></span><br><span class="line">err = simplify_symbols(mod, info);</span><br><span class="line"><span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">goto</span> free_modinfo;</span><br><span class="line"></span><br><span class="line">err = apply_relocations(mod, info);</span><br><span class="line"><span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">goto</span> free_modinfo;</span><br></pre></td></tr></table></figure>
+
+<p>符号重定位过程是由函数<code>apply_relocations()</code>实现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">apply_relocations</span><span class="params">(<span class="keyword">struct</span> module *mod, <span class="type">const</span> <span class="keyword">struct</span> load_info *info)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> i;</span><br><span class="line">        <span class="type">int</span> err = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Now do relocations. */</span></span><br><span class="line">        <span class="keyword">for</span> (i = <span class="number">1</span>; i &lt; info-&gt;hdr-&gt;e_shnum; i++) &#123;</span><br><span class="line">                <span class="type">unsigned</span> <span class="type">int</span> infosec = info-&gt;sechdrs[i].sh_info;</span><br><span class="line"></span><br><span class="line">                <span class="comment">/* Not a valid relocation section? */</span></span><br><span class="line">                <span class="keyword">if</span> (infosec &gt;= info-&gt;hdr-&gt;e_shnum)</span><br><span class="line">                        <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">                <span class="comment">/* Don&#x27;t bother with non-allocated sections */</span></span><br><span class="line">                <span class="keyword">if</span> (!(info-&gt;sechdrs[infosec].sh_flags &amp; SHF_ALLOC))</span><br><span class="line">                        <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">                <span class="comment">/* Livepatch relocation sections are applied by livepatch */</span></span><br><span class="line">                <span class="keyword">if</span> (info-&gt;sechdrs[i].sh_flags &amp; SHF_RELA_LIVEPATCH)</span><br><span class="line">                        <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (info-&gt;sechdrs[i].sh_type == SHT_REL)</span><br><span class="line">                        err = apply_relocate(info-&gt;sechdrs, info-&gt;strtab,</span><br><span class="line">                                             info-&gt;index.sym, i, mod);</span><br><span class="line">                <span class="keyword">else</span> <span class="keyword">if</span> (info-&gt;sechdrs[i].sh_type == SHT_RELA)</span><br><span class="line">                        err = apply_relocate_add(info-&gt;sechdrs, info-&gt;strtab,</span><br><span class="line">                                                 info-&gt;index.sym, i, mod);</span><br><span class="line">                <span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">                        <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> err;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过<code>readelf -r kdemo.ko</code>查看符号重定位信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">Relocation section &#x27;.rela.gnu.linkonce.this_module&#x27; at offset 0x8620 contains 2 entries:</span><br><span class="line">  Offset          Info           Type           Sym. Value    Sym. Name + Addend</span><br><span class="line">000000000178  002a00000101 R_AARCH64_ABS64   0000000000000000 init_module + 0</span><br><span class="line">000000000318  002900000101 R_AARCH64_ABS64   0000000000000000 cleanup_module + 0</span><br><span class="line">......</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>.rela.gnu.linkonce.this_module</code>节中有两个重定位信息，就是我们要找到的<code>init_module</code>和<code>cleanup_module</code>。</p>
+<p>为了观测加载过程中<code>.exit</code>的变化，可以使用<code>kprobe</code>机制来定位。这里我设计了两个观测点:</p>
+<ol>
+<li>符号重定向过程中</li>
+<li>符号重定向完成后</li>
+</ol>
+<p>为了找到具体的指令位置，需要对内核进行反汇编。Linux内核自带一个解压内核镜像的脚本，可以解压出内核镜像:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/usr/src/kernels/$(<span class="built_in">uname</span> -r)/scripts/extract-vmlinux vmlinuz-$(<span class="built_in">uname</span> -r) &gt; vmlinux</span><br></pre></td></tr></table></figure>
+
+<p>但这个工具在<code>ARM</code>架构上存在问题，因而我直接使用<code>debuginfo</code>包中的内核镜像文件。反汇编内核镜像:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">objdump -S /usr/lib/debug/lib/modules/4.18.0-147.8.1.el7.aarch64/vmlinux &gt; vmlinux.out</span><br></pre></td></tr></table></figure>
+
+<p>符号重定向过程中的观测点可以选在<code>apply_relocate_add</code>函数中<code>ffff000010095ec8</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">                        + rel[i].r_offset;</span><br><span class="line">ffff000010095ec0:       8b000f19        add     x25, x24, x0, lsl #3</span><br><span class="line">ffff000010095ec4:       f8607b09        ldr     x9, [x24,x0,lsl #3]</span><br><span class="line">                val = sym-&gt;st_value + rel[i].r_addend;</span><br><span class="line">ffff000010095ec8:       a9409320        ldp     x0, x4, [x25,#8]</span><br><span class="line">                loc = (void *)sechdrs[sechdrs[relsec].sh_info].sh_addr</span><br><span class="line">ffff000010095ecc:       b9402f81        ldr     w1, [x28,#44]</span><br><span class="line">ffff000010095ed0:       8b011a81        add     x1, x20, x1, lsl #6</span><br><span class="line">                switch (ELF64_R_TYPE(rel[i].r_info)) &#123;</span><br><span class="line">ffff000010095ed4:       92407c02        and     x2, x0, #0xffffffff</span><br></pre></td></tr></table></figure>
+<p>这时<code>x9</code>寄存器存储的是<code>rel[i].r_offset</code>的值，可以和<code>kdemo.ko</code>中的数据对比。</p>
+<p>符号重定向完成后的观测点可以选在<code>apply_relocate_add</code>调用后的地址<code>ffff000010196808</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">                if (info-&gt;sechdrs[i].sh_type == SHT_REL)</span><br><span class="line">ffff0000101967d8:       b9400461        ldr     w1, [x3,#4]</span><br><span class="line">ffff0000101967dc:       7100243f        cmp     w1, #0x9</span><br><span class="line">ffff0000101967e0:       54004a60        b.eq    ffff00001019712c &lt;load_module+0x161c&gt;</span><br><span class="line">                else if (info-&gt;sechdrs[i].sh_type == SHT_RELA)</span><br><span class="line">ffff0000101967e4:       7100103f        cmp     w1, #0x4</span><br><span class="line">ffff0000101967e8:       54fffd81        b.ne    ffff000010196798 &lt;load_module+0xc88&gt;</span><br><span class="line">                        err = apply_relocate_add(info-&gt;sechdrs, info-&gt;strtab,</span><br><span class="line">ffff0000101967ec:       b9405a62        ldr     w2, [x19,#88]</span><br><span class="line">ffff0000101967f0:       aa1403e4        mov     x4, x20</span><br><span class="line">ffff0000101967f4:       f9401661        ldr     x1, [x19,#40]</span><br><span class="line">ffff0000101967f8:       2a0503e3        mov     w3, w5</span><br><span class="line">ffff0000101967fc:       b90063e5        str     w5, [sp,#96]</span><br><span class="line">ffff000010196800:       f90037e6        str     x6, [sp,#104]</span><br><span class="line">ffff000010196804:       97fbfd91        bl      ffff000010095e48 &lt;apply_relocate_add&gt;</span><br><span class="line">ffff000010196808:       2a0003f7        mov     w23, w0</span><br><span class="line">                if (err &lt; 0)</span><br><span class="line">ffff00001019680c:       37f80660        tbnz    w0, #31, ffff0000101968d8 &lt;load_module+0xdc8&gt;</span><br><span class="line">ffff000010196810:       b94063e5        ldr     w5, [sp,#96]</span><br><span class="line">ffff000010196814:       f9400664        ldr     x4, [x19,#8]</span><br><span class="line">ffff000010196818:       f94037e6        ldr     x6, [sp,#104]</span><br><span class="line">ffff00001019681c:       17ffffdf        b       ffff000010196798 &lt;load_module+0xc88&gt;</span><br></pre></td></tr></table></figure>
+<p>此时<code>x20</code>寄存器存储的是模块的指针变量<code>struct module *mod</code>。</p>
+<p>编写<code>kprobe</code>模块，<code>kp.c</code>内容如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/err.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kprobes.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">kprobe</span> <span class="title">kp1</span> =</span> &#123;</span><br><span class="line">    .addr = (<span class="type">unsigned</span> <span class="type">int</span> *)<span class="number">0xffff000010095ec8</span>,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">kprobe</span> <span class="title">kp2</span> =</span> &#123;</span><br><span class="line">    .addr = (<span class="type">unsigned</span> <span class="type">int</span> *)<span class="number">0xffff000010196808</span>,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">handler_post1</span><span class="params">(<span class="keyword">struct</span> kprobe *p, <span class="keyword">struct</span> pt_regs *regs,</span></span><br><span class="line"><span class="params">    <span class="type">unsigned</span> <span class="type">long</span> flags)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;post_handler1: p-&gt;addr=0x%lx, pstate=0x%lx, x9=0x%lx\n&quot;</span>,</span><br><span class="line">            (<span class="type">unsigned</span> <span class="type">long</span>)p-&gt;addr, (<span class="type">unsigned</span> <span class="type">long</span>)regs-&gt;pstate,</span><br><span class="line">            (<span class="type">unsigned</span> <span class="type">long</span>)regs-&gt;regs[<span class="number">9</span>]);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">handler_post2</span><span class="params">(<span class="keyword">struct</span> kprobe *p, <span class="keyword">struct</span> pt_regs *regs,</span></span><br><span class="line"><span class="params">    <span class="type">unsigned</span> <span class="type">long</span> flags)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">module</span> *<span class="title">mod</span>;</span></span><br><span class="line">    pr_info(<span class="string">&quot;post_handler2: p-&gt;addr=0x%lx, pstate=0x%lx, x20=0x%lx\n&quot;</span>,</span><br><span class="line">            (<span class="type">unsigned</span> <span class="type">long</span>)p-&gt;addr, (<span class="type">unsigned</span> <span class="type">long</span>)regs-&gt;pstate,</span><br><span class="line">            (<span class="type">unsigned</span> <span class="type">long</span>)regs-&gt;regs[<span class="number">20</span>]);</span><br><span class="line"></span><br><span class="line">    mod = (<span class="keyword">struct</span> module *)regs-&gt;regs[<span class="number">20</span>];</span><br><span class="line">    <span class="keyword">if</span> (mod != <span class="literal">NULL</span>) &#123;</span><br><span class="line">        pr_info(<span class="string">&quot;NAME: %s\n&quot;</span>, mod-&gt;name);</span><br><span class="line">        pr_info(<span class="string">&quot;STATE: %d\n&quot;</span>, mod-&gt;state);</span><br><span class="line">        pr_info(<span class="string">&quot;INIT: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;init);</span><br><span class="line">        pr_info(<span class="string">&quot;EXIT: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;<span class="built_in">exit</span>);</span><br><span class="line">        pr_info(<span class="string">&quot;REFCOUNT: %u\n&quot;</span>, <span class="type">atomic_read</span>(&amp;mod-&gt;refcnt));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">kp_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> ret;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;loading\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    kp1.post_handler = handler_post1;</span><br><span class="line">    kp2.post_handler = handler_post2;</span><br><span class="line"></span><br><span class="line">    ret = register_kprobe(&amp;kp1);</span><br><span class="line">    <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        pr_err(<span class="string">&quot;register_kprobe failed, ret: %d\n&quot;</span>, ret);</span><br><span class="line">        <span class="keyword">goto</span> err0;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ret = register_kprobe(&amp;kp2);</span><br><span class="line">    <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        pr_err(<span class="string">&quot;register_kprobe failed, ret: %d\n&quot;</span>, ret);</span><br><span class="line">        <span class="keyword">goto</span> err1;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;kprobe1 at 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)kp1.addr);</span><br><span class="line">    pr_info(<span class="string">&quot;kprobe2 at 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)kp2.addr);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">err1:</span><br><span class="line">    unregister_kprobe(&amp;kp1);</span><br><span class="line">err0:</span><br><span class="line">    <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __exit <span class="title function_">kp_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    unregister_kprobe(&amp;kp2);</span><br><span class="line">    unregister_kprobe(&amp;kp1);</span><br><span class="line">    pr_info(<span class="string">&quot;unloaded\n&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(kp_init);</span><br><span class="line">module_exit(kp_exit);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>编译并加载我们的<code>kp.ko</code>模块，从<code>dmesg</code>可以看到加载成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[21946.542652] [kp]: loading</span><br><span class="line">[21946.543082] [kp]: kprobe1 at 0xffff000010095ec8</span><br><span class="line">[21946.543377] [kp]: kprobe2 at 0xffff000010196808</span><br></pre></td></tr></table></figure>
+
+<p>此时去加载有问题的<code>kdemo.ko</code>模块，查看<code>dmesg</code>输出:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">[21946.542652] [kp]: loading</span><br><span class="line">[21946.543082] [kp]: kprobe1 at 0xffff000010095ec8</span><br><span class="line">[21946.543377] [kp]: kprobe2 at 0xffff000010196808</span><br><span class="line">[21992.480537] [kp]: post_handler1: p-&gt;addr=0xffff000010095ec8, pstate=0x20400005, x9=0xc</span><br><span class="line">[21992.481105] [kp]: post_handler2: p-&gt;addr=0xffff000010196808, pstate=0x60400005, x20=0xffff00000a570000</span><br><span class="line">[21992.481694] [kp]: NAME: kdemo</span><br><span class="line">[21992.481884] [kp]: STATE: 3</span><br><span class="line">[21992.482055] [kp]: INIT: 0x0</span><br><span class="line">[21992.482232] [kp]: EXIT: 0x0</span><br><span class="line">[21992.482408] [kp]: REFCOUNT: 2</span><br><span class="line">[21992.482602] [kp]: post_handler1: p-&gt;addr=0xffff000010095ec8, pstate=0x20400005, x9=0x0</span><br><span class="line">[21992.483111] [kp]: post_handler2: p-&gt;addr=0xffff000010196808, pstate=0x60400005, x20=0xffff00000a570000</span><br><span class="line">[21992.483698] [kp]: NAME: kdemo</span><br><span class="line">[21992.483887] [kp]: STATE: 3</span><br><span class="line">[21992.484059] [kp]: INIT: 0x0</span><br><span class="line">[21992.484235] [kp]: EXIT: 0x0</span><br><span class="line">[21992.484414] [kp]: REFCOUNT: 2</span><br><span class="line">[21992.484610] [kp]: post_handler1: p-&gt;addr=0xffff000010095ec8, pstate=0x20400005, x9=0x178</span><br><span class="line">[21992.485135] [kp]: post_handler1: p-&gt;addr=0xffff000010095ec8, pstate=0x80400005, x9=0x318</span><br><span class="line">[21992.485652] [kp]: post_handler2: p-&gt;addr=0xffff000010196808, pstate=0x60400005, x20=0xffff00000a570000</span><br><span class="line">[21992.486295] [kp]: NAME: kdemo</span><br><span class="line">[21992.486530] [kp]: STATE: 3</span><br><span class="line">[21992.486744] [kp]: INIT: 0xffff000008b00000</span><br><span class="line">[21992.487067] [kp]: EXIT: 0x0</span><br><span class="line">[21992.487289] [kp]: REFCOUNT: 2</span><br></pre></td></tr></table></figure>
+
+<p>结合源码进行分析，对应的正是<code>readelf -r kdemo.ko</code>的输出中的<code>3</code>个<code>section</code>中的<code>4</code>个符号重定向:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Relocation section &#x27;.rela.init.text&#x27; at offset 0x85f0 contains 1 entry:</span><br><span class="line">  Offset          Info           Type           Sym. Value    Sym. Name + Addend</span><br><span class="line">00000000000c  002b0000011b R_AARCH64_CALL26  0000000000000000 _mcount + 0</span><br><span class="line"></span><br><span class="line">Relocation section &#x27;.rela__mcount_loc&#x27; at offset 0x8608 contains 1 entry:</span><br><span class="line">  Offset          Info           Type           Sym. Value    Sym. Name + Addend</span><br><span class="line">000000000000  000300000101 R_AARCH64_ABS64   0000000000000000 .init.text + c</span><br><span class="line"></span><br><span class="line">Relocation section &#x27;.rela.gnu.linkonce.this_module&#x27; at offset 0x8620 contains 2 entries:</span><br><span class="line">  Offset          Info           Type           Sym. Value    Sym. Name + Addend</span><br><span class="line">000000000178  002a00000101 R_AARCH64_ABS64   0000000000000000 init_module + 0</span><br><span class="line">000000000318  002900000101 R_AARCH64_ABS64   0000000000000000 cleanup_module + 0</span><br></pre></td></tr></table></figure>
+
+<p>可以确定<code>r_offset</code>为<code>0x318</code>的<code>cleanup_module</code>符号重定向确实是执行了，但执行完<code>module.exit</code>依然为<code>NULL</code>。</p>
+<p>这时开始怀疑<code>.exit</code>偏移量存在问题。</p>
+<p>查看一下使用<code>gcc 8.3.1</code>编译的<code>kdemo.ko</code>的重定向信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Relocation section &#x27;.rela.gnu.linkonce.this_module&#x27; at offset 0xf010 contains 2 entries:</span><br><span class="line">  Offset          Info           Type           Sym. Value    Sym. Name + Addend</span><br><span class="line">000000000178  002a00000101 R_AARCH64_ABS64   0000000000000000 init_module + 0</span><br><span class="line">000000000320  002900000101 R_AARCH64_ABS64   0000000000000000 cleanup_module + 0</span><br></pre></td></tr></table></figure>
+
+<p>发现确实存在差异，<code>4.8.5</code>的模块偏移是<code>000000000318</code>, 而<code>8.3.1</code>的模块偏移是<code>000000000320</code>, 正好差<code>8</code>个字节。</p>
+<p>再写一个模块来验证<code>exit</code>偏移的差异:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">offset_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;init offset: %lu\n&quot;</span>, offsetof(<span class="keyword">struct</span> module, init));</span><br><span class="line">    pr_info(<span class="string">&quot;exit offset: %lu\n&quot;</span>, offsetof(<span class="keyword">struct</span> module, <span class="built_in">exit</span>));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(offset_init);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p><code>gcc 4.8.5</code>的结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[23374.470470] init offset: 376</span><br><span class="line">[23374.470672] exit offset: 792</span><br></pre></td></tr></table></figure>
+<p>而<code>gcc 8.3.1</code>的结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[23467.040802] init offset: 376</span><br><span class="line">[23467.041005] exit offset: 800</span><br></pre></td></tr></table></figure>
+
+<p>证实是由于<code>exit</code>偏移问题导致重定向出现问题。</p>
+<p>查看内核源码文件<code>include/linux/module.h</code>的<code>struct module</code>定义, 发现有这样一个宏:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">ifdef</span> HAVE_JUMP_LABEL</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">jump_entry</span> *<span class="title">jump_entries</span>;</span></span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> num_jump_entries;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>而这个宏定义是在<code>include/linux/jump_label.h</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">if</span> defined(CC_HAVE_ASM_GOTO) &amp;&amp; defined(CONFIG_JUMP_LABEL)</span></span><br><span class="line"><span class="meta"># <span class="keyword">define</span> HAVE_JUMP_LABEL</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>内核构建的<code>Makefile</code>(<code>/lib/modules/4.18.0-147.8.1.el7.aarch64/build/Makefile</code>中会调用<code>gcc-goto.sh</code>来判断<code>gcc</code>是否支持<code>asm goto</code>:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># check for &#x27;asm goto&#x27;</span></span><br><span class="line"><span class="keyword">ifeq</span> (<span class="variable">$(<span class="built_in">shell</span> <span class="variable">$(CONFIG_SHELL)</span> <span class="variable">$(srctree)</span>/scripts/gcc-goto.sh <span class="variable">$(CC)</span> <span class="variable">$(KBUILD_CFLAGS)</span>)</span>, y)</span><br><span class="line">  CC_HAVE_ASM_GOTO := 1</span><br><span class="line">  KBUILD_CFLAGS += -DCC_HAVE_ASM_GOTO</span><br><span class="line">  KBUILD_AFLAGS += -DCC_HAVE_ASM_GOTO</span><br><span class="line"><span class="keyword">endif</span></span><br></pre></td></tr></table></figure>
+
+<p><code>gcc 8.3.1</code>环境下，脚本判断支持<code>asm goto</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost scripts]# /lib/modules/4.18.0-147.8.1.el7.aarch64/build/scripts/gcc-goto.sh gcc</span><br><span class="line">y</span><br><span class="line">[root@localhost scripts]#</span><br></pre></td></tr></table></figure>
+<p>而在<code>gcc 4.8.5</code>环境下，脚本判断不支持<code>asm goto</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# /lib/modules/4.18.0-147.8.1.el7.aarch64/build/scripts/gcc-goto.sh gcc</span><br><span class="line">[root@localhost ~]#</span><br></pre></td></tr></table></figure>
+
+<p><code>.init</code>在<code>struct module</code>结构中位于<code>HAVE_JUMP_LABEL</code>之前，因而两个编译器环境下的偏移量是一样的。而<code>.exit</code>位于<code>HAVE_JUMP_LABEL</code>之后，再加上内部结构对齐的因素，在两个编译器环境下相差了<code>8</code>字节。</p>
+<p>这样当加载<code>gcc 4.8.5</code>编译的内核模块时，<code>cleanup_module</code>符号重定向到了偏移量为<code>792</code>的位置，这个位置在内核<code>struct module</code>中为<code>struct list_head target_list;</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">module</span> &#123;</span></span><br><span class="line">        <span class="class"><span class="keyword">enum</span> <span class="title">module_state</span> <span class="title">state</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Member of list of modules */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">list</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Unique handle for this module */</span></span><br><span class="line">        <span class="type">char</span> name[MODULE_NAME_LEN];</span><br><span class="line"></span><br><span class="line">        ......</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Startup function. */</span></span><br><span class="line">        <span class="type">int</span> (*init)(<span class="type">void</span>);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_MODULE_UNLOAD</span></span><br><span class="line">        <span class="comment">/* What modules depend on me? */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">source_list</span>;</span></span><br><span class="line">        <span class="comment">/* What modules do I depend on? */</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">target_list</span>;</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Destruction function. */</span></span><br><span class="line">        <span class="type">void</span> (*<span class="built_in">exit</span>)(<span class="type">void</span>);</span><br><span class="line"></span><br><span class="line">        <span class="type">atomic_t</span> refcnt;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而<code>struct list</code>的定义(<code>include/linux/types.h</code>)为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> &#123;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> *<span class="title">next</span>, *<span class="title">prev</span>;</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>因而符号重定向覆盖的是<code>target_list.prev</code>指针。<code>source_list</code>和<code>target_list</code>成员是用来表示模块依赖关系的结构。</p>
+<p>对加载模块源码再次梳理后发现，符号重定向是发生在建立模块依赖关系之后:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Reserve our place in the list. */</span></span><br><span class="line">err = add_unformed_module(mod);</span><br></pre></td></tr></table></figure>
+<p>并且内核加载过程中都是正向遍历, 使用<code>target_list.next</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">add_usage_links</span><span class="params">(<span class="keyword">struct</span> module *mod)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="type">int</span> ret = <span class="number">0</span>;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_MODULE_UNLOAD</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">module_use</span> *<span class="title">use</span>;</span></span><br><span class="line"></span><br><span class="line">        mutex_lock(&amp;module_mutex);</span><br><span class="line">        list_for_each_entry(use, &amp;mod-&gt;target_list, target_list) &#123;</span><br><span class="line">                ret = sysfs_create_link(use-&gt;target-&gt;holders_dir,</span><br><span class="line">                                        &amp;mod-&gt;mkobj.kobj, mod-&gt;name);</span><br><span class="line">                <span class="keyword">if</span> (ret)</span><br><span class="line">                        <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        mutex_unlock(&amp;module_mutex);</span><br><span class="line">        <span class="keyword">if</span> (ret)</span><br><span class="line">                del_usage_links(mod);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>而我们的模块代码中没有其他结构在不同编译器环境下存在差异，因而可以正常运行，只是不能卸载。</p>
+<p>但这里还存在疑惑的点是，为什么在<code>gcc 4.8.5</code>的环境下少了两个成员变量，但编译的<code>struct module</code>结构的大小却都是<code>0x380</code>(十进制<code>896</code>)呢？这是因为<code>struct module</code>的定义带有<code>____cacheline_aligned</code>属性。</p>
+<p>它定义在<code>include/linux/cache.h</code>中:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">ifndef</span> SMP_CACHE_BYTES</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> SMP_CACHE_BYTES L1_CACHE_BYTES</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">......</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> ____cacheline_aligned</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> ____cacheline_aligned __attribute__((__aligned__(SMP_CACHE_BYTES)))</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+<p>而在<code>arch/arm64/include/asm/cache.h</code>文件中,<code>L1_CACHE_BYTES</code>定义为<code>64</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> L1_CACHE_SHIFT          (6)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> L1_CACHE_BYTES          (1 &lt;&lt; L1_CACHE_SHIFT)</span></span><br></pre></td></tr></table></figure>
+
+<p>这样编译器将这个结构的大小以<code>64</code>对齐，因而减少那两个成员变量后大小依然为<code>896</code>。</p>
+<p>接下来考虑如何能够不重启服务器卸载掉这个模块。</p>
+<p>当卸载模块时，从链表中删除元素时会使用到<code>prev</code>指针。我们只要能够把被覆盖的<code>target_list.prev</code>指针恢复到之前的值并且把<code>exit</code>函数修改到相应的符号内存地址就可以实现卸载了。</p>
+<p>实际上，因为<code>target_list</code>本身是双向链接，只要把<code>target_list.prev</code>指向最后一个结构的地址就可以实现修复，而<code>kdemo_exit</code>的符号地址可以通过<code>kallsyms_lookup_name()</code>获取。</p>
+<p>按这个思路编写修复模块,<code>exitfix.c</code>内容如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kallsyms.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">char</span> module_name[<span class="number">256</span>] = <span class="string">&quot;kdemo&quot;</span>;</span><br><span class="line">MODULE_PARM_DESC(module_name, <span class="string">&quot;module name to fix exit()&quot;</span>);</span><br><span class="line">module_param_string(module_name, module_name, <span class="keyword">sizeof</span>(module_name), <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">char</span> module_exit_symbol[<span class="number">256</span>] = <span class="string">&quot;kdemo_exit&quot;</span>;</span><br><span class="line">MODULE_PARM_DESC(module_exit_symbol, <span class="string">&quot;module exit symbol to fix exit()&quot;</span>);</span><br><span class="line">module_param_string(module_exit_symbol, module_exit_symbol, <span class="keyword">sizeof</span>(module_exit_symbol), <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">exitfix_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">module</span> *<span class="title">mod</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">module_use</span> *<span class="title">use</span>, *<span class="title">last_use</span>;</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> sym;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;start\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    mod = find_module(module_name);</span><br><span class="line">    <span class="keyword">if</span> (mod == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        pr_crit(<span class="string">&quot;module %s not found\n&quot;</span>, module_name);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mod-&gt;<span class="built_in">exit</span> != <span class="literal">NULL</span>) &#123;</span><br><span class="line">        pr_crit(<span class="string">&quot;module-&gt;exit is 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;<span class="built_in">exit</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    pr_info(<span class="string">&quot;STATE: %d\n&quot;</span>, mod-&gt;state);</span><br><span class="line">    pr_info(<span class="string">&quot;INIT: %lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;init);</span><br><span class="line">    pr_info(<span class="string">&quot;EXIT: %lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;<span class="built_in">exit</span>);</span><br><span class="line">    pr_info(<span class="string">&quot;REFCOUNT: %u\n&quot;</span>, <span class="type">atomic_read</span>(&amp;mod-&gt;refcnt));</span><br><span class="line"></span><br><span class="line">    sym = kallsyms_lookup_name(module_exit_symbol);</span><br><span class="line">    <span class="keyword">if</span> (sym == <span class="number">0</span>) &#123;</span><br><span class="line">        printk(KERN_ERR <span class="string">&quot;lookup symbol failed&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;exit_symbol: %s 0x%lx\n&quot;</span>, module_exit_symbol, sym);</span><br><span class="line">    pr_info(<span class="string">&quot;mod-&gt;target_list.next: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;target_list.next);</span><br><span class="line">    pr_info(<span class="string">&quot;mod-&gt;target_list.prev: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;target_list.prev);</span><br><span class="line">    mutex_lock(&amp;module_mutex);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* find last struct module_use */</span></span><br><span class="line">    last_use = <span class="literal">NULL</span>;</span><br><span class="line">    list_for_each_entry(use, &amp;mod-&gt;target_list, target_list) &#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">module</span> *<span class="title">i</span> =</span> use-&gt;target;</span><br><span class="line">        pr_info(<span class="string">&quot;%s using %s\n&quot;</span>, mod-&gt;name, i-&gt;name);</span><br><span class="line">        last_use = use;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (last_use != <span class="literal">NULL</span>) &#123;</span><br><span class="line">        mod-&gt;target_list.prev = &amp;last_use-&gt;target_list;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mod-&gt;target_list.prev = &amp;mod-&gt;target_list;</span><br><span class="line">    &#125;</span><br><span class="line">    mod-&gt;<span class="built_in">exit</span> = (<span class="type">void</span> (*)(<span class="type">void</span>))sym;</span><br><span class="line"></span><br><span class="line">    mutex_unlock(&amp;module_mutex);</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;restore mod-&gt;target_list.prev to: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;target_list.prev);</span><br><span class="line">    pr_info(<span class="string">&quot;restore mod-&gt;exit to: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)mod-&gt;<span class="built_in">exit</span>);</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;over\n&quot;</span>);</span><br><span class="line">    <span class="comment">/* just run once */</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(exitfix_init);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>最初的示例模块没有任何代码，现在修改为依赖其他模块:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter/ipset/ip_set.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/device-mapper.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">kdemo_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">void</span> *p;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* use module: ip_set */</span></span><br><span class="line">    p = ip_set_alloc(<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (!p) &#123;</span><br><span class="line">        pr_crit(<span class="string">&quot;ip_set_alloc() failed\n&quot;</span>);</span><br><span class="line">        <span class="keyword">goto</span> err;</span><br><span class="line">    &#125;</span><br><span class="line">    ip_set_free(p);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* use module: dm_mod */</span></span><br><span class="line">    p = dm_vcalloc(<span class="number">1</span>, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (!p) &#123;</span><br><span class="line">        pr_crit(<span class="string">&quot;dm_vcalloc() failed\n&quot;</span>);</span><br><span class="line">        <span class="keyword">goto</span> err;</span><br><span class="line">    &#125;</span><br><span class="line">    vfree(p);</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;loaded\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">err:</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __exit <span class="title function_">kdemo_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;unloaded\n&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(kdemo_init);</span><br><span class="line">module_exit(kdemo_exit);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>gcc 4.8.5</code>编译后加载, 查看依赖关系, 可以看到<code>kdemo</code>模块依赖了<code>ip_set</code>和<code>dm_mod</code>模块:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost kdemo]<span class="comment"># lsmod |grep kdemo</span></span><br><span class="line">kdemo                 262144  0</span><br><span class="line">ip_set                262144  1 kdemo</span><br><span class="line">dm_mod                327680  9 kdemo,dm_log,dm_mirror</span><br></pre></td></tr></table></figure>
+
+<p>执行<code>rmmod</code>, 卸载失败:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost kdemo]<span class="comment"># rmmod kdemo</span></span><br><span class="line">rmmod: ERROR: could not remove <span class="string">&#x27;kdemo&#x27;</span>: Device or resource busy</span><br><span class="line">rmmod: ERROR: could not remove module kdemo: Device or resource busy</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>gcc 8.3.1</code>编译修复模块<code>exitfix.ko</code>并加载, 查看<code>dmesg</code>输出:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[26734.237973] [exitfix]: start</span><br><span class="line">[26734.238187] [exitfix]: STATE: 0</span><br><span class="line">[26734.238382] [exitfix]: INIT: ffff0000089f0000</span><br><span class="line">[26734.238649] [exitfix]: EXIT: 0</span><br><span class="line">[26734.238840] [exitfix]: REFCOUNT: 1</span><br><span class="line">[26734.247782] [exitfix]: exit_symbol: kdemo_exit 0xffff00000a5a003c</span><br><span class="line">[26734.248170] [exitfix]: mod-&gt;target_list.next: 0xffff8001c80aed90</span><br><span class="line">[26734.248540] [exitfix]: mod-&gt;target_list.prev: 0xffff00000a5a003c</span><br><span class="line">[26734.248920] [exitfix]: kdemo using dm_mod</span><br><span class="line">[26734.249168] [exitfix]: kdemo using ip_set</span><br><span class="line">[26734.249416] [exitfix]: restore mod-&gt;target_list.prev to: 0xffff8001c80ae010</span><br><span class="line">[26734.249843] [exitfix]: restore mod-&gt;exit to: 0xffff00000a5a003c</span><br><span class="line">[26734.250206] [exitfix]: over</span><br></pre></td></tr></table></figure>
+<p>可以看到<code>target_list.prev</code>和<code>exit</code>地址都进行了修复。</p>
+<p>此时再去执行<code>rmmod</code>, 成功卸载:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost kdemo]# rmmod kdemo</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>kdemo</code>依赖的<code>ip_set</code>和<code>dm_mod</code>模块, 可以看到模块的使用者中已经没有<code>kdemo</code>, 引用计数也都减小了<code>1</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost kdemo]<span class="comment"># lsmod |grep ip_set</span></span><br><span class="line">ip_set                262144  0</span><br><span class="line">nfnetlink             262144  1 ip_set</span><br><span class="line">[root@localhost kdemo]<span class="comment"># lsmod |grep dm_mod</span></span><br><span class="line">dm_mod                327680  8 dm_log,dm_mirror</span><br></pre></td></tr></table></figure>
+
+<p>至此，终于成功的在不重启服务器情况下完成了模块的卸载。总结来看，我们的内核模块能够修复是由于代码中并没有存在不同编译器环境下存在差异的其他结构。如果存在其他结构，可能在加载过程中就会出现崩溃的情况。</p>
+<p>因而还是需要强调，必须使用和内核编译时一致的<code>gcc</code>对模块进行编译。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/gatieme/article/details/75108154">https://blog.csdn.net/gatieme/article/details/75108154</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/arnoldlu/p/9752061.html">https://www.cnblogs.com/arnoldlu/p/9752061.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://programmer.group/modle_init-and-modle_exit-principles-of-kernel-modules.html">https://programmer.group/modle_init-and-modle_exit-principles-of-kernel-modules.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/06/02/linux-loadable-module">https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/06/02/linux-loadable-module</a></li>
+<li><a target="_blank" rel="noopener" href="https://kernelgo.org/kprobe.html">https://kernelgo.org/kprobe.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.packagecloud.io/how-to-extract-and-disassmble-a-linux-kernel-image-vmlinuz/">https://blog.packagecloud.io/how-to-extract-and-disassmble-a-linux-kernel-image-vmlinuz/</a></li>
+<li><a target="_blank" rel="noopener" href="http://chuquan.me/2018/05/21/elf-introduce/">http://chuquan.me/2018/05/21/elf-introduce/</a></li>
+<li><a target="_blank" rel="noopener" href="https://linux.die.net/man/2/init_module">https://linux.die.net/man/2/init_module</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.researchgate.net/publication/261599172_Robust_Linux_memory_acquisition_with_minimal_target_impact/fulltext/53d20bd40cf228d363e8fe21/Robust-Linux-memory-acquisition-with-minimal-target-impact.pdf">https://www.researchgate.net/publication/261599172_Robust_Linux_memory_acquisition_with_minimal_target_impact/fulltext/53d20bd40cf228d363e8fe21/Robust-Linux-memory-acquisition-with-minimal-target-impact.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://tuxthink.blogspot.com/2011/03/overview-of-compiling-kernel-modules.html">https://tuxthink.blogspot.com/2011/03/overview-of-compiling-kernel-modules.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/Makefile.modpost">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/Makefile.modpost</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1687441">https://cloud.tencent.com/developer/article/1687441</a></li>
+<li><a target="_blank" rel="noopener" href="https://python.iitter.com/other/166243.html">https://python.iitter.com/other/166243.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/17922234/meaning-of-version-info-in-mod-c-file-in-linux-kernel">https://stackoverflow.com/questions/17922234/meaning-of-version-info-in-mod-c-file-in-linux-kernel</a></li>
+<li><a target="_blank" rel="noopener" href="https://my.oschina.net/macwe/blog/482893">https://my.oschina.net/macwe/blog/482893</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/gcc/" rel="tag"># gcc</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/04/03/seccomp/" rel="prev" title="Seccomp机制与seccomp notify介绍">
+      <i class="fa fa-chevron-left"></i> Seccomp机制与seccomp notify介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/06/11/bash-test/" rel="next" title="Bash test和[命令分析">
+      Bash test和[命令分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

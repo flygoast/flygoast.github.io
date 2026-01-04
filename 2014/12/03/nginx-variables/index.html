@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="NGINX实现了一套变量机制，使得配置动态内容非常灵活。比如我们可以使用“proxy_cache_key”指令根据我们的需求灵活地设置Cache的KEY。变量机制也为各模块合作提供了一个桥梁，使得模块间配合完成功能更加方便。比如”proxy_pass”指令支持将回源地址设置为变量，我们可以在另一个模块中依据条件对该变量赋值，从而非常简便地完成基于各种策略选择上游地址的功能。 变量机制相关的内部数据">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NGINX变量机制分析">
+<meta property="og:url" content="http://just4coding.com/2014/12/03/nginx-variables/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="NGINX实现了一套变量机制，使得配置动态内容非常灵活。比如我们可以使用“proxy_cache_key”指令根据我们的需求灵活地设置Cache的KEY。变量机制也为各模块合作提供了一个桥梁，使得模块间配合完成功能更加方便。比如”proxy_pass”指令支持将回源地址设置为变量，我们可以在另一个模块中依据条件对该变量赋值，从而非常简便地完成基于各种策略选择上游地址的功能。 变量机制相关的内部数据">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-03T02:29:42.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.469Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/03/nginx-variables/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NGINX变量机制分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/nginx-variables/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NGINX变量机制分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 10:29:42" itemprop="dateCreated datePublished" datetime="2014-12-03T10:29:42+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>NGINX实现了一套变量机制，使得配置动态内容非常灵活。比如我们可以使用“proxy_cache_key”指令根据我们的需求灵活地设置Cache的KEY。变量机制也为各模块合作提供了一个桥梁，使得模块间配合完成功能更加方便。比如”proxy_pass”指令支持将回源地址设置为变量，我们可以在另一个模块中依据条件对该变量赋值，从而非常简便地完成基于各种策略选择上游地址的功能。</p>
+<p>变量机制相关的内部数据结构主要有两种, ngx_http_variable_t和ngx_http_variable_value_t，分别代表变量本身和变量值。</p>
+<p>ngx_http_variable_t结构如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">ngx_http_variable_s</span> &#123;</span></span><br><span class="line">    <span class="type">ngx_str_t</span>                     name;   <span class="comment">/* must be first to build the hash */</span></span><br><span class="line">    ngx_http_set_variable_pt      set_handler;</span><br><span class="line">    ngx_http_get_variable_pt      get_handler;</span><br><span class="line">    <span class="type">uintptr_t</span>                     data;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                    flags;</span><br><span class="line">    <span class="type">ngx_uint_t</span>                    index;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>各成员意义如下:</p>
+<ul>
+<li>name: 变量名称</li>
+<li>set_handler: 赋值函数，主要用于”set”指令，处理请求时执行set指令时调用</li>
+<li>get_handler: 取值函数，当读取该变量时调用该函数得到变量值</li>
+<li>data: 传递给set_handler和get_handler的参数</li>
+<li>flags: 变量属性标志</li>
+<li>index: 变量在cmcf-&gt;variables数组中的索引</li>
+</ul>
+<p>其中flags取值及意义如下:</p>
+<ul>
+<li>NGX_HTTP_VAR_CHANGEABLE: 变量被添加时如果已有同名变量，则返回该变量，否则会报错认为变量名冲突。</li>
+<li>NGX_HTTP_VAR_NOCACHEABLE: 变量的值不应该被缓存。变量被取值后，变量值的no_cacheable被置为1。</li>
+<li>NGX_HTTP_VAR_INDEXED：表示变量被索引，存储在cmcf-&gt;variables数组，这样的变量可以通过索引值直接找到。</li>
+<li>NGX_HTTP_VAR_NOHASH: 不会将该变量存储在cmcf-&gt;variables_hash哈希表。</li>
+</ul>
+<p>ngx_http_variable_value_t结构如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="type">ngx_variable_value_t</span>  <span class="type">ngx_http_variable_value_t</span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="type">unsigned</span>    len:<span class="number">28</span>;</span><br><span class="line"></span><br><span class="line">    <span class="type">unsigned</span>    valid:<span class="number">1</span>;</span><br><span class="line">    <span class="type">unsigned</span>    no_cacheable:<span class="number">1</span>;</span><br><span class="line">    <span class="type">unsigned</span>    not_found:<span class="number">1</span>;</span><br><span class="line">    <span class="type">unsigned</span>    escape:<span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    u_char     *data;</span><br><span class="line">&#125; <span class="type">ngx_variable_value_t</span>;</span><br></pre></td></tr></table></figure>
+<p>各成员意义如下：</p>
+<ul>
+<li>len: 变量值数据长度</li>
+<li>valid: 该变量值是否可用</li>
+<li>no_cacheable: 该变量值是否不能缓存</li>
+<li>not_found: 对应变量不存在</li>
+<li>escape: 变量值内容中的特殊字符是否进行了转义</li>
+<li>data：变量值的数据</li>
+</ul>
+<p>因为NGINX所有变量存储在ngx_http_core_module的main级结构ngx_http_core_main_conf_t中(以下简写cmcf)，所以变量的作用范围是整个http{}配置。在某个server{}中添加的变量，在另一个server{}同样可以使用。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    ......</span><br><span class="line">    <span class="type">ngx_hash_t</span>                 variables_hash;</span><br><span class="line">    <span class="type">ngx_array_t</span>                variables;       <span class="comment">/* ngx_http_variable_t */</span></span><br><span class="line">    ......</span><br><span class="line">    <span class="type">ngx_hash_keys_arrays_t</span>    *variables_keys;</span><br><span class="line">    ......</span><br><span class="line">&#125; <span class="type">ngx_http_core_main_conf_t</span>;</span><br></pre></td></tr></table></figure>
+
+<p>NGINX变量有以下3种类型:</p>
+<ul>
+<li>模块内置变量</li>
+<li>根据配置动态添加的变量</li>
+<li>内置规则变量</li>
+</ul>
+<p>模块内置变量主要在ngx_http_module_t的preconfiguration阶段中添加。如upstream模块的preconfiguration回调为ngx_http_upstream_add_variables().</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_add_variables</span><span class="params">(<span class="type">ngx_conf_t</span> *cf)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_http_variable_t</span>  *var, *v;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (v = ngx_http_upstream_vars; v-&gt;name.len; v++) &#123;</span><br><span class="line">        var = ngx_http_add_variable(cf, &amp;v-&gt;name, v-&gt;flags);</span><br><span class="line">        <span class="keyword">if</span> (var == <span class="literal">NULL</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        var-&gt;get_handler = v-&gt;get_handler;</span><br><span class="line">        var-&gt;data = v-&gt;data;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>根据配置动态添加的变量一般当解析相应指令时，在指令的解析函数中添加。比如rewrite模块中的set指令可以添加用户定义名称的变量。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">v = ngx_http_add_variable(cf, &amp;value[<span class="number">1</span>], NGX_HTTP_VAR_CHANGEABLE);</span><br><span class="line"><span class="keyword">if</span> (v == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>内置规则变量不需要添加，而是按特定规则来解析。如”http_”, “upstream_http_”, “arg_”, “cookie_”等等一系列变量。<br>前两种方式都是调用ngx_http_add_variable()来添加变量。ngx_http_add_variable()向cmcf-&gt;variable_keys数组中添加变量，并将该变量结构返回。如果指定了NGX_HTTP_VAR_CHANGEABLE标志，那么当检查到同名的变量时，则直接返回该变量。否则报错返回NULL。<br>如果某一指令需要用到一个变量，则一般在解析该指令配置时会调用ngx_http_get_variable_index()，并将该索引值保存，当处理请求时直接通过索引找到变量。如geo模块中geo指令的解析函数。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">geo-&gt;index = ngx_http_get_variable_index(cf, &amp;name);</span><br><span class="line"><span class="keyword">if</span> (geo-&gt;index == NGX_ERROR) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>ngx_http_get_variable_index()会从cmcf-&gt;variables数组中查找变量，查找到则返回该变量的索引。否则在cmcf-&gt;variables添加该变量并返回数组索引。当解析完HTTP{}配置后，NGINX会将cmcf-&gt;variables_keys中的变量组织到cmcf-&gt;variables_hash这个HASH表中。如果变量指令了NGX_HTTP_VAR_NOHASH标志，则该变量不会被添加到cmcf-&gt;variables_hash中。如果一个变量既没有添加到cmcf-&gt;variables中，也没有添加到cmcf-&gt;variables_hash中，那么这个变量就不能被找到，因而会被认为不存在。</p>
+<p>NGINX开始处理请求时会在请求结构体ngx_http_request_中创建被索引的变量值的缓存空间。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">r-&gt;variables = ngx_pcalloc(r-&gt;pool, cmcf-&gt;variables.nelts</span><br><span class="line">                                    * <span class="keyword">sizeof</span>(<span class="type">ngx_http_variable_value_t</span>));</span><br></pre></td></tr></table></figure>
+<p>对于被索引的变量，可以使用ngx_http_get_indexed_variable()或者ngx_http_get_flushed_variable()来求值。这样省去了查找哈希表的消耗。ngx_http_get_indexed_variable()首先检查r-&gt;variables[index]变量缓存是否可用。可用则直接返回，否则调用v-&gt;get_handler对变量求值，并将结果存储在r-&gt;variables[index]中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ngx_http_variable_value_t</span> *</span><br><span class="line"><span class="title function_">ngx_http_get_indexed_variable</span><span class="params">(<span class="type">ngx_http_request_t</span> *r, <span class="type">ngx_uint_t</span> index)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_http_variable_t</span>        *v;</span><br><span class="line">    <span class="type">ngx_http_core_main_conf_t</span>  *cmcf;</span><br><span class="line"></span><br><span class="line">    cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cmcf-&gt;variables.nelts &lt;= index) &#123;</span><br><span class="line">        ngx_log_error(NGX_LOG_ALERT, r-&gt;connection-&gt;<span class="built_in">log</span>, <span class="number">0</span>,</span><br><span class="line">                      <span class="string">&quot;unknown variable index: %d&quot;</span>, index);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (r-&gt;variables[index].not_found || r-&gt;variables[index].valid) &#123;</span><br><span class="line">        <span class="keyword">return</span> &amp;r-&gt;variables[index];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    v = cmcf-&gt;variables.elts;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (v[index].get_handler(r, &amp;r-&gt;variables[index], v[index].data)</span><br><span class="line">        == NGX_OK)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (v[index].flags &amp; NGX_HTTP_VAR_NOCACHEABLE) &#123;</span><br><span class="line">            r-&gt;variables[index].no_cacheable = <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> &amp;r-&gt;variables[index];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    r-&gt;variables[index].valid = <span class="number">0</span>;</span><br><span class="line">    r-&gt;variables[index].not_found = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>ngx_http_get_flushed_variable()还会对变量值的no_cacheable标志进行检查。如果为0，表示变量值可以cache, 则直接返回已缓存的变量值。否则，将变量值置为不可用，调用ngx_http_get_indexed_variable()对变量求值。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ngx_http_variable_value_t</span> *</span><br><span class="line"><span class="title function_">ngx_http_get_flushed_variable</span><span class="params">(<span class="type">ngx_http_request_t</span> *r, <span class="type">ngx_uint_t</span> index)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_http_variable_value_t</span>  *v;</span><br><span class="line"></span><br><span class="line">    v = &amp;r-&gt;variables[index];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (v-&gt;valid || v-&gt;not_found) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!v-&gt;no_cacheable) &#123;</span><br><span class="line">            <span class="keyword">return</span> v;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        v-&gt;valid = <span class="number">0</span>;</span><br><span class="line">        v-&gt;not_found = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> ngx_http_get_indexed_variable(r, index);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>没有索引的变量，可以调用ngx_http_get_variable()完成取值。它会查找cmcf-&gt;variables_hash哈希表，找到变量，从相应变量缓存中取值或调用变量的get_handler。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);</span><br><span class="line"></span><br><span class="line">v = ngx_hash_find(&amp;cmcf-&gt;variables_hash, key, name-&gt;data, name-&gt;len);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (v) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (v-&gt;flags &amp; NGX_HTTP_VAR_INDEXED) &#123;</span><br><span class="line">        <span class="keyword">return</span> ngx_http_get_flushed_variable(r, v-&gt;index);</span><br><span class="line"></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line"></span><br><span class="line">        vv = ngx_palloc(r-&gt;pool, <span class="keyword">sizeof</span>(<span class="type">ngx_http_variable_value_t</span>));</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (vv &amp;&amp; v-&gt;get_handler(r, vv, v-&gt;data) == NGX_OK) &#123;</span><br><span class="line">            <span class="keyword">return</span> vv;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>NGINX中rewrite模块实现了set指令，可以给变量赋值。如果另一模块的变量也可以使用set来赋值，则多模块配合完成功能会更加灵活。<br>set指令的解析函数ngx_http_rewrite_set()代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">char</span> *</span><br><span class="line"><span class="title function_">ngx_http_rewrite_set</span><span class="params">(<span class="type">ngx_conf_t</span> *cf, <span class="type">ngx_command_t</span> *cmd, <span class="type">void</span> *conf)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_http_rewrite_loc_conf_t</span>  *lcf = conf;</span><br><span class="line"></span><br><span class="line">    <span class="type">ngx_int_t</span>                            index;</span><br><span class="line">    <span class="type">ngx_str_t</span>                           *value;</span><br><span class="line">    <span class="type">ngx_http_variable_t</span>                 *v;</span><br><span class="line">    <span class="type">ngx_http_script_var_code_t</span>          *vcode;</span><br><span class="line">    <span class="type">ngx_http_script_var_handler_code_t</span>  *vhcode;</span><br><span class="line"></span><br><span class="line">    value = cf-&gt;args-&gt;elts;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (value[<span class="number">1</span>].data[<span class="number">0</span>] != <span class="string">&#x27;$&#x27;</span>) &#123;</span><br><span class="line">        ngx_conf_log_error(NGX_LOG_EMERG, cf, <span class="number">0</span>,</span><br><span class="line">                           <span class="string">&quot;invalid variable name &quot;</span>%V<span class="string">&quot;&quot;</span>, &amp;value[<span class="number">1</span>]);</span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    value[<span class="number">1</span>].len--;</span><br><span class="line">    value[<span class="number">1</span>].data++;</span><br><span class="line"></span><br><span class="line">    v = ngx_http_add_variable(cf, &amp;value[<span class="number">1</span>], NGX_HTTP_VAR_CHANGEABLE);</span><br><span class="line">    <span class="keyword">if</span> (v == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    index = ngx_http_get_variable_index(cf, &amp;value[<span class="number">1</span>]);</span><br><span class="line">    <span class="keyword">if</span> (index == NGX_ERROR) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (v-&gt;get_handler == <span class="literal">NULL</span></span><br><span class="line">        &amp;&amp; ngx_strncasecmp(value[<span class="number">1</span>].data, (u_char *) <span class="string">&quot;http_&quot;</span>, <span class="number">5</span>) != <span class="number">0</span></span><br><span class="line">        &amp;&amp; ngx_strncasecmp(value[<span class="number">1</span>].data, (u_char *) <span class="string">&quot;sent_http_&quot;</span>, <span class="number">10</span>) != <span class="number">0</span></span><br><span class="line">        &amp;&amp; ngx_strncasecmp(value[<span class="number">1</span>].data, (u_char *) <span class="string">&quot;upstream_http_&quot;</span>, <span class="number">14</span>) != <span class="number">0</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        v-&gt;get_handler = ngx_http_rewrite_var;</span><br><span class="line">        v-&gt;data = index;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ngx_http_rewrite_value(cf, lcf, &amp;value[<span class="number">2</span>]) != NGX_CONF_OK) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (v-&gt;set_handler) &#123;</span><br><span class="line">        vhcode = ngx_http_script_start_code(cf-&gt;pool, &amp;lcf-&gt;codes,</span><br><span class="line">                                   <span class="keyword">sizeof</span>(<span class="type">ngx_http_script_var_handler_code_t</span>));</span><br><span class="line">        <span class="keyword">if</span> (vhcode == <span class="literal">NULL</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        vhcode-&gt;code = ngx_http_script_var_set_handler_code;</span><br><span class="line">        vhcode-&gt;handler = v-&gt;set_handler;</span><br><span class="line">        vhcode-&gt;data = v-&gt;data;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_OK;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    vcode = ngx_http_script_start_code(cf-&gt;pool, &amp;lcf-&gt;codes,</span><br><span class="line">                                       <span class="keyword">sizeof</span>(<span class="type">ngx_http_script_var_code_t</span>));</span><br><span class="line">    <span class="keyword">if</span> (vcode == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_CONF_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    vcode-&gt;code = ngx_http_script_set_var_code;</span><br><span class="line">    vcode-&gt;index = (<span class="type">uintptr_t</span>) index;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NGX_CONF_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>它向lcf-&gt;codes函数引擎添加rewrite阶段需要执行的函数。如果检测到变量的set_handler存在，则添加ngx_http_script_var_set_handler_code函数，它会调用set_handler。而如果没有set_handler, 则添加ngx_http_script_set_var_code函数，它不会调用set_handler。由于内置变量添加一般是在preconfiguration中完成，因而解析set指令时，变量的set_handler存在，可以正常处理。而根据配置动态添加的变量如果解析出现在set指令后，set指令先被解析，此时变量的set_handler为空，此时添加的函数为ngx_http_script_set_var_code，v-&gt;set_handler不会得到调用。因此个人感觉添加函数引擎的逻辑应该放到postconfiguration中处理。此时和变量的各成员值都已被正常赋值。因而可以更方便地让根据配置动态添加的变量也可以和set指令轻松结合。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/03/nginx-cache-time/" rel="prev" title="修改NGINX实现灵活设置文件缓存时间">
+      <i class="fa fa-chevron-left"></i> 修改NGINX实现灵活设置文件缓存时间
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/03/passenger-helper-abnormal/" rel="next" title="PassengerHelperAgent开机启动异常分析">
+      PassengerHelperAgent开机启动异常分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

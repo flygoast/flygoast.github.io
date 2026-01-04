@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ivshmem:(Inter-VM shared memory device)是QEMU提供的一种宿主机与虚拟机之间或多个虚拟机之间共享内存的特殊设备。它有两种形式:  ivshmem-plain: 简单的共享内存区域 ivshmem-doorbell: 除了共享内存，还能提供基于中断的通信机制  这种设备在虚拟机内部表现为PCI设备，共享的内存区域则以PCI BAR的形式存在。ivshmemPC">
+<meta property="og:type" content="article">
+<meta property="og:title" content="QEMU虚拟机内识别ivshmem设备">
+<meta property="og:url" content="http://just4coding.com/2021/09/12/qemu-ivshmem/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="ivshmem:(Inter-VM shared memory device)是QEMU提供的一种宿主机与虚拟机之间或多个虚拟机之间共享内存的特殊设备。它有两种形式:  ivshmem-plain: 简单的共享内存区域 ivshmem-doorbell: 除了共享内存，还能提供基于中断的通信机制  这种设备在虚拟机内部表现为PCI设备，共享的内存区域则以PCI BAR的形式存在。ivshmemPC">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-09-12T04:56:34.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.494Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Virtualization">
+<meta property="article:tag" content="Ivshmem">
+<meta property="article:tag" content="Qemu">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2021/09/12/qemu-ivshmem/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>QEMU虚拟机内识别ivshmem设备 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/09/12/qemu-ivshmem/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          QEMU虚拟机内识别ivshmem设备
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-09-12 12:56:34" itemprop="dateCreated datePublished" datetime="2021-09-12T12:56:34+08:00">2021-09-12</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>ivshmem:(Inter-VM shared memory device)</code>是<code>QEMU</code>提供的一种宿主机与虚拟机之间或多个虚拟机之间共享内存的特殊设备。它有两种形式:</p>
+<ul>
+<li><code>ivshmem-plain</code>: 简单的共享内存区域</li>
+<li><code>ivshmem-doorbell</code>: 除了共享内存，还能提供基于中断的通信机制</li>
+</ul>
+<p>这种设备在虚拟机内部表现为<code>PCI</code>设备，共享的内存区域则以<code>PCI BAR</code>的形式存在。<code>ivshmem</code>PCI设备提供3个<code>BAR</code>:</p>
+<ul>
+<li><code>BAR0</code>: 设备寄存器</li>
+<li><code>BAR1</code>: <code>MSI-X</code>表</li>
+<li><code>BAR2</code>: 共享内存区域</li>
+</ul>
+<p>简单共享内存的场景只使用<code>BAR2</code>就足够了。如果需要基于中断实现额外通信，需要用到<code>BAR0</code>和<code>BAR1</code>。这可能需要编写内核驱动在虚拟机内处理中断，宿主机上<code>QEMU</code>进程在启动前需要先启动<code>ivshmem server</code>, 然后让<code>QEMU</code>进程连接到<code>server</code>的<code>unix socket</code>。</p>
+<p>具体可以参考<a href=":https://github.com/qemu/qemu/blob/master/docs/specs/ivshmem-spec.txt">官方文档</a>。</p>
+<p>本文只讨论<code>ivshmem-plain</code>模式。宿主机上添加<code>ivshmem</code>设备后，虚拟机应用如何找到相应的<code>ivshmem</code>设备呢？</p>
+<p>Linux的<code>/sys/bus/pci/devices/</code>目录会列出所有的PCI设备，<code>ivshmem</code>设备也会包含在其中。PCI设备都存在<code>vendor</code>号和<code>device</code>两个标识，<code>vendor</code>表示厂商，<code>device</code>表示厂商内的设备类型。<code>ivshmem</code>设备的<code>vendor</code>号为<code>0x1af4</code>, <code>device</code>号为<code>0x1110</code>，PCI设备的<code>vendor</code>和<code>device</code>号可在<a target="_blank" rel="noopener" href="https://pci-ids.ucw.cz/read/PC?restrict=">这里</a>进行查询。</p>
+<p>虚拟机中应用可通过遍历该目录下的具体设备，通过读取<code>vendor</code>和<code>device</code>文件来识别<code>ivshmem</code>设备。</p>
+<p>但如果有两种应用都需要使用一个独立的<code>ivshmem</code>设备，虚拟机应用如何识别出应该使用哪个<code>ivshmem</code>设备呢?</p>
+<p>因为每个PCI设备都可以由<code>BDF:(Bus, Device, Function)</code>来唯一标识，简单做法可以为每个应用预留好固定<code>BDF</code>地址。<code>BDF</code>地址中，<code>BUS</code>占用<code>8</code>位，<code>Device</code>占用<code>5</code>位,<code>Function</code>占用<code>3</code>位。比如，预留总线<code>pci0</code>的最后两个设备地址<code>0000:00:1e.0</code>和<code>0000:00:1f.0</code>。</p>
+<p>有时候无法预留，不同虚拟机上的<code>ivshmem</code>地址可能不同。这种情况可以通过与宿主机上的应用约定好相应的固定内容做为<code>signature</code>写入共享内存头部，虚拟机应用读取共享内存头部的<code>signature</code>信息来识别相应设备。</p>
+<span id="more"></span>
+
+<p>之前的文章<a href="/2017/11/19/qemu-monitor/">&lt;&lt;QEMU monitor机制实例介绍&gt;&gt;</a>介绍了<code>QEMU</code>的监控机制。我们使用可以该机制动态添加<code>ivshmem</code>设备。</p>
+<p>首先，识别虚拟机当前的PCI设备:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line">[root@controller ~]# virsh qemu-monitor-command --hmp 4 info pci</span><br><span class="line">  Bus  0, device   0, function 0:</span><br><span class="line">    Host bridge: PCI device 8086:1237</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 0:</span><br><span class="line">    ISA bridge: PCI device 8086:7000</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 1:</span><br><span class="line">    IDE controller: PCI device 8086:7010</span><br><span class="line">      BAR4: I/O at 0xc0a0 [0xc0af].</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 2:</span><br><span class="line">    USB controller: PCI device 8086:7020</span><br><span class="line">      IRQ 11.</span><br><span class="line">      BAR4: I/O at 0xc040 [0xc05f].</span><br><span class="line">      id &quot;usb&quot;</span><br><span class="line">  Bus  0, device   1, function 3:</span><br><span class="line">    Bridge: PCI device 8086:7113</span><br><span class="line">      IRQ 9.</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   2, function 0:</span><br><span class="line">    VGA controller: PCI device 1013:00b8</span><br><span class="line">      BAR0: 32 bit prefetchable memory at 0xfc000000 [0xfdffffff].</span><br><span class="line">      BAR1: 32 bit memory at 0xfebd0000 [0xfebd0fff].</span><br><span class="line">      BAR6: 32 bit memory at 0xffffffffffffffff [0x0000fffe].</span><br><span class="line">      id &quot;video0&quot;</span><br><span class="line">  Bus  0, device   3, function 0:</span><br><span class="line">    Ethernet controller: PCI device 1af4:1000</span><br><span class="line">      IRQ 11.</span><br><span class="line">      BAR0: I/O at 0xc060 [0xc07f].</span><br><span class="line">      BAR1: 32 bit memory at 0xfebd1000 [0xfebd1fff].</span><br><span class="line">      BAR4: 64 bit prefetchable memory at 0xfe000000 [0xfe003fff].</span><br><span class="line">      BAR6: 32 bit memory at 0xffffffffffffffff [0x0003fffe].</span><br><span class="line">      id &quot;net0&quot;</span><br><span class="line">  Bus  0, device   4, function 0:</span><br><span class="line">    SCSI controller: PCI device 1af4:1001</span><br><span class="line">      IRQ 11.</span><br><span class="line">      BAR0: I/O at 0xc000 [0xc03f].</span><br><span class="line">      BAR1: 32 bit memory at 0xfebd2000 [0xfebd2fff].</span><br><span class="line">      BAR4: 64 bit prefetchable memory at 0xfe004000 [0xfe007fff].</span><br><span class="line">      id &quot;virtio-disk0&quot;</span><br><span class="line">  Bus  0, device   5, function 0:</span><br><span class="line">    Class 0255: PCI device 1af4:1002</span><br><span class="line">      IRQ 10.</span><br><span class="line">      BAR0: I/O at 0xc080 [0xc09f].</span><br><span class="line">      BAR4: 64 bit prefetchable memory at 0xfe008000 [0xfe00bfff].</span><br><span class="line">      id &quot;balloon0&quot;</span><br></pre></td></tr></table></figure>
+
+
+<p>PCI地址使用到了<code>0000:00:05.0</code>, 我们使用未使用的PCI地址添加两个<code>ivshmem</code>设备，<code>0000:00:10.0</code>大小为<code>16M</code>, <code>0000:00:11.0</code>大小为<code>8M</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">virsh qemu-monitor-command --hmp 4 <span class="string">&quot;object_add  memory-backend-file,size=16M,share,mem-path=/dev/shm/shm1,id=shm1&quot;</span></span><br><span class="line">virsh qemu-monitor-command --hmp 4 <span class="string">&quot;device_add  ivshmem-plain,memdev=shm1,bus=pci.0,addr=0x10,master=on&quot;</span></span><br><span class="line">virsh qemu-monitor-command --hmp 4 <span class="string">&quot;object_add  memory-backend-file,size=8M,share,mem-path=/dev/shm/shm2,id=shm2&quot;</span></span><br><span class="line">virsh qemu-monitor-command --hmp 4 <span class="string">&quot;device_add  ivshmem-plain,memdev=shm2,bus=pci.0,addr=0x11,master=on&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>登录到虚拟机上查看PCI设备，可以看到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# lspci</span><br><span class="line">00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)</span><br><span class="line">00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]</span><br><span class="line">00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE [Natoma/Triton II]</span><br><span class="line">00:01.2 USB controller: Intel Corporation 82371SB PIIX3 USB [Natoma/Triton II] (rev 01)</span><br><span class="line">00:01.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 03)</span><br><span class="line">00:02.0 VGA compatible controller: Cirrus Logic GD 5446</span><br><span class="line">00:03.0 Ethernet controller: Red Hat, Inc. Virtio network device</span><br><span class="line">00:04.0 SCSI storage controller: Red Hat, Inc. Virtio block device</span><br><span class="line">00:05.0 Unclassified device [00ff]: Red Hat, Inc. Virtio memory balloon</span><br><span class="line">00:10.0 RAM memory: Red Hat, Inc. Inter-VM shared memory (rev 01)</span><br><span class="line">00:11.0 RAM memory: Red Hat, Inc. Inter-VM shared memory (rev 01)</span><br></pre></td></tr></table></figure>
+
+<p>查看目录<code>/sys/bus/pci/devices/</code>, 也可以看这些设备:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# ls -l /sys/bus/pci/devices/</span><br><span class="line">total 0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:00.0 -&gt; ../../../devices/pci0000:00/0000:00:00.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:01.0 -&gt; ../../../devices/pci0000:00/0000:00:01.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:01.1 -&gt; ../../../devices/pci0000:00/0000:00:01.1</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:01.2 -&gt; ../../../devices/pci0000:00/0000:00:01.2</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:01.3 -&gt; ../../../devices/pci0000:00/0000:00:01.3</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:02.0 -&gt; ../../../devices/pci0000:00/0000:00:02.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:03.0 -&gt; ../../../devices/pci0000:00/0000:00:03.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:04.0 -&gt; ../../../devices/pci0000:00/0000:00:04.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:39 0000:00:05.0 -&gt; ../../../devices/pci0000:00/0000:00:05.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:47 0000:00:10.0 -&gt; ../../../devices/pci0000:00/0000:00:10.0</span><br><span class="line">lrwxrwxrwx. 1 root root 0 Sep 12 08:47 0000:00:11.0 -&gt; ../../../devices/pci0000:00/0000:00:11.0</span><br></pre></td></tr></table></figure>
+
+<p>分别查看两个<code>ivshmem</code>设备目录下<code>vendor</code>和<code>device</code>文件的内容，可以看到<code>vendor</code>都是<code>0x1af4</code>,<code>device</code>都是<code>0x1110</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# cat /sys/bus/pci/devices/0000\:00\:10.0/vendor</span><br><span class="line">0x1af4</span><br><span class="line">[root@host-172-16-0-29 ~]# cat /sys/bus/pci/devices/0000\:00\:10.0/device</span><br><span class="line">0x1110</span><br><span class="line">[root@host-172-16-0-29 ~]# cat /sys/bus/pci/devices/0000\:00\:11.0/vendor</span><br><span class="line">0x1af4</span><br><span class="line">[root@host-172-16-0-29 ~]# cat /sys/bus/pci/devices/0000\:00\:11.0/device</span><br><span class="line">0x1110</span><br></pre></td></tr></table></figure>
+
+<p>再查看一个其他PCI设备<code>0000:00:05.0</code>的<code>device</code>值为<code>0x1002</code>, 不是<code>0x1110</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# cat /sys/bus/pci/devices/0000\:00\:05.0/device</span><br><span class="line">0x1002</span><br></pre></td></tr></table></figure>
+
+<p><code>ivshmem</code>设备的共享内存以设备目录下的<code>resource2</code>文件存在，虚拟机应用可以通过<code>mmap</code>调用来读写该内存区域。查看两个<code>ivshmem</code>共享内存的大小,可以看到<code>0000:00:10.0</code>的大小为<code>16M</code>, <code>0000:00:11.0</code>的大小为<code>8M</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# ls -l /sys/bus/pci/devices/0000\:00\:10.0/resource2</span><br><span class="line">-rw-------. 1 root root 16777216 9月  12 09:23 /sys/bus/pci/devices/0000:00:10.0/resource2</span><br><span class="line">[root@host-172-16-0-29 ~]# ls -l /sys/bus/pci/devices/0000\:00\:11.0/resource2</span><br><span class="line">-rw-------. 1 root root 8388608 9月  12 11:11 /sys/bus/pci/devices/0000:00:11.0/resource2</span><br></pre></td></tr></table></figure>
+
+<p>在宿主机上分别在两个共享内存区域中写入<code>8</code>字节(含字符串换行符)的不同标识信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">&quot;SIGN_01&quot;</span> &gt; /dev/shm/shm1</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;SIGN_02&quot;</span> &gt; /dev/shm/shm2</span><br></pre></td></tr></table></figure>
+
+<p>在虚拟机上编写一个简单的程序来读出第一个<code>ivshmem</code>设备的前<code>8</code>字节, <code>C</code>语言代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/mman.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> SHM_SIZE  (16 * 1024 * 1024)</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span> &#123;</span><br><span class="line">    <span class="type">char</span> *p;</span><br><span class="line">    <span class="type">int</span> fd;</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    fd = open(<span class="string">&quot;/sys/bus/pci/devices/0000:00:10.0/resource2&quot;</span>, O_RDWR);</span><br><span class="line">    assert(fd != <span class="number">-1</span>);</span><br><span class="line"></span><br><span class="line">    p = mmap(<span class="number">0</span>, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, <span class="number">0</span>);</span><br><span class="line">    assert(p != <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; <span class="number">8</span>; i++) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;%c&quot;</span>, p[i]);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    munmap(p, SHM_SIZE);</span><br><span class="line">    close(fd);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在虚拟机上编译执行, 可以看到宿主机上写入的标识信息。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@host-172-16-0-29 ~]# gcc t.c</span><br><span class="line">[root@host-172-16-0-29 ~]# ./a.out</span><br><span class="line">SIGN_01</span><br></pre></td></tr></table></figure>
+
+<p>在真实的生产应用中，对于共享内存的使用不会这么简单，而是要构造相当复杂的数据结构。比如，可以在共享内存中构造基于偏移量的环形队列结构，用于双向的信息发送。</p>
+<p>基于中断方式的通信方式，后续再专门文章来介绍。</p>
+<p>参考文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.linux-kvm.org/images/e/e8/0.11.Nahanni-CamMacdonell.pdf">https://www.linux-kvm.org/images/e/e8/0.11.Nahanni-CamMacdonell.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.dazhuanlan.com/mcalf/topics/1478919">https://www.dazhuanlan.com/mcalf/topics/1478919</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/filesystems/sysfs-pci.txt">https://www.kernel.org/doc/Documentation/filesystems/sysfs-pci.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/virtio-win/kvm-guest-drivers-windows/tree/master/ivshmem">https://github.com/virtio-win/kvm-guest-drivers-windows/tree/master/ivshmem</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1593168">https://cloud.tencent.com/developer/article/1593168</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Virtualization/" rel="tag"># Virtualization</a>
+              <a href="/tags/Ivshmem/" rel="tag"># Ivshmem</a>
+              <a href="/tags/Qemu/" rel="tag"># Qemu</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/09/05/nfqueue-mark/" rel="prev" title="Kubernetes环境中NFQUEUE与MARK机制冲突">
+      <i class="fa fa-chevron-left"></i> Kubernetes环境中NFQUEUE与MARK机制冲突
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/09/25/ivshmem-pci/" rel="next" title="ivshmem PCI设备中断机制驱动示例">
+      ivshmem PCI设备中断机制驱动示例 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

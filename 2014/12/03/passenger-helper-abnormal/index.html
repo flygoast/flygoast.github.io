@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="异常现象： 在&#x2F;etc&#x2F;rc.local中添加&#x2F;usr&#x2F;local&#x2F;nginx&#x2F;sbin&#x2F;nginx来开机自动启动NGINX时，PassengerHelperAgent进程不停反复重启，而从shell上手动启动NGINX时一切正常。 追查过程: 查阅异常时的error.log日志发现以下错误： 12345[ pid&#x3D;3413 t">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PassengerHelperAgent开机启动异常分析">
+<meta property="og:url" content="http://just4coding.com/2014/12/03/passenger-helper-abnormal/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="异常现象： 在&#x2F;etc&#x2F;rc.local中添加&#x2F;usr&#x2F;local&#x2F;nginx&#x2F;sbin&#x2F;nginx来开机自动启动NGINX时，PassengerHelperAgent进程不停反复重启，而从shell上手动启动NGINX时一切正常。 追查过程: 查阅异常时的error.log日志发现以下错误： 12345[ pid&#x3D;3413 t">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-03T02:44:12.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.470Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/03/passenger-helper-abnormal/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>PassengerHelperAgent开机启动异常分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/passenger-helper-abnormal/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          PassengerHelperAgent开机启动异常分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 10:44:12" itemprop="dateCreated datePublished" datetime="2014-12-03T10:44:12+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/PASSENGER/" itemprop="url" rel="index">
+                    <span itemprop="name">PASSENGER</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>异常现象：</p>
+<p>在&#x2F;etc&#x2F;rc.local中添加&#x2F;usr&#x2F;local&#x2F;nginx&#x2F;sbin&#x2F;nginx来开机自动启动NGINX时，PassengerHelperAgent进程不停反复重启，而从shell上手动启动NGINX时一切正常。</p>
+<p>追查过程:</p>
+<p>查阅异常时的error.log日志发现以下错误：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[ pid=3413 thr=140583025772288 file=ext/nginx/HelperAgent.cpp:963 time=2014-09-30 11:05:20.925 ]: Uncaught exception in PassengerServer client thread:</span><br><span class="line">   exception: Cannot accept new connection: Too many open files (24)</span><br><span class="line">   backtrace:</span><br><span class="line">     in &#x27;Passenger::FileDescriptor Client::acceptConnection()&#x27; (HelperAgent.cpp:429)</span><br><span class="line">     in &#x27;void Client::threadMain()&#x27; (HelperAgent.cpp:952)</span><br></pre></td></tr></table></figure>
+
+<p>根据日志错误信息，可以确定是PassengerHelperAgent进程文件描述符达到了上限。</p>
+<p>找到ext&#x2F;nginx&#x2F;HelperAgent.cpp文件的963行：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">threadMain</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">TRACE_POINT</span>();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">                        <span class="built_in">UPDATE_TRACE_POINT</span>();</span><br><span class="line">                        inactivityTimer.<span class="built_in">start</span>();</span><br><span class="line">                        <span class="function">FileDescriptor <span class="title">fd</span><span class="params">(acceptConnection())</span></span>;</span><br><span class="line">                        inactivityTimer.<span class="built_in">stop</span>();</span><br><span class="line">                        <span class="built_in">handleRequest</span>(fd);</span><br><span class="line">                &#125;</span><br><span class="line">        &#125; <span class="built_in">catch</span> (<span class="type">const</span> boost::thread_interrupted &amp;) &#123;</span><br><span class="line">                <span class="built_in">P_TRACE</span>(<span class="number">2</span>, <span class="string">&quot;Client thread &quot;</span> &lt;&lt; <span class="keyword">this</span> &lt;&lt; <span class="string">&quot; interrupted.&quot;</span>);</span><br><span class="line">        &#125; <span class="built_in">catch</span> (<span class="type">const</span> tracable_exception &amp;e) &#123;</span><br><span class="line">                <span class="built_in">P_ERROR</span>(<span class="string">&quot;Uncaught exception in PassengerServer client thread:\n&quot;</span></span><br><span class="line">                        &lt;&lt; <span class="string">&quot;   exception: &quot;</span> &lt;&lt; e.<span class="built_in">what</span>() &lt;&lt; <span class="string">&quot;\n&quot;</span></span><br><span class="line">                        &lt;&lt; <span class="string">&quot;   backtrace:\n&quot;</span> &lt;&lt; e.<span class="built_in">backtrace</span>());</span><br><span class="line">                <span class="built_in">abort</span>();</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>通过上下文可以确定是调用acceptConnection()出错，查看acceptConnection()代码，确定是由该函数抛出的异常。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">FileDescriptor <span class="title">acceptConnection</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">TRACE_POINT</span>();</span><br><span class="line">        <span class="keyword">struct</span> <span class="title class_">sockaddr_un</span> addr;</span><br><span class="line">        <span class="type">socklen_t</span> addrlen = <span class="built_in">sizeof</span>(addr);</span><br><span class="line">        <span class="type">int</span> fd = syscalls::<span class="built_in">accept</span>(serverSocket,</span><br><span class="line">                (<span class="keyword">struct</span> sockaddr *) &amp;addr,</span><br><span class="line">                &amp;addrlen);</span><br><span class="line">        <span class="keyword">if</span> (fd == <span class="number">-1</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="built_in">SystemException</span>(<span class="string">&quot;Cannot accept new connection&quot;</span>, errno);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="built_in">FileDescriptor</span>(fd);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>syscalls::accept是对系统调用accept的简单封装。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">syscalls::<span class="built_in">accept</span>(<span class="type">int</span> sockfd, <span class="keyword">struct</span> sockaddr *addr, <span class="type">socklen_t</span> *addrlen) &#123;</span><br><span class="line">        <span class="type">int</span> ret;</span><br><span class="line">        <span class="built_in">CHECK_INTERRUPTION</span>(</span><br><span class="line">                ret == <span class="number">-1</span>,</span><br><span class="line">                ret = ::<span class="built_in">accept</span>(sockfd, addr, addrlen)</span><br><span class="line">        );</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>错误原因就是accept由于进程文件描述符达到上限而出错返回了。</p>
+<p>接下来追查为什么进程文件描述符数会达到上限。</p>
+<p>首先看一下PassengerHelperAgent的整体代码逻辑:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span></span></span><br><span class="line"><span class="function"><span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> *argv[])</span> </span>&#123;</span><br><span class="line">        <span class="built_in">TRACE_POINT</span>();</span><br><span class="line">        VariantMap options = <span class="built_in">initializeAgent</span>(argc, argv, <span class="string">&quot;PassengerHelperAgent&quot;</span>);</span><br><span class="line">        <span class="type">pid_t</span>   webServerPid  = options.<span class="built_in">getPid</span>(<span class="string">&quot;web_server_pid&quot;</span>);</span><br><span class="line">        string  tempDir       = options.<span class="built_in">get</span>(<span class="string">&quot;temp_dir&quot;</span>);</span><br><span class="line">        <span class="type">bool</span>    userSwitching = options.<span class="built_in">getBool</span>(<span class="string">&quot;user_switching&quot;</span>);</span><br><span class="line">        string  defaultUser   = options.<span class="built_in">get</span>(<span class="string">&quot;default_user&quot;</span>);</span><br><span class="line">        string  defaultGroup  = options.<span class="built_in">get</span>(<span class="string">&quot;default_group&quot;</span>);</span><br><span class="line">        string  passengerRoot = options.<span class="built_in">get</span>(<span class="string">&quot;passenger_root&quot;</span>);</span><br><span class="line">        string  rubyCommand   = options.<span class="built_in">get</span>(<span class="string">&quot;ruby&quot;</span>);</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> generationNumber   = options.<span class="built_in">getInt</span>(<span class="string">&quot;generation_number&quot;</span>);</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> maxPoolSize        = options.<span class="built_in">getInt</span>(<span class="string">&quot;max_pool_size&quot;</span>);</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> maxInstancesPerApp = options.<span class="built_in">getInt</span>(<span class="string">&quot;max_instances_per_app&quot;</span>);</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> poolIdleTime       = options.<span class="built_in">getInt</span>(<span class="string">&quot;pool_idle_time&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="built_in">UPDATE_TRACE_POINT</span>();</span><br><span class="line">                <span class="function">Server <span class="title">server</span><span class="params">(FEEDBACK_FD, webServerPid, tempDir,</span></span></span><br><span class="line"><span class="params"><span class="function">                        userSwitching, defaultUser, defaultGroup,</span></span></span><br><span class="line"><span class="params"><span class="function">                        passengerRoot, rubyCommand, generationNumber,</span></span></span><br><span class="line"><span class="params"><span class="function">                        maxPoolSize, maxInstancesPerApp, poolIdleTime,</span></span></span><br><span class="line"><span class="params"><span class="function">                        options)</span></span>;</span><br><span class="line">                <span class="built_in">P_DEBUG</span>(<span class="string">&quot;Passenger helper agent started on PID &quot;</span> &lt;&lt; <span class="built_in">getpid</span>());</span><br><span class="line"></span><br><span class="line">                <span class="built_in">UPDATE_TRACE_POINT</span>();</span><br><span class="line">                server.<span class="built_in">mainLoop</span>();</span><br><span class="line">        &#125; <span class="built_in">catch</span> (<span class="type">const</span> tracable_exception &amp;e) &#123;</span><br><span class="line">                <span class="built_in">P_ERROR</span>(e.<span class="built_in">what</span>() &lt;&lt; <span class="string">&quot;\n&quot;</span> &lt;&lt; e.<span class="built_in">backtrace</span>());</span><br><span class="line">                <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125; <span class="built_in">catch</span> (<span class="type">const</span> std::exception &amp;e) &#123;</span><br><span class="line">                <span class="built_in">P_ERROR</span>(e.<span class="built_in">what</span>());</span><br><span class="line">                <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">P_TRACE</span>(<span class="number">2</span>, <span class="string">&quot;Helper agent exited.&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>首先创建一个Server对象，然后调用Server对象的mainLoop成员函数。Server对象构造函数会调用成员函数startListening。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">startListening</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        this_thread::disable_syscall_interruption dsi;</span><br><span class="line">        requestSocket = <span class="built_in">createUnixServer</span>(<span class="built_in">getRequestSocketFilename</span>().<span class="built_in">c_str</span>());</span><br><span class="line"></span><br><span class="line">        <span class="type">int</span> ret;</span><br><span class="line">        <span class="keyword">do</span> &#123;</span><br><span class="line">                ret = <span class="built_in">chmod</span>(<span class="built_in">getRequestSocketFilename</span>().<span class="built_in">c_str</span>(), S_ISVTX |</span><br><span class="line">                        S_IRUSR | S_IWUSR | S_IXUSR |</span><br><span class="line">                        S_IRGRP | S_IWGRP | S_IXGRP |</span><br><span class="line">                        S_IROTH | S_IWOTH | S_IXOTH);</span><br><span class="line">        &#125; <span class="keyword">while</span> (ret == <span class="number">-1</span> &amp;&amp; errno == EINTR);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>createUnixServer函数会创建一个socket文件，然后监听这个文件。NGINX收到请求后，会由Passenger模块转发请求到该socket文件。<br>mainLoop会调用成员函数startClientHandlerThreads，它会创建numberOfThreads个Client对象。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">startClientHandlerThreads</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">unsigned</span> <span class="type">int</span> i = <span class="number">0</span>; i &lt; numberOfThreads; i++) &#123;</span><br><span class="line">                <span class="function">ClientPtr <span class="title">client</span><span class="params">(<span class="keyword">new</span> Client(i + <span class="number">1</span>, pool, requestSocketPassword,</span></span></span><br><span class="line"><span class="params"><span class="function">                        defaultUser, defaultGroup, requestSocket,</span></span></span><br><span class="line"><span class="params"><span class="function">                        analyticsLogger))</span></span>;</span><br><span class="line">                clients.<span class="built_in">insert</span>(client);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Client对象构造函数会启动一个线程执行threadMain。threadMain就是我们上面出错的函数。每个线程等待接收通过socket文件发来的请求，接收请求后调用handleRequest进行处理。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">Client</span>(<span class="type">unsigned</span> <span class="type">int</span> number, ApplicationPool::Ptr pool,</span><br><span class="line">       <span class="type">const</span> string &amp;password, <span class="type">const</span> string &amp;defaultUser,</span><br><span class="line">       <span class="type">const</span> string &amp;defaultGroup, <span class="type">int</span> serverSocket,</span><br><span class="line">       <span class="type">const</span> AnalyticsLoggerPtr &amp;logger)</span><br><span class="line">        : <span class="built_in">inactivityTimer</span>(<span class="literal">false</span>)</span><br><span class="line">&#123;</span><br><span class="line">        <span class="keyword">this</span>-&gt;number = number;</span><br><span class="line">        <span class="keyword">this</span>-&gt;pool = pool;</span><br><span class="line">        <span class="keyword">this</span>-&gt;password = password;</span><br><span class="line">        <span class="keyword">this</span>-&gt;defaultUser = defaultUser;</span><br><span class="line">        <span class="keyword">this</span>-&gt;defaultGroup = defaultGroup;</span><br><span class="line">        <span class="keyword">this</span>-&gt;serverSocket = serverSocket;</span><br><span class="line">        <span class="keyword">this</span>-&gt;analyticsLogger = logger;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">sbmh_init</span>(&amp;statusFinder.ctx, <span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line">        <span class="built_in">sbmh_init</span>(&amp;transferEncodingFinder.ctx, <span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">        thr = <span class="keyword">new</span> oxt::<span class="built_in">thread</span>(</span><br><span class="line">                boost::<span class="built_in">bind</span>(&amp;Client::threadMain, <span class="keyword">this</span>),</span><br><span class="line">                <span class="string">&quot;Client thread &quot;</span> + <span class="built_in">toString</span>(number),</span><br><span class="line">                CLIENT_THREAD_STACK_SIZE</span><br><span class="line">        );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>问题出在线程调用accept等待接收请求时。我们所创建的线程数量numberOfThreads是在Server对象被创建时指定的。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">numberOfThreads     = maxPoolSize * <span class="number">4</span>;</span><br></pre></td></tr></table></figure>
+<p>而maxPoolSize由passenger_max_pool_size配置项指定，我们指定的是256。256 × 4 ＝ 1024，开机启动时PassengerHelperAgent进程的文件描述符上限就是1024。这个数字值得怀疑。因而我将配置修改为128，果然正常了。</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">passenger_max_pool_size</span> <span class="number">256</span>;</span><br></pre></td></tr></table></figure>
+<p>可以确定每个线程中占用了文件描述符。然而从代码中并没有找到打开文件相关的逻辑。当accept成功返回时，会返回一个新的文件描述符。开始怀疑accept在还没有接收到请求时就预先占用了一个文件描述符。通过一个简单程序来验证。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/un.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/socket.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">start_accept</span><span class="params">(<span class="type">void</span> *arg)</span> &#123;</span><br><span class="line">    <span class="type">int</span>                 fd = (<span class="type">int</span>) arg;</span><br><span class="line">    <span class="type">int</span>                 newfd;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_un</span>  <span class="title">addr</span>;</span></span><br><span class="line">    <span class="type">socklen_t</span>           addrlen;</span><br><span class="line"></span><br><span class="line">    newfd = accept(fd, (<span class="keyword">struct</span> sockaddr *)&amp;addr, &amp;addrlen);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (newfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;accept failed: %u: %s\n&quot;</span>,</span><br><span class="line">                pthread_self(), strerror(errno));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">int</span>                 i, fd;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_un</span>  <span class="title">addr</span>;</span></span><br><span class="line">    <span class="type">socklen_t</span>           addrlen = <span class="keyword">sizeof</span>(addr);</span><br><span class="line">    <span class="type">pthread_t</span>           pt;</span><br><span class="line"></span><br><span class="line">    assert((fd = socket(PF_LOCAL, SOCK_STREAM, <span class="number">0</span>)) &gt; <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; <span class="number">1020</span>; i++) &#123;</span><br><span class="line">        assert(open(<span class="string">&quot;emfile.c&quot;</span>, O_RDONLY) &gt; <span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    addr.sun_family = AF_LOCAL;</span><br><span class="line">    <span class="built_in">strncpy</span>(addr.sun_path, <span class="string">&quot;emfile.socket&quot;</span>, <span class="keyword">sizeof</span>(<span class="string">&quot;emfile.socket&quot;</span>) - <span class="number">1</span>);</span><br><span class="line">    addr.sun_path[<span class="keyword">sizeof</span>(<span class="string">&quot;emfile.socket&quot;</span>) - <span class="number">1</span>] = <span class="string">&#x27;\0&#x27;</span>;</span><br><span class="line"></span><br><span class="line">    assert(bind(fd, (<span class="type">const</span> <span class="keyword">struct</span> sockaddr *)&amp;addr, <span class="keyword">sizeof</span>(addr)) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    assert(listen(fd, <span class="number">512</span>) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    pthread_create(&amp;pt, <span class="literal">NULL</span>, start_accept, (<span class="type">void</span> *) fd);</span><br><span class="line"></span><br><span class="line">    pthread_join(pt, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>使用ulimit将shell文件打开数上限修改为1024:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ulimit -n 1024</span><br></pre></td></tr></table></figure>
+<p>编译验证程序，并执行</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ gcc emfile.c -lpthread</span><br><span class="line">$ ./a.out</span><br></pre></td></tr></table></figure>
+<p>得到结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">accept failed: 591611648: Too many open files</span><br></pre></td></tr></table></figure>
+<p>确实如些，那再来看一下accept的实现。accept系统调用的内核实现是sys_accept，而sys_accept是对sys_accept4的简单封装。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SYSCALL_DEFINE3(accept, <span class="type">int</span>, fd, <span class="keyword">struct</span> sockaddr __user *, upeer_sockaddr,</span><br><span class="line">        <span class="type">int</span> __user *, upeer_addrlen)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> sys_accept4(fd, upeer_sockaddr, upeer_addrlen, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">SYSCALL_DEFINE4(accept4, <span class="type">int</span>, fd, <span class="keyword">struct</span> sockaddr __user *, upeer_sockaddr,</span><br><span class="line">        <span class="type">int</span> __user *, upeer_addrlen, <span class="type">int</span>, flags)</span><br><span class="line">&#123;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    sock = sockfd_lookup_light(fd, &amp;err, &amp;fput_needed);</span><br><span class="line">    <span class="keyword">if</span> (!sock)</span><br><span class="line">        <span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">    err = -ENFILE;</span><br><span class="line">    <span class="keyword">if</span> (!(newsock = sock_alloc()))</span><br><span class="line">        <span class="keyword">goto</span> out_put;</span><br><span class="line"></span><br><span class="line">    newsock-&gt;type = sock-&gt;type;</span><br><span class="line">    newsock-&gt;ops = sock-&gt;ops;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    newfd = sock_alloc_file(newsock, &amp;newfile, flags);</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    err = sock-&gt;ops-&gt;accept(sock, newsock, sock-&gt;file-&gt;f_flags);</span><br><span class="line">    <span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">goto</span> out_fd;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    fd_install(newfd, newfile);</span><br><span class="line">    err = newfd;</span><br><span class="line"></span><br><span class="line">out_put:</span><br><span class="line">    fput_light(sock-&gt;file, fput_needed);</span><br><span class="line">out:</span><br><span class="line">    <span class="keyword">return</span> err;</span><br><span class="line">out_fd:</span><br><span class="line">    fput(newfile);</span><br><span class="line">    put_unused_fd(newfd);</span><br><span class="line">    <span class="keyword">goto</span> out_put;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>sys_accept4中在调用sock-&gt;ops-&gt;accept去接收网络请求前就调用sock_alloc_file来分配文件描述符。再来看sock_alloc_file这个函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">sock_alloc_file</span><span class="params">(<span class="keyword">struct</span> socket *sock, <span class="keyword">struct</span> file **f, <span class="type">int</span> flags)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">qstr</span> <span class="title">name</span> =</span> &#123; .name = <span class="string">&quot;&quot;</span> &#125;;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">path</span> <span class="title">path</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">file</span> *<span class="title">file</span>;</span></span><br><span class="line">    <span class="type">int</span> fd;</span><br><span class="line"></span><br><span class="line">    fd = get_unused_fd_flags(flags);</span><br><span class="line">    <span class="keyword">if</span> (unlikely(fd &lt; <span class="number">0</span>))</span><br><span class="line">        <span class="keyword">return</span> fd;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>sock_alloc_file会调用get_unused_fd_flags，这是一个宏，实际会调用函数alloc_fd, 而alloc_fd又会调用函数expand_files：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">expand_files</span><span class="params">(<span class="keyword">struct</span> files_struct *files, <span class="type">int</span> nr)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">fdtable</span> *<span class="title">fdt</span>;</span></span><br><span class="line"></span><br><span class="line">    fdt = files_fdtable(files);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * N.B. For clone tasks sharing a files structure, this test</span></span><br><span class="line"><span class="comment">     * will limit the total number of files that can be opened.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (nr &gt;= current-&gt;signal-&gt;rlim[RLIMIT_NOFILE].rlim_cur)</span><br><span class="line">        <span class="keyword">return</span> -EMFILE;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Do we need to expand? */</span></span><br><span class="line">    <span class="keyword">if</span> (nr &lt; fdt-&gt;max_fds)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Can we expand? */</span></span><br><span class="line">    <span class="keyword">if</span> (nr &gt;= sysctl_nr_open)</span><br><span class="line">        <span class="keyword">return</span> -EMFILE;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* All good, so we try */</span></span><br><span class="line">    <span class="keyword">return</span> expand_fdtable(files, nr);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到expand_files进行文件描述符限制的检查，当超过限制时返回”EMFILE”。”EMFILE”错误的提示就是”Too many open files”。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> EMFILE      24  <span class="comment">/* Too many open files */</span></span></span><br></pre></td></tr></table></figure>
+<p>结合上面的测试程序，使用一个systemtap脚本可以捕获到上述调用路径。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">probe  kernel.function(&quot;expand_files&quot;).return &#123;</span><br><span class="line">    if ($return == -24) &#123;</span><br><span class="line">        println(&quot;expand_files&quot;);</span><br><span class="line">        printf(&quot;%d\n&quot;, $nr);</span><br><span class="line">        print_backtrace();</span><br><span class="line">        exit();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">probe begin &#123;</span><br><span class="line">    println(&quot;start\n&quot;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>执行stap:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$sudo stap emfile.stap</span><br></pre></td></tr></table></figure>
+<p>捕获结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">start</span><br><span class="line"></span><br><span class="line">expand_files</span><br><span class="line">1024</span><br><span class="line">Returning from:  0xffffffff811931d0 : expand_files+0x0/0x220 [kernel]</span><br><span class="line">Returning to  :  0xffffffff81193443 : alloc_fd+0x53/0x160 [kernel]</span><br><span class="line"> 0xffffffff814187f3 : sock_alloc_file+0x43/0x150 [kernel]</span><br><span class="line"> 0xffffffff8141b3dd : sys_accept4+0x11d/0x2b0 [kernel]</span><br><span class="line"> 0xffffffff8141b580 : sys_accept+0x10/0x20 [kernel]</span><br><span class="line"> 0xffffffff8100b0f2 : system_call_fastpath+0x16/0x1b [kernel]</span><br></pre></td></tr></table></figure>
+<p>最终确定异常原因:</p>
+<p>开机自启时，进程的打开文件数限制为1024，而创建1024个线程执行accept()时。每个accept会占用一个文件描述符, 达到了进程的文件描述符上限而异常。而从shell启动时，我们shell进程的文件描述符限制是32768，因而不会出现问题。</p>
+<p>解决方法：<br>创建一个启动脚本，在执行&#x2F;usr&#x2F;local&#x2F;nginx&#x2F;sbin&#x2F;nginx前执行ulimit修改文件描述符限制。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">ulimit</span> -SHn 65535</span><br><span class="line">/usr/local/nginx/sbin/nginx &amp;</span><br></pre></td></tr></table></figure>
+<p>注意:</p>
+<ul>
+<li>&#x2F;etc&#x2F;security&#x2F;limits.conf中的设置只针对登录动作发生时才生效，因而对于开机自动启动进程这种情况，这种修改该文件的方式不生效。</li>
+<li>Passenger版本为3.0.11</li>
+<li>kernel版本为CentOS 6.2内核，kernel-2.6.32-220.4.2.el6</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/03/nginx-variables/" rel="prev" title="NGINX变量机制分析">
+      <i class="fa fa-chevron-left"></i> NGINX变量机制分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/03/passenger-blocking/" rel="next" title="Passenger导致NGINX master进程阻塞定位及解决">
+      Passenger导致NGINX master进程阻塞定位及解决 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

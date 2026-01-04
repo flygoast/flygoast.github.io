@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ejabberd中的hook机制是ejabberd XMPP模块的基础。XMPP模块需要根据需求在相应的hook点上注册自己的处理函数，在处理函数的逻辑中实现需求。ejabberd执行到hook点时，会按注册的顺序号由小到大来执行各模块所注册的处理函数。 下面来分析具体实现。 ejabberd启动时，ejabberd_sup:init&#x2F;1会通过调用ejabberd_hooks:start">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd中hook机制分析">
+<meta property="og:url" content="http://just4coding.com/2014/12/07/ejabberd-hooks/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="ejabberd中的hook机制是ejabberd XMPP模块的基础。XMPP模块需要根据需求在相应的hook点上注册自己的处理函数，在处理函数的逻辑中实现需求。ejabberd执行到hook点时，会按注册的顺序号由小到大来执行各模块所注册的处理函数。 下面来分析具体实现。 ejabberd启动时，ejabberd_sup:init&#x2F;1会通过调用ejabberd_hooks:start">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-07T05:37:11.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.471Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/07/ejabberd-hooks/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd中hook机制分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/07/ejabberd-hooks/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd中hook机制分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-07 13:37:11" itemprop="dateCreated datePublished" datetime="2014-12-07T13:37:11+08:00">2014-12-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>ejabberd中的hook机制是ejabberd XMPP模块的基础。XMPP模块需要根据需求在相应的hook点上注册自己的处理函数，在处理函数的逻辑中实现需求。ejabberd执行到hook点时，会按注册的顺序号由小到大来执行各模块所注册的处理函数。</p>
+<p>下面来分析具体实现。</p>
+<p>ejabberd启动时，ejabberd_sup:init&#x2F;1会通过调用ejabberd_hooks:start_link&#x2F;0启动名称为ejabberd_hooks的worker进程。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init</span><span class="params">([])</span> -&gt;</span></span><br><span class="line">    Hooks =</span><br><span class="line">    &#123;ejabberd_hooks,</span><br><span class="line">     &#123;ejabberd_hooks, start_link, []&#125;,</span><br><span class="line">     permanent,</span><br><span class="line">     brutal_kill,</span><br><span class="line">     worker,</span><br><span class="line">     [ejabberd_hooks]&#125;,</span><br><span class="line">    ...</span><br><span class="line">    &#123;ok, &#123;&#123;one_for_one, <span class="number">10</span>, <span class="number">1</span>&#125;,</span><br><span class="line">      [Hooks,</span><br><span class="line">       ...]&#125;&#125;.</span><br></pre></td></tr></table></figure>
+
+<p>ejabberd_hooks进程初始化时执行init&#x2F;1函数创建了名为hooks的ETS表。这个表用来存储在各注册点和域名下注册的hook函数。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init</span><span class="params">([])</span> -&gt;</span></span><br><span class="line">    ets:new(hooks, [named_table]),</span><br><span class="line">    &#123;ok, #state&#123;&#125;&#125;.</span><br></pre></td></tr></table></figure>
+<p>模块一般使用ejabberd_hooks:add&#x2F;5注册hook函数。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">add</span><span class="params">(Hook, Host, Module, Function, Seq)</span> -&gt;</span></span><br><span class="line">    gen_server:call(ejabberd_hooks, &#123;add, Hook, Host, Module, Function, Seq&#125;).</span><br></pre></td></tr></table></figure>
+<p>参数:</p>
+<ul>
+<li>Hook: 注册的hook点位置</li>
+<li>Host: 注册的域名</li>
+<li>Module: hook函数所在模块</li>
+<li>Function: hook函数名</li>
+<li>Seq: hook函数顺序号，顺序号越小函数越早被执行</li>
+</ul>
+<p>add函数发送<code>add</code>消息给ejabberd_hooks进程。ejabberd_hooks进程调用handle_call处理消息。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_call</span><span class="params">(&#123;add, Hook, Host, Module, Function, Seq&#125;, _From, State)</span> -&gt;</span></span><br><span class="line">    Reply = <span class="keyword">case</span> ets:lookup(hooks, &#123;Hook, Host&#125;) <span class="keyword">of</span></span><br><span class="line">        [&#123;_, Ls&#125;] -&gt;</span><br><span class="line">            El = &#123;Seq, Module, Function&#125;,</span><br><span class="line">            <span class="keyword">case</span> lists:member(El, Ls) <span class="keyword">of</span></span><br><span class="line">            <span class="literal">true</span> -&gt;</span><br><span class="line">                ok;</span><br><span class="line">            <span class="literal">false</span> -&gt;</span><br><span class="line">                NewLs = lists:merge(Ls, [El]),</span><br><span class="line">                ets:insert(hooks, &#123;&#123;Hook, Host&#125;, NewLs&#125;),</span><br><span class="line">                ok</span><br><span class="line">            <span class="keyword">end</span>;</span><br><span class="line">        [] -&gt;</span><br><span class="line">            NewLs = [&#123;Seq, Module, Function&#125;],</span><br><span class="line">            ets:insert(hooks, &#123;&#123;Hook, Host&#125;, NewLs&#125;),</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    &#123;reply, Reply, State&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>handle_call首先从hooks表中查找该hook点和域名下是否已经注册了函数。若不存在，则将顺序号、模块、函数名添加到表中。若已存在，再检查是否为重复添加。如果不是，则将顺序号、模块、函数名和之前的函数信息按顺序号排序后一并添加。</p>
+<p>如果hook函数必须在集群内特定节点上执行，可以调用ejabberd_hooks:add_dist注册。它的处理逻辑与add函数类似，只是在hooks表中多存储了node信息，此处略过。</p>
+<p>当需要删除hook函数时(一般是模块停止时)，调用ejabberd_hooks:delete&#x2F;5。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">delete</span><span class="params">(Hook, Host, Module, Function, Seq)</span> -&gt;</span></span><br><span class="line">    gen_server:call(ejabberd_hooks, &#123;delete, Hook, Host, Module, Function, Seq&#125;).</span><br></pre></td></tr></table></figure>
+<p>delete函数发送<code>delete</code>消息给ejabberd_hooks进程。进程执行handle_call处理。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_call</span><span class="params">(&#123;delete, Hook, Host, Module, Function, Seq&#125;, _From, State)</span> -&gt;</span></span><br><span class="line">    Reply = <span class="keyword">case</span> ets:lookup(hooks, &#123;Hook, Host&#125;) <span class="keyword">of</span></span><br><span class="line">        [&#123;_, Ls&#125;] -&gt;</span><br><span class="line">            NewLs = lists:delete(&#123;Seq, Module, Function&#125;, Ls),</span><br><span class="line">            ets:insert(hooks, &#123;&#123;Hook, Host&#125;, NewLs&#125;),</span><br><span class="line">            ok;</span><br><span class="line">        [] -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    &#123;reply, Reply, State&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>handle_call从hooks表中获取注册在该hook点和域名上的所有函数，从中删除指定的函数，再将结果保存。<br>删除注册在特定节点上的函数要使用delete_dist，处理逻辑类似，略过。</p>
+<p>ejabberd执行到hook点时会调用ejabberd_hooks:run&#x2F;3或ejabberd_hooks:run_fold&#x2F;4来执行注册的HOOK函数。如果这个hook点不关心各hook函数的返回结果，则调用run函数，否则调用run_fold函数。<br>首先看run函数:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">run</span><span class="params">(Hook, Host, Args)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ets:lookup(hooks, &#123;Hook, Host&#125;) <span class="keyword">of</span></span><br><span class="line">    [&#123;_, Ls&#125;] -&gt;</span><br><span class="line">        run1(Ls, Hook, Args);</span><br><span class="line">    [] -&gt;</span><br><span class="line">        ok</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>run函数从hooks表中查找注册在该hook点和域名上的所有函数，然后调用run1&#x2F;3。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">run1</span><span class="params">([&#123;_Seq, Module, Function&#125; | Ls], Hook, Args)</span> -&gt;</span></span><br><span class="line">    Res = <span class="keyword">if</span> is_function(Function) -&gt;</span><br><span class="line">          <span class="keyword">catch</span> apply(Function, Args);</span><br><span class="line">         <span class="literal">true</span> -&gt;</span><br><span class="line">          <span class="keyword">catch</span> apply(Module, Function, Args)</span><br><span class="line">      <span class="keyword">end</span>,</span><br><span class="line">    <span class="keyword">case</span> Res <span class="keyword">of</span></span><br><span class="line">    &#123;&#x27;EXIT&#x27;, Reason&#125; -&gt;</span><br><span class="line">        ?ERROR_MSG(<span class="string">&quot;~p~nrunning hook: ~p&quot;</span>,</span><br><span class="line">               [Reason, &#123;Hook, Args&#125;]),</span><br><span class="line">        run1(Ls, Hook, Args);</span><br><span class="line">    stop -&gt;</span><br><span class="line">        ok;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        run1(Ls, Hook, Args)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>run1依次执行注册的hook函数，如果某个hook函数返回<code>stop</code>, 则run1结束返回，之后的hook函数不再被执行。</p>
+<p>如果需要执行的是注册在某个节点上的hook函数，则通过rpc:call在该节点上执行函数，其他逻辑类似。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">run1</span><span class="params">([&#123;_Seq, Node, Module, Function&#125; | Ls], Hook, Args)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> rpc:call(Node, Module, Function, Args, ?TIMEOUT_DISTRIBUTED_HOOK) <span class="keyword">of</span></span><br><span class="line">    timeout -&gt;</span><br><span class="line">        ?ERROR_MSG(<span class="string">&quot;Timeout on RPC to ~p~nrunning hook: ~p&quot;</span>,</span><br><span class="line">               [Node, &#123;Hook, Args&#125;]),</span><br><span class="line">        run1(Ls, Hook, Args);</span><br><span class="line">    &#123;badrpc, Reason&#125; -&gt;</span><br><span class="line">        ?ERROR_MSG(<span class="string">&quot;Bad RPC error to ~p: ~p~nrunning hook: ~p&quot;</span>,</span><br><span class="line">               [Node, Reason, &#123;Hook, Args&#125;]),</span><br><span class="line">        run1(Ls, Hook, Args);</span><br><span class="line">    stop -&gt;</span><br><span class="line">        ?INFO_MSG(<span class="string">&quot;~nThe process ~p in node ~p ran a hook in node ~p.~n&quot;</span></span><br><span class="line">              <span class="string">&quot;Stop.&quot;</span>, [self(), node(), Node]), <span class="comment">% debug code</span></span><br><span class="line">        ok;</span><br><span class="line">    Res -&gt;</span><br><span class="line">        ?INFO_MSG(<span class="string">&quot;~nThe process ~p in node ~p ran a hook in node ~p.~n&quot;</span></span><br><span class="line">              <span class="string">&quot;The response is:~n~s&quot;</span>, [self(), node(), Node, Res]), <span class="comment">% debug code</span></span><br><span class="line">        run1(Ls, Hook, Args)</span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+
+<p>再来看run_fold函数。和run函数相比，run_fold还需要一个参数，表示默认的返回结果。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">run_fold</span><span class="params">(Hook, Host, Val, Args)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ets:lookup(hooks, &#123;Hook, Host&#125;) <span class="keyword">of</span></span><br><span class="line">    [&#123;_, Ls&#125;] -&gt;</span><br><span class="line">        run_fold1(Ls, Hook, Val, Args);</span><br><span class="line">    [] -&gt;</span><br><span class="line">        Val</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>run_fold首先找到注册在该hook点和域名上的所有函数，如果没有，则返回默认结果。否则调用run_fold1。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">run_fold1</span><span class="params">([&#123;_Seq, Module, Function&#125; | Ls], Hook, Val, Args)</span> -&gt;</span></span><br><span class="line">    Res = <span class="keyword">if</span> is_function(Function) -&gt;</span><br><span class="line">          <span class="keyword">catch</span> apply(Function, [Val | Args]);</span><br><span class="line">         <span class="literal">true</span> -&gt;</span><br><span class="line">          <span class="keyword">catch</span> apply(Module, Function, [Val | Args])</span><br><span class="line">      <span class="keyword">end</span>,</span><br><span class="line">    <span class="keyword">case</span> Res <span class="keyword">of</span></span><br><span class="line">    &#123;&#x27;EXIT&#x27;, Reason&#125; -&gt;</span><br><span class="line">        ?ERROR_MSG(<span class="string">&quot;~p~nrunning hook: ~p&quot;</span>,</span><br><span class="line">               [Reason, &#123;Hook, Args&#125;]),</span><br><span class="line">        run_fold1(Ls, Hook, Val, Args);</span><br><span class="line">    stop -&gt;</span><br><span class="line">        stopped;</span><br><span class="line">    &#123;stop, NewVal&#125; -&gt;</span><br><span class="line">        NewVal;</span><br><span class="line">    NewVal -&gt;</span><br><span class="line">        run_fold1(Ls, Hook, NewVal, Args)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>run_fold1会将传入的结果<code>Val</code>(或者来自默认结果，或者来自前一hook函数的返回结果)和参数<code>Args</code>组成新的lists做为参数传给hook函数，依次递归调用。若某hook函数返回<code>stop</code>，结束递归调用，返回<code>stopped</code>。若hook函数返回<code>&#123;stop, NewVal&#125;</code>,则直接返回该hook函数的结果<code>NewVal</code>。这两种情况下，其余的hook函数不再被执行。否则，返回结果做为Val参数再次递归调用run_fold1。</p>
+<p>注册在特定节点上的函数处理逻辑类似，只是使用rpc:call在相应节点上执行，略过。</p>
+<p>具体的hook点和hook函数原型可以参考官方文档:</p>
+<p><a target="_blank" rel="noopener" href="https://www.process-one.net/en/wiki/ejabberd_events_and_hooks/">https://www.process-one.net/en/wiki/ejabberd_events_and_hooks/</a></p>
+<p>这个文档写地不是很详细。不确定的地方需要参考源码。</p>
+<p>当这些内置hook点不能满足需求时，可以在ejabberd中合适位置调用ejabberd_hooks:run或ejabberd_hooks:run_fold添加hook点。</p>
+<p>如:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ejabberd_hooks:run(dummy_hook, []),</span><br></pre></td></tr></table></figure>
+
+<p>另外，需要注意的有:<br>ejabberd执行某些hook点时，调用不同参数版本的run或run_fold。这种情况Host参数为<code>global</code>。注册这种hook点时，Host参数也应该使用<code>global</code>。<br>如:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> ejabberd_hooks:run_fold(filter_packet,</span><br><span class="line">             &#123;OrigFrom, OrigTo, OrigPacket&#125;, []) <span class="keyword">of</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ejabberd_hooks:add(filter_packet, global, ?MODULE, on_filter_packet, <span class="number">120</span>),</span><br></pre></td></tr></table></figure>
+
+<p>注: 文中代码版本为:ejabberd-2.1.13。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/03/tt-skeleton/" rel="prev" title="Abstract Database和Skeleton Database">
+      <i class="fa fa-chevron-left"></i> Abstract Database和Skeleton Database
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/09/ejabberd-config/" rel="next" title="ejabberd配置模块分析">
+      ejabberd配置模块分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

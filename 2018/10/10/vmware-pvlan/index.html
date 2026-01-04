@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VMware vSphere东西向网络防护&gt;&gt;介绍了基于不同VLAN来实现二层网络内虚拟机的东西向隔离防护技术。这种方法在每台ESXi主机上对VLAN ID的管理和分配较为烦琐，本文介绍基于PVLAN实现二层网络内东西向隔离防护的方法。由于VMware vSphere环境中只有DVS(Distributed Virtual Switch，分布式虚拟交换机)支持">
+<meta property="og:type" content="article">
+<meta property="og:title" content="基于PVLAN实现VMware vSphere环境DVS东西向防护">
+<meta property="og:url" content="http://just4coding.com/2018/10/10/vmware-pvlan/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VMware vSphere东西向网络防护&gt;&gt;介绍了基于不同VLAN来实现二层网络内虚拟机的东西向隔离防护技术。这种方法在每台ESXi主机上对VLAN ID的管理和分配较为烦琐，本文介绍基于PVLAN实现二层网络内东西向隔离防护的方法。由于VMware vSphere环境中只有DVS(Distributed Virtual Switch，分布式虚拟交换机)支持">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/7.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/8.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/9.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/10.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/11.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/12.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/13.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/14.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/15.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/16.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/17.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-10-10/18.png">
+<meta property="article:published_time" content="2018-10-10T08:57:45.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.489Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2018-10-10/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2018/10/10/vmware-pvlan/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>基于PVLAN实现VMware vSphere环境DVS东西向防护 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/10/10/vmware-pvlan/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          基于PVLAN实现VMware vSphere环境DVS东西向防护
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-10-10 16:57:45" itemprop="dateCreated datePublished" datetime="2018-10-10T16:57:45+08:00">2018-10-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/blog/2017/06/10/vmware-westeast/">VMware vSphere东西向网络防护</a>&gt;&gt;介绍了基于不同VLAN来实现二层网络内虚拟机的东西向隔离防护技术。这种方法在每台ESXi主机上对VLAN ID的管理和分配较为烦琐，本文介绍基于PVLAN实现二层网络内东西向隔离防护的方法。由于VMware vSphere环境中只有<code>DVS</code>(Distributed Virtual Switch，分布式虚拟交换机)支持PVLAN，所以这种方法只能使用在DVS中。</p>
+<p>PVLAN(<code>Private VLAN</code>，专用VLAN)技术是为了解决网络内需要大量隔离而VLAN ID不足的情况。它采用两层VLAN隔离技术，即上行的主VLAN(<code>Primary VLAN</code>)和下行的辅助VLAN(<code>Secondary VLAN</code>)。对上行设备而言，只可见主VLAN,而不可见辅助VLAN。辅助VLAN包含两种类型:隔离VLAN(<code>isolated VLAN</code>)和团体VLAN(<code>community VLAN</code>)。支持PVLAN的交换机的端口对应有三种类型: 隔离端口(<code>isolated port</code>),团体端口(<code>community port</code>),混杂端口(<code>promiscuous port</code>)，它们分别对应隔离VLAN，团体VLAN和主VLAN。在隔离VLAN中，隔离端口之间不能通信，隔离端口只能和混杂端口通信。在团体VLAN中，团体端口之间以及团队端口与混杂端口之间都可以通信。</p>
+<p>可以看到，隔离端口的特性天生就满足二层网络完全隔离的要求，为了能使他们通信，我们需要虚拟网络设备完成隔离端口间的数据包中继。</p>
+<p>我们的测试环境由两台ESXi主机组成，通信双方虚拟机<code>t1</code>和<code>t2</code>位于同一台ESXi主机，属于同一个二层网络，IP分别为:<code>10.95.49.150</code>和<code>10.95.49.151</code>, 两台虚拟机的网络接口都接到分布式交换机<code>DSwitch</code>的<code>DPG-original</code>端口组中。此时拓扑如图:</p>
+<img src="/images/2018-10-10/1.png" class="">
+
+<span id="more"></span>
+
+
+<p>从<code>t1</code>访问<code>t2</code>, 访问外网都能够成功:</p>
+<img src="/images/2018-10-10/2.png" class="">
+
+
+<p>下面我们通过设置PVLAN实现二层网络隔离。</p>
+<p>我们在<code>DSwitch上</code>编辑PVLAN。添加一个专用VLAN，设置主VLAN ID为<code>1000</code>，辅助VLAN ID为<code>1001</code>，类型为隔离VLAN。如图:</p>
+<img src="/images/2018-10-10/3.png" class="">
+
+
+<p>接着，创建分布式端口组:<code>DPG-isolated</code>, VLAN类型设置为<code>专用VLAN</code>，专用VLAN ID选择<code>隔离(1000,1001)</code>，如图:</p>
+<img src="/images/2018-10-10/4.png" class="">
+
+<p>再创建分布式端口组:<code>DPG-promisc</code>, VLAN类型选择<code>专用VLAN</code>，专用VLAN ID选择<code>混杂(1000,1000)</code>，如下图所示:</p>
+<img src="/images/2018-10-10/5.png" class="">
+
+<p>接着，对<code>DPG-promisc</code>进行编辑，需要将安全选项<code>混杂模式</code>和<code>伪传输</code>设置为接受，否则vSphere DVS将会丢弃符合特定条件的数据包，具体可以参考之前文章&lt;&lt;<a href="/blog/2017/05/01/vmvare/">VMware vSphere虚拟网络防护</a>&gt;&gt;对于这两个选项的解释, 以及<a target="_blank" rel="noopener" href="https://www.virtuallyghetto.com/2013/11/why-is-promiscuous-mode-forged.html">这篇文章</a></p>
+<p>如下图:</p>
+<img src="/images/2018-10-10/6.png" class="">
+
+<p>我们将两个虚拟机的网络接口改到端口组:<code>DGP-isolated</code>中，此时拓扑如图:</p>
+<img src="/images/2018-10-10/7.png" class="">
+
+<p>我们再次从<code>t1</code>访问<code>t2</code>。由于隔离端口之间不能通信，因而访问失败:</p>
+<img src="/images/2018-10-10/8.png" class="">
+
+<p>因为隔离端口能够与混杂端口通信，我们需要在混杂端口上接入虚拟网络设备，由该设备实现网络转发及防护功能，完成隔离端口之间的通信中继。PVLAN网络中增加了自己的VLAN标识，为了保证能够与原始外界的设备通信，我们需要在虚拟网络设备中将网络数据包转换为没有设置PVLAN之前的状态，因而我们需要虚拟网络设备的一个网络接口接入原有的端口组中, 整体架构如图:</p>
+<img src="/images/2018-10-10/9.png" class="">
+
+<p>下面我们看具体操作。</p>
+<p>我们创建一台具备两个网络接口的虚拟机<code>VNF</code>, 第一个接口接入端口组<code>DPG-promisc</code>, 第二个接口接入<code>t1</code>,<code>t2</code>原来的端口组:<code>DPG-original</code>。因为<code>t1</code>,<code>t2</code>访问外部的流量需要经由<code>VNF</code>虚拟机的<code>eth1</code>接口发出，因而<code>DPG-original</code>也需要将端口组的<code>混杂模式</code>和<code>伪传输</code>两个安全选项设置为<code>接受</code>。此时拓扑如图:</p>
+<img src="/images/2018-10-10/10.png" class="">
+
+<p>我们在VNF设备内使用OpenvSwitch实现转发逻辑。</p>
+<p>首先，我们需要将两个网络接口添加进<code>br0</code>中</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br0</span><br><span class="line">ovs-vsctl add-port br0 eth0</span><br><span class="line">ovs-vsctl add-port br0 eth1</span><br></pre></td></tr></table></figure>
+
+<p>查看ofport情况:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ovs-ofctl show br0</span><br><span class="line">OFPT_FEATURES_REPLY (xid=0x2): dpid:0000005056a023f3</span><br><span class="line">n_tables:254, n_buffers:256</span><br><span class="line">capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP</span><br><span class="line">actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst</span><br><span class="line"> 1(eth0): addr:00:50:56:a0:48:ee</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10GB-FD COPPER</span><br><span class="line">     advertised: COPPER</span><br><span class="line">     supported:  1GB-FD 10GB-FD COPPER</span><br><span class="line">     speed: 10000 Mbps now, 10000 Mbps max</span><br><span class="line"> 2(eth1): addr:00:50:56:a0:23:f3</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10GB-FD COPPER</span><br><span class="line">     advertised: COPPER</span><br><span class="line">     supported:  1GB-FD 10GB-FD COPPER</span><br><span class="line">     speed: 10000 Mbps now, 10000 Mbps max</span><br><span class="line"> LOCAL(br0): addr:00:50:56:a0:23:f3</span><br><span class="line">     config:     PORT_DOWN</span><br><span class="line">     state:      LINK_DOWN</span><br><span class="line">     speed: 0 Mbps now, 0 Mbps max</span><br><span class="line">OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0</span><br></pre></td></tr></table></figure>
+
+<p>开启<code>STP</code>, 避免形成二层环路，造成网络中断:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl <span class="built_in">set</span> bridge br0 stp_enable=<span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>在OVS中，在如下这种流表条件下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">in_port=1 actions=output:1</span><br></pre></td></tr></table></figure>
+<p>从端口<code>1</code>中接收的数据包是不能由端口<code>1</code>发送出去的，需要使用特殊的端口<code>IN_PORT</code>来处理。</p>
+<p><code>t1</code>访问<code>t2</code>的流量需要由<code>br0</code>的端口<code>eth0</code>进入并再次由它发出，而访问外部的设备时需要由<code>eth1</code>端口发出，因而需要对源MAC地址进行学习来判断应该从哪个端口发出。</p>
+<p>我们本身共使用三张流表:</p>
+<ul>
+<li>表0: 用于处理ARP数据包，通过ARP学习源MAC地址与PORT的对应关系，将学习到的流保存到表10中, 并将其他协议数据包交由表10和表11处理。</li>
+<li>表10: 存储学习到的流，当数据包匹配到表10中的流时，它将学习到的PORT(即应从该PORT发出该数据包)保存到<code>REG0</code>中。</li>
+<li>表11: 根据<code>REG0</code>中存储的PORT信息，修改入端口信息，保证出入端口不相同，从而可以成功发送。</li>
+</ul>
+<p>添加表0的流:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=0, priority=10,arp,in_port=1 actions=learn(table=10,hard_timeout=300,priority=10,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]-&gt;NXM_NX_REG0[0..15]),output:2,output:IN_PORT&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=0, priority=10,arp,in_port=2 actions=learn(table=10,hard_timeout=300,priority=10,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]-&gt;NXM_NX_REG0[0..15]),output:1&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=0, priority=9, actions=resubmit(,10), resubmit(,11)&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>添加表11的流:<br>对于从<code>eth1</code>进入的数据包我们直接从<code>eth0</code>转发走:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=11,priority=11,in_port=2 actions=output:1”</span></span><br></pre></td></tr></table></figure>
+<p>根据<code>REG0</code>中保存的出端口信息，修改入端口并由相应出端口转发:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=11,priority=10,reg0=1,actions=set_field:2-&gt;in_port_oxm, output:1&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=11,priority=10,reg0=2,actions=set_field:1-&gt;in_port_oxm, output:2”</span></span><br></pre></td></tr></table></figure>
+<p>没有匹配到学习到的MAC，则从两个端口都转发:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;table=11,priority=9,in_port=1 actions=output:2,output:IN_PORT&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>此时，再次从<code>t1</code>访问<code>t2</code>,访问成功:</p>
+<img src="/images/2018-10-10/11.png" class="">
+
+<p>在<code>VNF</code>上的<code>eth0</code>接口上抓包可以看到数据通过了<code>VNF</code>进行转发:</p>
+<img src="/images/2018-10-10/12.png" class="">
+
+<p>再次访问外网，访问也成功:</p>
+<img src="/images/2018-10-10/13.png" class="">
+
+<p>在<code>VNF</code>上的<code>eth1</code>接口上的抓包结果显示数据包通过了<code>eth1</code>接口转发:</p>
+<img src="/images/2018-10-10/14.png" class="">
+
+<p>整个<code>DVS</code>可以只创建一台VNF虚拟机完成所有二层网络整体流量的转发和过滤，但这样也会导致本可以在ESXi主机内完成转发的数据包需要先发送到VNF所在ESXi主机上完成过滤和转发再回到原有ESXi主机内，这给物理网络增加了额外负担。</p>
+<p>除了这种形式外，也可以在每台ESXi主机上创建一台VNF，该VNF负责该ESXi主机上的虚拟机的流量过滤，这种情形下需要给不同的ESXi主机分配不一样的PVLAN ID，整体架构如图:</p>
+<img src="/images/2018-10-10/15.png" class="">
+
+<p>但是由于<code>DPG-original</code>端口组需要设置为<code>混杂模式</code>，处于混杂模式的端口组中的网络接口会接收到穿过虚拟交换机的所有网络流量，因而也会导致许多网络数据包在不同的ESXi主机之间进行没有必要的传输，造成网络吞吐的衰退。</p>
+<p>之所以需要设置为<code>混杂模式</code>，是由于VMware vSphere的虚拟交换机(VSS&#x2F;DVS)不支持<code>Mac-Learning</code>机制，因为vSphere平台本身就知道网络接口的MAC地址。然而在虚拟化嵌套或者我们这种由虚拟网络设备中转二层数据包的情况下，需要由一个网络接口发送大量的不同MAC地址的数据包, vSphere平台并不知道该接口会发送哪些MAC地址的数据包。VMware官方为了解决这个问题，开发了一个dvfilter-maclearn模块，具体可参考<a target="_blank" rel="noopener" href="https://www.virtuallyghetto.com/2014/08/new-vmware-fling-to-improve-networkcpu-performance-when-using-promiscuous-mode-for-nested-esxi.html">文章</a>。</p>
+<p><code>dvfilter-maclearn</code>需要安装在ESXi主机上:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@ESXi-2:~] esxcli software vib install -v /vmware-esx-dvfilter-maclearn-1.0.vib -f</span><br><span class="line">Installation Result</span><br><span class="line">   Message: Operation finished successfully.</span><br><span class="line">   Reboot Required: false</span><br><span class="line">   VIBs Installed: VMware_bootbank_vmware-esx-dvfilter-maclearn_1.00-1.00</span><br><span class="line">   VIBs Removed:</span><br><span class="line">   VIBs Skipped:</span><br></pre></td></tr></table></figure>
+
+<p>安装完成后，执行下述命令可以看到<code>dvfilter-maclearn</code>的安装情况:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/sbin/summarize-dvfilter</span><br></pre></td></tr></table></figure>
+
+<p>结果如图:</p>
+<img src="/images/2018-10-10/16.png" class="">
+
+
+<p>为了使这个<code>dvFilter</code>生效，需要针对相应虚拟机的网卡进行过滤设置。我们需要在相应虚拟机的VMX配置文件中添加:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ethernet#.filter4.name=dvfilter-maclearn</span><br><span class="line">ethernet#.filter4.onFailure=failOpen</span><br></pre></td></tr></table></figure>
+
+<p><code>#</code>为网卡的顺序号，第一个网卡为<code>0</code>。</p>
+<p>也可以通过VCenter进行配置，如图:</p>
+<img src="/images/2018-10-10/17.png" class="">
+
+<p>生效后再次执行&#x2F;sbin&#x2F;summarize-dvfilter，查看dvfilter加载情况，可以看到<code>dvfilter-maclearn</code>已经生效，在虚拟机相应网卡上抓包可以看到数据包有明显减少。</p>
+<img src="/images/2018-10-10/18.png" class="">
+
+<p><code>dvfilter-maclearn</code>尽管可以提高部分性能还是存在一些问题，比如学习到的MAC地址永不过期等等，VMware后续又发布了一个更为完善的方案，具体可参考<a target="_blank" rel="noopener" href="https://www.virtuallyghetto.com/2017/04/esxi-learnswitch-enhancement-to-the-esxi-mac-learn-dvfilter.html">文章</a>, 而在VSphere6.7中，<code>Mac Learning</code>已经是DVS的原生特性了，混杂模式也不需要再开启，具体参考<a target="_blank" rel="noopener" href="https://www.virtuallyghetto.com/2018/04/native-mac-learning-in-vsphere-6-7-removes-the-need-for-promiscuous-mode-for-nested-esxi.html">文章</a>, 这里不再详述。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/09/07/newt/" rel="prev" title="TUI库newt和snack简要介绍">
+      <i class="fa fa-chevron-left"></i> TUI库newt和snack简要介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/11/19/npyscreen/" rel="next" title="Python TUI库npyscreen简要介绍">
+      Python TUI库npyscreen简要介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

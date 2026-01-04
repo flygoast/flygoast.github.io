@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Docker默认的网络模式是bridge模式, 在宿主机上创建一个Linux bridge:docker0，并分配一个网段给该网桥使用。该模式下启动的容器，会分配一个该网段的IP, 并通过veth-pair接入网桥。为了能够从宿主机外部访问容器，需要在创建容器时指定-p参数，在宿主机上将某个宿主机的端口映射到容器的端口。如: 1docker run --rm  -itd -p 80:80 ngin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从外部访问Docker桥接网络容器路径分析">
+<meta property="og:url" content="http://just4coding.com/2023/08/24/docker-bridge/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Docker默认的网络模式是bridge模式, 在宿主机上创建一个Linux bridge:docker0，并分配一个网段给该网桥使用。该模式下启动的容器，会分配一个该网段的IP, 并通过veth-pair接入网桥。为了能够从宿主机外部访问容器，需要在创建容器时指定-p参数，在宿主机上将某个宿主机的端口映射到容器的端口。如: 1docker run --rm  -itd -p 80:80 ngin">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2023-08-24/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-08-24/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-08-24/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-08-24/4.png">
+<meta property="article:published_time" content="2023-08-24T15:55:22.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.508Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2023-08-24/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2023/08/24/docker-bridge/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>从外部访问Docker桥接网络容器路径分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/08/24/docker-bridge/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          从外部访问Docker桥接网络容器路径分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-08-24 23:55:22" itemprop="dateCreated datePublished" datetime="2023-08-24T23:55:22+08:00">2023-08-24</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>Docker</code>默认的网络模式是<code>bridge</code>模式, 在宿主机上创建一个<code>Linux bridge</code>:<code>docker0</code>，并分配一个网段给该网桥使用。该模式下启动的容器，会分配一个该网段的<code>IP</code>, 并通过<code>veth-pair</code>接入网桥。为了能够从宿主机外部访问容器，需要在创建容器时指定<code>-p</code>参数，在宿主机上将某个宿主机的端口映射到容器的端口。<br>如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker run --<span class="built_in">rm</span>  -itd -p 80:80 nginx</span><br></pre></td></tr></table></figure>
+
+<p>本文来简要分析一下从宿主机外访问<code>bridge</code>网络模式下<code>docker</code>容器的数据包路径。</p>
+<p>整体的网络架构如图所示:</p>
+<img src="/images/2023-08-24/1.png" class="">
+
+<span id="more"></span>
+
+<p>容器网络大量应用了<code>netfilter</code>和<code>iptables</code>。<code>netfilter</code>是内核协议栈的包过滤框架，<code>iptables</code>是建立在<code>netfilter</code>框架之上的基于规则的过滤防火墙，它将规则组织成<code>表</code>和<code>链</code>结构对数据包进行操作和过滤。之前写过一篇简单的介绍<a href="/2016/12/11/iptables/">&lt;&lt;IPTABLES机制分析&gt;&gt;</a>。</p>
+<p><code>netfilter</code>和<code>iptables</code>整体处理路径如图:</p>
+<img src="/images/2023-08-24/2.png" class="">
+
+<p><code>netfilter</code>有5个挂载点:</p>
+<ul>
+<li><p><code>NF_INET_PRE_ROUTING</code>:<br>在网卡驱动收到数据包之后会调用<code>ip_rcv()</code>函数进行协议栈处理过程。它会调用<code>NF_INET_PRE_ROUTING</code>挂载点上注册的函数。</p>
+</li>
+<li><p><code>NF_INET_LOCAL_IN</code>:<br>在处理完上一阶段的函数后，会针对数据包进行路由选择，如果数据包是发送给本机的，则调用<code>ip_local_deliver()</code>函数处理。它会调用<code>NF_INET_LOCAL_IN</code>挂载点上注册的函数。</p>
+</li>
+<li><p><code>NF_INET_FORWARD</code>:<br>如果上述的数据包不是发送给本机的网络地址的，则会调用<code>ip_forward()</code>进行处理，它会调用<code>NF_INET_FORWARD</code>挂载点上注册的函数。</p>
+</li>
+<li><p><code>NF_INET_POST_ROUTING</code>:<br>对于上述来自转发的数据包处理完挂载点函数后会调用<code>ip_output</code>函数将数据进行发送。这个函数会调用<code>NF_INET_POST_ROUTING</code>挂载点上注册的函数。<br>对于来自主机上应用程序的数据包在经过下边的<code>NF_INET_LOCAL_OUT</code>挂载点后，也会调用到<code>ip_output</code>进行数据包发送。</p>
+</li>
+<li><p><code>NF_INET_LOCAL_OUT</code>:<br>当前主机产生的<code>TCP/UDP</code>数据包经过路由选择后调用<code>ip_local_out</code>, 它会调用<code>NF_INET_LOCAL_OUT</code>挂载点上的函数。之后调用到<code>ip_output</code>函数进而流经上述的<code>NF_INET_POST_ROUTING</code>阶段。</p>
+</li>
+</ul>
+<p>从这里来看，<code>NF_INET_POST_ROUTING</code>阶段并不是直接位于路由过程之后，而是<code>路由 -&gt; FORWARD -&gt; POST_ROUTING</code>和<code>路由 -&gt; LOCAL_OUT -&gt; POST_ROUTING</code>这样的路径中，名称叫做<code>POST_ROUTING</code>不是特别准确。</p>
+<p>创建完容器后，网络接口如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># ip a</span></span><br><span class="line">......</span><br><span class="line">3: eth1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/ether 08:00:27:d0:e3:37 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 192.168.0.11/24 brd 192.168.0.255 scope global noprefixroute eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::a00:27ff:fed0:e337/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">......</span><br><span class="line">5: docker0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default</span><br><span class="line">    <span class="built_in">link</span>/ether 02:42:e4:0f:0f:26 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::42:e4ff:fe0f:f26/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">11: vethfd5436d@if10: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue master docker0 state UP group default</span><br><span class="line">    <span class="built_in">link</span>/ether 86:81:2a:a8:5a:c8 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br><span class="line">    inet6 fe80::8481:2aff:fea8:5ac8/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>iptables</code>规则:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># iptables-save</span></span><br><span class="line"><span class="comment"># Generated by iptables-save v1.4.21 on Thu Aug 24 01:52:06 2023</span></span><br><span class="line">*filter</span><br><span class="line">:INPUT ACCEPT [169:13126]</span><br><span class="line">:FORWARD DROP [0:0]</span><br><span class="line">:OUTPUT ACCEPT [111:11866]</span><br><span class="line">:DOCKER - [0:0]</span><br><span class="line">:DOCKER-ISOLATION-STAGE-1 - [0:0]</span><br><span class="line">:DOCKER-ISOLATION-STAGE-2 - [0:0]</span><br><span class="line">:DOCKER-USER - [0:0]</span><br><span class="line">-A FORWARD -j DOCKER-USER</span><br><span class="line">-A FORWARD -j DOCKER-ISOLATION-STAGE-1</span><br><span class="line">-A FORWARD -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT</span><br><span class="line">-A FORWARD -o docker0 -j DOCKER</span><br><span class="line">-A FORWARD -i docker0 ! -o docker0 -j ACCEPT</span><br><span class="line">-A FORWARD -i docker0 -o docker0 -j ACCEPT</span><br><span class="line">-A DOCKER -d 172.17.0.2/32 ! -i docker0 -o docker0 -p tcp -m tcp --dport 80 -j ACCEPT</span><br><span class="line">-A DOCKER-ISOLATION-STAGE-1 -i docker0 ! -o docker0 -j DOCKER-ISOLATION-STAGE-2</span><br><span class="line">-A DOCKER-ISOLATION-STAGE-1 -j RETURN</span><br><span class="line">-A DOCKER-ISOLATION-STAGE-2 -o docker0 -j DROP</span><br><span class="line">-A DOCKER-ISOLATION-STAGE-2 -j RETURN</span><br><span class="line">-A DOCKER-USER -j RETURN</span><br><span class="line">COMMIT</span><br><span class="line"><span class="comment"># Completed on Thu Aug 24 01:52:06 2023</span></span><br><span class="line"><span class="comment"># Generated by iptables-save v1.4.21 on Thu Aug 24 01:52:06 2023</span></span><br><span class="line">*nat</span><br><span class="line">:PREROUTING ACCEPT [0:0]</span><br><span class="line">:INPUT ACCEPT [0:0]</span><br><span class="line">:OUTPUT ACCEPT [8:544]</span><br><span class="line">:POSTROUTING ACCEPT [8:544]</span><br><span class="line">:DOCKER - [0:0]</span><br><span class="line">-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER</span><br><span class="line">-A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER</span><br><span class="line">-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE</span><br><span class="line">-A POSTROUTING -s 172.17.0.2/32 -d 172.17.0.2/32 -p tcp -m tcp --dport 80 -j MASQUERADE</span><br><span class="line">-A DOCKER -i docker0 -j RETURN</span><br><span class="line">-A DOCKER ! -i docker0 -p tcp -m tcp --dport 80 -j DNAT --to-destination 172.17.0.2:80</span><br><span class="line">COMMIT</span><br><span class="line"><span class="comment"># Completed on Thu Aug 24 01:52:06 2023</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="入包"><a href="#入包" class="headerlink" title="入包"></a>入包</h4><p>当从图中节点<code>node2</code>上访问<code>192.168.0.11:80</code>的数据包到达网卡<code>eth1</code>之后，网卡驱动收包之后进入<code>PRE_ROUTING</code>挂载点。此时，会以<code>raw</code>,<code>mangle</code>,<code>nat</code>的表顺序进行规则匹配。</p>
+<p>由于目的<code>IP: 192.168.0.11</code>是本机<code>IP</code>地址，因而会匹配到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER</span><br></pre></td></tr></table></figure>
+<p>而在<code>DOCKER</code>链中会匹配到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A DOCKER ! -i docker0 -p tcp -m tcp --dport 80 -j DNAT --to-destination 172.17.0.2:80</span><br></pre></td></tr></table></figure>
+<p>从而进行<code>DNAT</code>转换，数据包变为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">192.168.0.12:44444 -&gt; 172.17.0.2:80</span><br></pre></td></tr></table></figure>
+
+<p>然后进行路由，根据本地路由表，确实目标设备为<code>docker0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1</span><br></pre></td></tr></table></figure>
+
+<p>接下来进入<code>FORWARD</code>挂载点，开始匹配<code>filter</code>表中的<code>FORWARD</code>链。<code>FORWARD</code>链会直接跳转至<code>DOCKER-USER</code>链，该链中只有一条<code>RETURN</code>的规则。因而继续匹配<code>DOCKER-ISOLATION-STAGE-1</code>和<code>DOCKER-ISOLATION-STAGE-2</code>。这两个链用于保证不同<code>docker</code>网络之间的隔离。我们这里都匹配不上，最终进入<code>DOCKER</code>链，匹配到下面规则，进行放行数据包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-A FORWARD -o docker0 -j DOCKER</span><br><span class="line">-A DOCKER -d 172.17.0.2/32 ! -i docker0 -o docker0 -p tcp -m tcp --dport 80 -j ACCEPT</span><br></pre></td></tr></table></figure>
+
+<p>接下来进入到<code>POST_ROUTING</code>挂载点，匹配<code>nat</code>表的<code>POSTROUTING</code>链。不能匹配任意规则，于是继续放行，从而最终调用到<code>docker0</code>的网卡驱动将数据包发出。<code>docker0</code>为<code>Linux bridge</code>设备，<code>bridge</code>的实现将数据包送到容器的<code>namespace</code>中。后续可以写文章分析<code>bridge</code>发送数据包的具体实现。</p>
+<p>以上是外部数据包访问容器的转发路径，整体过程如图:</p>
+<img src="/images/2023-08-24/3.png" class="">
+
+<h4 id="回包"><a href="#回包" class="headerlink" title="回包"></a>回包</h4><p>当容器内的回包通过<code>veth-pair</code>设备到达<code>docker0</code>后，与上述的入包一样，首先进入<code>PRE_ROUTING</code>挂载点。此时不会匹配到任何规则，继续放行进行路由。根据目的<code>IP: 192.168.0.12</code>查找路由条目, 确定目标设备为<code>eth1</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">192.168.0.0/24 dev eth1 proto kernel scope link src 192.168.0.11 metric 101</span><br></pre></td></tr></table></figure>
+
+<p>接下来进入到<code>FORWARD</code>挂载点。与入包一样，跳过<code>DOCKER-USER</code>,<code>DOCKER-ISOLATION-STAGE-1</code>, <code>DOCKER-ISOLATION-STAGE-2</code>。<code>DOCKER</code>链中也匹配不到规则，最终命中:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A FORWARD -i docker0 ! -o docker0 -j ACCEPT</span><br></pre></td></tr></table></figure>
+
+<p>接着进入<code>POST_ROUTING</code>挂载点。匹配到规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE</span><br></pre></td></tr></table></figure>
+<p>进行<code>SNAT</code>操作，将数据包转换为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">192.168.0.11:80 -&gt; 192.168.0.12:44444</span><br></pre></td></tr></table></figure>
+
+<p>之后将数据包由<code>eth1</code>网卡发到物理网络，完成一次网络数据包交互流程。</p>
+<p>回包的整体路径如下图:</p>
+<img src="/images/2023-08-24/4.png" class="">
+
+<p>本文介绍了从外部访问端口映射到宿主机的容器的数据包路径。而对于相同网桥下的不同容器之间的网络访问路径，和参数<code>net.bridge.bridge-nf-call-iptables</code>有关，后续可以再写文章分析一下。</p>
+<h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
+<li><a target="_blank" rel="noopener" href="https://jiansoft.net/2022/08/06/linux_source_code_netfilter.html">https://jiansoft.net/2022/08/06/linux_source_code_netfilter.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://juejin.cn/post/7170653486793621511">https://juejin.cn/post/7170653486793621511</a></li>
+<li><a target="_blank" rel="noopener" href="https://unix.stackexchange.com/questions/130807/what-are-the-definitions-of-addrtype-in-iptables">https://unix.stackexchange.com/questions/130807/what-are-the-definitions-of-addrtype-in-iptables</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/06/19/netfiter-priority/" rel="prev" title="netfilter中相同优先级的HOOK函数的执行顺序">
+      <i class="fa fa-chevron-left"></i> netfilter中相同优先级的HOOK函数的执行顺序
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/09/03/locale/" rel="next" title="关于应用程序的locale设置">
+      关于应用程序的locale设置 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%85%A5%E5%8C%85"><span class="nav-number">1.</span> <span class="nav-text">入包</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%9B%9E%E5%8C%85"><span class="nav-number">2.</span> <span class="nav-text">回包</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%8F%82%E8%80%83"><span class="nav-number">3.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

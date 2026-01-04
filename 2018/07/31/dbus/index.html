@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="D-Bus是Linux及其他类UNIX系统上的一种IPC(Interprocess communication)机制。相较于传统的管道(PIPE)、Socket等原生基于字节流的IPC方式，D-Bus提供了基于独立Message的传输方式，应用程序使用起来更加简单。D-Bus的设计初衷是为Linux桌面环境上的一系列应用程序提供通信方式，它的设计里保留了许多对上层框架设计考虑的元素。 D-Bus的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="D-Bus实例介绍">
+<meta property="og:url" content="http://just4coding.com/2018/07/31/dbus/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="D-Bus是Linux及其他类UNIX系统上的一种IPC(Interprocess communication)机制。相较于传统的管道(PIPE)、Socket等原生基于字节流的IPC方式，D-Bus提供了基于独立Message的传输方式，应用程序使用起来更加简单。D-Bus的设计初衷是为Linux桌面环境上的一系列应用程序提供通信方式，它的设计里保留了许多对上层框架设计考虑的元素。 D-Bus的">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2018-07-31/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-07-31/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-07-31/3.png">
+<meta property="article:published_time" content="2018-07-31T07:16:55.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.487Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2018-07-31/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2018/07/31/dbus/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>D-Bus实例介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/07/31/dbus/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          D-Bus实例介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-07-31 15:16:55" itemprop="dateCreated datePublished" datetime="2018-07-31T15:16:55+08:00">2018-07-31</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>D-Bus</code>是<code>Linux</code>及其他类<code>UNIX</code>系统上的一种<code>IPC(Interprocess communication</code>)机制。相较于传统的<code>管道(PIPE)</code>、<code>Socket</code>等原生基于字节流的IPC方式，<code>D-Bus</code>提供了基于独立<code>Message</code>的传输方式，应用程序使用起来更加简单。<code>D-Bus</code>的设计初衷是为<code>Linux</code>桌面环境上的一系列应用程序提供通信方式，它的设计里保留了许多对上层框架设计考虑的元素。</p>
+<p><code>D-Bus</code>的常用架构与传统的<code>Socket</code>一对一通信模式不同，它基于中间消息路由转发的模式来实现, 如下图:</p>
+<img src="/images/2018-07-31/1.png" class="">
+
+<span id="more"></span>
+
+<p><code>D-Bus</code>默认提供两种BUS，<code>系统BUS(system)</code>和<code>会话BUS(session)</code>。系统BUS在每台机器上是惟一的，用于后台服务及操作系统之间的通信。会话BUS用于每个登录用户会话的应用程序之间的通信。每个BUS实例由一个<code>bus-daemon</code>进程来管理，由其负责消息路由转发。应用程序需要收发消息，需要连接到BUS实例上。BUS实例使用基于XML的配置文件来控制安全策略，如用户能否注册服务，能给哪些服务接口发送消息等等。</p>
+<p>下面介绍<code>D-Bus</code>的一些概念。</p>
+<ul>
+<li>Service</li>
+</ul>
+<p>也叫<code>BUS Name</code>，这个名称有些令人费解。它并不是指BUS实例的名称，而应该理解为进程连接到BUS实例之后的名称。BUS实例依据<code>BUS Name</code>转发消息。进程连接到BUS实例时，会由BUS实例自动分配一个惟一的连接名称，形式如<code>:1.98</code>, 但这个名称不是很容易记，可以注册更有实际意义的名称。自行注册的服务名称使用反向域名的方式，类似于<code>JAVA</code>中的类名。比如, 服务名称<code>org.freedesktop.login1</code>对应系统BUS上的<code>systemd-logind</code>服务。</p>
+<ul>
+<li>object</li>
+</ul>
+<p>一个D-Bus服务可以包含多个对象, 每个对象对外提供一组功能特性。它是一个独立处理消息的实体，也就是说消息的传送路径为对象到对象。不同的编程语言和库中，定义了自身领域内的对象，如<code>JAVA</code>中的<code>java.lang.Object</code>, <code>GLIB</code>中的<code>GObject</code>, <code>QT</code>中的<code>QObject</code>等。<code>D-Bus</code>使用通用的对象路径的方式来让更高层的接口来绑定到特定语言和库的对象中。这种对象路径类似于类<code>UNIX</code>系统中的文件路径，如<code>/org/freedesktop/systemd</code>。这种路径只是提供了对象的惟一标识符，不同的服务实现可以自行来决定是否需要使用其层次性的价值。</p>
+<ul>
+<li>Interface</li>
+</ul>
+<p>object支持一个或者多个接口，接口是一组方法和信号的集和。可以理解为方法(methods)和信号(signals)的命名空间。命名也是采用反向域名方式，如<code>org.freedesktop.DBus</code>。大多数编程语言的<code>D-Bus</code>绑定库会将这些接口映射为语言本身的结构，如<code>JAVA</code>中的<code>Interface</code>，<code>C++</code>的纯虚类。</p>
+<ul>
+<li>Members</li>
+</ul>
+<p>Interface中成员可以包含多个methods和signals。Methods表示能够被其他进程调用的操作，可以带有参数和响应结果。Signals是一种带有Payload的广播消息，进程可以定义自己感兴趣的Signals。这两种情形分别对应<code>RPC(Remote Procedure Call)</code>和<code>Publish/Subscribe</code>模式。</p>
+<p><code>D-Bus</code>的消息中会包含以上的这些信息，如下图所示:</p>
+<img src="/images/2018-07-31/2.png" class="">
+
+<p>实际上，这些面向对象的结构设计更多地是为更高层的语言绑定服务。若我们直接使用底层的libdbus库来开发程序，可以简单地将其理解为消息内容的不同区分标识。</p>
+<p>下面我们用一个基于<code>libdbus</code>库实现的示例来说明简单的方法调用。</p>
+<p><code>libdbus</code>的官方文档地址为: <a target="_blank" rel="noopener" href="https://dbus.freedesktop.org/doc/api/html/index.html">https://dbus.freedesktop.org/doc/api/html/index.html</a></p>
+<p>文档开头就写道: <code>If you use this low-level API directly, you’re signing up for some pain.</code>不过, 对于我们只是简单的应用D-Bus做为消息通道的场景中并不存在太大的难度。</p>
+<p>示例中的服务功能为根据消息中object的不同，在收到的内容前添加<code>yes</code>或者<code>no</code>并返回。</p>
+<p>服务端代码<code>dbus-server.c</code>如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdbool.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ctype.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;dbus/dbus.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> SERVER_BUS_NAME = <span class="string">&quot;com.just4coding.dbus&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> OBJECT_PATH_NAME_YES = <span class="string">&quot;/com/just4coding/dbus/yes&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> OBJECT_PATH_NAME_NO = <span class="string">&quot;/com/just4coding/dbus/no&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> INTERFACE_NAME = <span class="string">&quot;com.just4coding.dbus_demo&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> METHOD_NAME = <span class="string">&quot;hello&quot;</span>;</span><br><span class="line"></span><br><span class="line">DBusError dbus_error;</span><br><span class="line"><span class="type">void</span> <span class="title function_">print_dbus_error</span><span class="params">(<span class="type">char</span> *str)</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    DBusConnection *conn;</span><br><span class="line">    <span class="type">int</span> ret;</span><br><span class="line"></span><br><span class="line">    dbus_error_init(&amp;dbus_error);</span><br><span class="line"></span><br><span class="line">    conn = dbus_bus_get(DBUS_BUS_SYSTEM, &amp;dbus_error);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dbus_error_is_set(&amp;dbus_error)) &#123;</span><br><span class="line">        print_dbus_error(<span class="string">&quot;dbus_bus_get&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!conn) &#123;</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ret = dbus_bus_request_name(conn, SERVER_BUS_NAME, DBUS_NAME_FLAG_DO_NOT_QUEUE, &amp;dbus_error);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dbus_error_is_set(&amp;dbus_error)) &#123;</span><br><span class="line">        print_dbus_error(<span class="string">&quot;dbus_bus_request_name&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) &#123;</span><br><span class="line">        <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;not primary owner, ret = %d\n&quot;</span>, ret);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!dbus_connection_read_write_dispatch(conn, <span class="number">-1</span>)) &#123;</span><br><span class="line">            <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;Not connected now.\n&quot;</span>);</span><br><span class="line">            <span class="built_in">exit</span> (<span class="number">1</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        DBusMessage *message;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> ((message = dbus_connection_pop_message(conn)) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">            <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;Did not get message\n&quot;</span>);</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (dbus_message_is_method_call(message, INTERFACE_NAME, METHOD_NAME)) &#123;</span><br><span class="line">            <span class="type">char</span> *s;</span><br><span class="line">            <span class="keyword">if</span> (dbus_message_get_args(message,</span><br><span class="line">                                      &amp;dbus_error,</span><br><span class="line">                                      DBUS_TYPE_STRING, &amp;s, DBUS_TYPE_INVALID))</span><br><span class="line">            &#123;</span><br><span class="line">                <span class="built_in">printf</span>(<span class="string">&quot;Received: %s\n&quot;</span>, s);</span><br><span class="line"></span><br><span class="line">                DBusMessage *reply;</span><br><span class="line">                <span class="type">char</span> answer[<span class="number">1024</span>];</span><br><span class="line"></span><br><span class="line">                assert(reply = dbus_message_new_method_return(message));</span><br><span class="line"></span><br><span class="line">                DBusMessageIter iter;</span><br><span class="line">                dbus_message_iter_init_append(reply, &amp;iter);</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (dbus_message_has_path(message, OBJECT_PATH_NAME_YES)) &#123;</span><br><span class="line">                    <span class="built_in">sprintf</span>(answer, <span class="string">&quot;Yes, %s&quot;</span>, s);</span><br><span class="line">                &#125; <span class="keyword">else</span> <span class="keyword">if</span> (dbus_message_has_path(message, OBJECT_PATH_NAME_NO)) &#123;</span><br><span class="line">                    <span class="built_in">sprintf</span>(answer, <span class="string">&quot;No, %s&quot;</span>, s);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="built_in">sprintf</span>(answer, <span class="string">&quot;No object found&quot;</span>);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="type">char</span> *ptr = answer;</span><br><span class="line">                assert(dbus_message_iter_append_basic(&amp;iter, DBUS_TYPE_STRING, &amp;ptr));</span><br><span class="line"></span><br><span class="line">                assert(dbus_connection_send(conn, reply, <span class="literal">NULL</span>));</span><br><span class="line">                dbus_connection_flush (conn);</span><br><span class="line">                dbus_message_unref (reply);</span><br><span class="line"></span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                print_dbus_error(<span class="string">&quot;Error getting message&quot;</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">print_dbus_error</span><span class="params">(<span class="type">char</span> *str)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;%s: %s\n&quot;</span>, str, dbus_error.message);</span><br><span class="line">    dbus_error_free(&amp;dbus_error);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>服务端程序从BUS实例中读取消息，并根据消息中的不同部分来做不同处理。</p>
+<p>编译服务端程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -o dbus-server dbus-server.c `pkg-config --libs --cflags dbus-1`</span><br></pre></td></tr></table></figure>
+
+<p>直接执行<code>dbus-server</code>, 我们会发现安全策略不允许注册服务。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 dbus]# ./dbus-server</span><br><span class="line">dbus_bus_request_name: Connection &quot;:1.107&quot; is not allowed to own the service &quot;com.just4coding.dbus&quot; due to security policies in the configuration file</span><br><span class="line">not primary owner, ret = -1</span><br></pre></td></tr></table></figure>
+
+<p>我们在<code>/etc/dbus-1/system.d/</code>下创建安全策略文件<code>com.just4coding.dbus.conf</code>，内容如下:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">busconfig</span> <span class="keyword">PUBLIC</span></span></span><br><span class="line"><span class="meta"> <span class="string">&quot;-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN&quot;</span></span></span><br><span class="line"><span class="meta"> <span class="string">&quot;http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd&quot;</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">busconfig</span>&gt;</span></span><br><span class="line"></span><br><span class="line">  <span class="tag">&lt;<span class="name">policy</span> <span class="attr">user</span>=<span class="string">&quot;root&quot;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">allow</span> <span class="attr">own</span>=<span class="string">&quot;com.just4coding.dbus&quot;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">policy</span>&gt;</span></span><br><span class="line"></span><br><span class="line">  <span class="tag">&lt;<span class="name">policy</span> <span class="attr">context</span>=<span class="string">&quot;default&quot;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">allow</span> <span class="attr">send_interface</span>=<span class="string">&quot;com.just4coding.dbus_demo&quot;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">policy</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">busconfig</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>再次运行<code>dbus-server</code>可以成功，我们使用<code>busctl</code>查看, 可以看到<code>dbus-server</code>已经注册成功:</p>
+<img src="/images/2018-07-31/3.png" class="">
+
+<p>我们再来看客户端代码<code>dbus-client.c</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdbool.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ctype.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;dbus/dbus.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> SERVER_BUS_NAME = <span class="string">&quot;com.just4coding.dbus&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> CLIENT_BUS_NAME = <span class="string">&quot;com.just4coding.client&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> OBJECT_PATH_NAME_YES = <span class="string">&quot;/com/just4coding/dbus/yes&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> OBJECT_PATH_NAME_NO = <span class="string">&quot;/com/just4coding/dbus/no&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> INTERFACE_NAME = <span class="string">&quot;com.just4coding.dbus_demo&quot;</span>;</span><br><span class="line"><span class="type">const</span> <span class="type">char</span> *<span class="type">const</span> METHOD_NAME = <span class="string">&quot;hello&quot;</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">DBusError dbus_error;</span><br><span class="line"><span class="type">void</span> <span class="title function_">print_dbus_error</span><span class="params">(<span class="type">char</span> *str)</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    DBusConnection *conn;</span><br><span class="line">    <span class="type">char</span> input[<span class="number">80</span>];</span><br><span class="line"></span><br><span class="line">    dbus_error_init(&amp;dbus_error);</span><br><span class="line"></span><br><span class="line">    assert(conn = dbus_bus_get(DBUS_BUS_SYSTEM, &amp;dbus_error));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dbus_error_is_set(&amp;dbus_error)) &#123;</span><br><span class="line">        print_dbus_error(<span class="string">&quot;dbus_bus_get&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> <span class="type">char</span> *objects[] = &#123;OBJECT_PATH_NAME_YES, OBJECT_PATH_NAME_NO, <span class="literal">NULL</span>&#125;;</span><br><span class="line">    <span class="type">int</span> i = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> ( ; objects[i]; i++) &#123;</span><br><span class="line">        DBusMessage *request;</span><br><span class="line">        assert((request = dbus_message_new_method_call(SERVER_BUS_NAME, objects[i], INTERFACE_NAME, METHOD_NAME)));</span><br><span class="line"></span><br><span class="line">        DBusMessageIter iter;</span><br><span class="line">        dbus_message_iter_init_append(request, &amp;iter);</span><br><span class="line">        <span class="built_in">snprintf</span>(input, <span class="keyword">sizeof</span>(input), <span class="string">&quot;alice&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="type">char</span> *ptr = input;</span><br><span class="line">        assert(dbus_message_iter_append_basic (&amp;iter, DBUS_TYPE_STRING, &amp;ptr));</span><br><span class="line"></span><br><span class="line">        DBusPendingCall *pending_return;</span><br><span class="line">        assert(dbus_connection_send_with_reply (conn, request, &amp;pending_return, <span class="number">-1</span>));</span><br><span class="line"></span><br><span class="line">        assert(pending_return);</span><br><span class="line">        dbus_connection_flush(conn);</span><br><span class="line">        dbus_message_unref(request);</span><br><span class="line"></span><br><span class="line">        dbus_pending_call_block(pending_return);</span><br><span class="line"></span><br><span class="line">        DBusMessage *reply;</span><br><span class="line">        assert((reply = dbus_pending_call_steal_reply (pending_return)));</span><br><span class="line">        dbus_pending_call_unref(pending_return);</span><br><span class="line"></span><br><span class="line">        <span class="type">char</span> *s;</span><br><span class="line">        <span class="keyword">if</span> (dbus_message_get_args(reply, &amp;dbus_error, DBUS_TYPE_STRING, &amp;s, DBUS_TYPE_INVALID)) &#123;</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;Reply: %s\n&quot;</span>, s);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="built_in">fprintf</span> (<span class="built_in">stderr</span>, <span class="string">&quot;Did not get arguments in reply\n&quot;</span>);</span><br><span class="line">            <span class="built_in">exit</span>(<span class="number">1</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        dbus_message_unref(reply);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">print_dbus_error</span><span class="params">(<span class="type">char</span> *str)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="built_in">fprintf</span> (<span class="built_in">stderr</span>, <span class="string">&quot;%s: %s\n&quot;</span>, str, dbus_error.message);</span><br><span class="line">    dbus_error_free(&amp;dbus_error);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>客户端程序分别向<code>/com/just4coding/dbus/yes</code>和<code>/com/just4coding/dbus/no</code>两个object发送了字符串”alice”并打印出响应。</p>
+<p>编译程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -o dbus-client dbus-client.c `pkg-config --libs --cflags dbus-1`</span><br></pre></td></tr></table></figure>
+
+<p>执行结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 dbus]# ./dbus-client</span><br><span class="line">Reply: Yes, alice</span><br><span class="line">Reply: No, alice</span><br></pre></td></tr></table></figure>
+
+<p>系统本身也自带了一些命令行工具可以进行<code>D-Bus</code>操作。我们也可以使用<code>dbus-send</code>命令来进行测试, 返回结果也一样:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/yes com.just4coding.dbus_demo.hello string:&quot;alice&quot;</span><br><span class="line">method return time=1533021068.211336 sender=:1.111 -&gt; destination=:1.118 serial=8 reply_serial=2</span><br><span class="line">   string &quot;Yes, alice&quot;</span><br><span class="line">[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/no com.just4coding.dbus_demo.hello string:&quot;alice&quot;</span><br><span class="line">method return time=1533021079.752412 sender=:1.111 -&gt; destination=:1.119 serial=9 reply_serial=2</span><br><span class="line">   string &quot;No, alice&quot;</span><br><span class="line">[root@centos1 dbus]# dbus-send --system --print-reply --dest=com.just4coding.dbus /com/just4coding/dbus/dummy com.just4coding.dbus_demo.hello string:&quot;alice&quot;</span><br><span class="line">method return time=1533021087.748693 sender=:1.111 -&gt; destination=:1.120 serial=10 reply_serial=2</span><br><span class="line">   string &quot;No object found”</span><br></pre></td></tr></table></figure>
+
+
+<p>值得注意的是，<code>D-Bus</code>本身实现性能上并不是特别高，因而只适合于传送控制消息而非数据。并且现在用于实现RPC和PUB&#x2F;SUB场景的中间件选择非常多，如<code>RabbitMQ</code>、<code>Redis</code>等, 使用起来都更为简单。在一般情形下更推荐使用这些消息队列类型的中间件。但是若需要和系统本身的一些使用<code>D-Bus</code>的服务(如<code>systemd</code>, <code>NetworkManager</code>)需要交互时，使用<code>D-Bus</code>则是一个非常方便的方式。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/01/11/meltdown-pcid/" rel="prev" title="虚拟机KPTI性能影响分析">
+      <i class="fa fa-chevron-left"></i> 虚拟机KPTI性能影响分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/08/01/dbus-api/" rel="next" title="D-BUS API查找与调用">
+      D-BUS API查找与调用 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

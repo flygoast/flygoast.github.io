@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ejabberd_config模块负责加载ejabberd配置文件，存储相应的配置选项，并提供添加和获取配置选项的API。 比如, ejabberd_app:start_modules函数会使用ejabber_config:get_local_option获取配置文件中的modules选项:  1234567891011121314%% Start all the modules in all t">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd配置模块分析">
+<meta property="og:url" content="http://just4coding.com/2014/12/09/ejabberd-config/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="ejabberd_config模块负责加载ejabberd配置文件，存储相应的配置选项，并提供添加和获取配置选项的API。 比如, ejabberd_app:start_modules函数会使用ejabber_config:get_local_option获取配置文件中的modules选项:  1234567891011121314%% Start all the modules in all t">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-09T11:24:12.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.471Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/09/ejabberd-config/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd配置模块分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/09/ejabberd-config/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd配置模块分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-09 19:24:12" itemprop="dateCreated datePublished" datetime="2014-12-09T19:24:12+08:00">2014-12-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>ejabberd_config模块负责加载ejabberd配置文件，存储相应的配置选项，并提供添加和获取配置选项的API。</p>
+<p>比如, ejabberd_app:start_modules函数会使用ejabber_config:get_local_option获取配置文件中的modules选项:</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">%% Start all the modules in all the hosts</span></span><br><span class="line"><span class="function"><span class="title">start_modules</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    lists:foreach(</span><br><span class="line">      <span class="keyword">fun</span>(Host) -&gt;</span><br><span class="line">          <span class="keyword">case</span> ejabberd_config:get_local_option(&#123;modules, Host&#125;) <span class="keyword">of</span></span><br><span class="line">          undefined -&gt;</span><br><span class="line">              ok;</span><br><span class="line">          Modules -&gt;</span><br><span class="line">              lists:foreach(</span><br><span class="line">            <span class="keyword">fun</span>(&#123;Module, Args&#125;) -&gt;</span><br><span class="line">                gen_mod:start_module(Host, Module, Args)</span><br><span class="line">            <span class="keyword">end</span>, Modules)</span><br><span class="line">          <span class="keyword">end</span></span><br><span class="line">      <span class="keyword">end</span>, ?MYHOSTS).</span><br></pre></td></tr></table></figure>
+
+<p>下面分析ejbberd_config模块实现。</p>
+<p>ejabberd启动时，ejabberd_app:start&#x2F;0会调用ejabberd_config:start&#x2F;0。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    mnesia:create_table(config,</span><br><span class="line">            [&#123;disc_copies, [node()]&#125;,</span><br><span class="line">             &#123;attributes, record_info(fields, config)&#125;]),</span><br><span class="line">    mnesia:add_table_copy(config, node(), ram_copies),</span><br><span class="line">    mnesia:create_table(local_config,</span><br><span class="line">            [&#123;disc_copies, [node()]&#125;,</span><br><span class="line">             &#123;local_content, true&#125;,</span><br><span class="line">             &#123;attributes, record_info(fields, local_config)&#125;]),</span><br><span class="line">    mnesia:add_table_copy(local_config, node(), ram_copies),</span><br><span class="line">    Config = get_ejabberd_config_path(),</span><br><span class="line">    load_file(Config),</span><br><span class="line">    <span class="comment">%% This start time is used by mod_last:</span></span><br><span class="line">    add_local_option(node_start, now()),</span><br><span class="line">    ok.</span><br></pre></td></tr></table></figure>
+
+<p>start函数首先创建config和local_config两个mnesia表，接着调用get_ejabberd_config_path获取配置文件路径。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">get_ejabberd_config_path</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> application:get_env(config) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, Path&#125; -&gt; Path;</span><br><span class="line">    undefined -&gt;</span><br><span class="line">        <span class="keyword">case</span> os:getenv(<span class="string">&quot;EJABBERD_CONFIG_PATH&quot;</span>) <span class="keyword">of</span></span><br><span class="line">        <span class="literal">false</span> -&gt;</span><br><span class="line">            ?CONFIG_PATH;</span><br><span class="line">        Path -&gt;</span><br><span class="line">            Path</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+
+<p>get_ejabberd_config_path首先使用application:get_env从ejabberd.app的env或erlang命令行中的config选项中获取值:<br>如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;env, [&#123;config, &quot;/etc/ejabberd/ejabberd.cfg&quot;]&#125;</span><br></pre></td></tr></table></figure>
+<p>或者:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">erl -config &quot;/path/to/ejabberd.cfg&quot;</span><br></pre></td></tr></table></figure>
+<p>如果没有设置这两个选项，则尝试从系统环境变量”EJABBERD_CONFIG_PATH”读取文件路径。ejabberdctl会设置该环境变量。若也没有设置该环境变量，get_ejabberd_config_path则返回<code>?CONFIG_PATH</code>, 这个宏被定义为”ejabberd.cfg”。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">-define</span><span class="params">(CONFIG_PATH, <span class="string">&quot;ejabberd.cfg&quot;</span>)</span>.</span><br></pre></td></tr></table></figure>
+<p>接下来, start函数调用load_file来加载配置文件:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">load_file</span><span class="params">(File)</span> -&gt;</span></span><br><span class="line">    Terms = get_plain_terms_file(File),</span><br><span class="line">    State = lists:foldl(fun search_hosts/2, #state&#123;&#125;, Terms),</span><br><span class="line">    Terms_macros = replace_macros(Terms),</span><br><span class="line">    Res = lists:foldl(fun process_term/2, State, Terms_macros),</span><br><span class="line">    set_opts(Res).</span><br></pre></td></tr></table></figure>
+<p>load_file首先调用get_plain_terms_file来获取所有配置选项的列表。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">get_plain_terms_file</span><span class="params">(File1)</span> -&gt;</span></span><br><span class="line">    File = get_absolute_path(File1),</span><br><span class="line">    <span class="keyword">case</span> file:consult(File) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, Terms&#125; -&gt;</span><br><span class="line">        include_config_files(Terms);</span><br><span class="line">    &#123;error, &#123;LineNumber, erl_parse, _ParseMessage&#125; = Reason&#125; -&gt;</span><br><span class="line">        ExitText = describe_config_problem(File, Reason, LineNumber),</span><br><span class="line">        ?ERROR_MSG(ExitText, []),</span><br><span class="line">        exit_or_halt(ExitText);</span><br><span class="line">    &#123;error, Reason&#125; -&gt;</span><br><span class="line">        ExitText = describe_config_problem(File, Reason),</span><br><span class="line">        ?ERROR_MSG(ExitText, []),</span><br><span class="line">        exit_or_halt(ExitText)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>我们来看get_plain_terms_file实现。首先，调用get_absolute_path，期望得到配置文件的绝对路径。不过，get_absolute_path实现上存在BUG:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">get_absolute_path</span><span class="params">(File)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> filename:pathtype(File) <span class="keyword">of</span></span><br><span class="line">    absolute -&gt;</span><br><span class="line">        File;</span><br><span class="line">    relative -&gt;</span><br><span class="line">        Config_path = get_ejabberd_config_path(),</span><br><span class="line">        Config_dir = filename:dirname(Config_path),</span><br><span class="line">        filename:absname_join(Config_dir, File)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>当File为相对路径时，使用filename:absname_join不能得到绝对路径。我提了一个PATCH，使用当前目录来转成绝对路径。官方已接受。<br>PATCH地址：<br><a target="_blank" rel="noopener" href="https://github.com/processone/ejabberd/commit/62ccf1cf0e13954ee5207bc6288afbc669247d14">https://github.com/processone/ejabberd/commit/62ccf1cf0e13954ee5207bc6288afbc669247d14</a></p>
+<p>接着，get_plain_terms_file调用file:consult读取配置文件中的所有Erlang Terms到列表中，再调用include_config_files函数来处理include_config_file选项。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">include_config_files</span><span class="params">([&#123;include_config_file, Filename, Options&#125; | Terms], Res)</span> -&gt;</span></span><br><span class="line">    Included_terms = get_plain_terms_file(Filename),</span><br><span class="line">    Disallow = proplists:get_value(disallow, Options, []),</span><br><span class="line">    Included_terms2 = delete_disallowed(Disallow, Included_terms),</span><br><span class="line">    Allow_only = proplists:get_value(allow_only, Options, all),</span><br><span class="line">    Included_terms3 = keep_only_allowed(Allow_only, Included_terms2),</span><br><span class="line">    include_config_files(Terms, Res ++ Included_terms3);</span><br></pre></td></tr></table></figure>
+<p>include_config_file选项格式为：</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;include_config_file, [&#123;disallow, foo&#125;, &#123;allow_only, bar&#125;], <span class="string">&quot;/path/to/included_config&quot;</span>&#125;.</span><br></pre></td></tr></table></figure>
+<p>include_config_files递归调用get_plain_terms_file获取被引用的配置文件中所有配置，接着检查include_config_file选项中是否有disallow选项。如果有，调用delete_disallowed将disallow指定的配置选项从被引用文件的配置列表中删除。接着检查其中是否存在allow_only选项，如果有，则调用keep_only_allowed只保留下allow_only中指定的配置，将其和外部配置合并，再递归调用include_config_files&#x2F;2处理剩余的选项，最终返回所有配置文件中所有选项列表。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">include_config_files</span><span class="params">([], Res)</span> -&gt;</span></span><br><span class="line">    Res;</span><br></pre></td></tr></table></figure>
+<p>load_file接着遍历配置列表调用search_host, 最终调用add_option来添加hosts选项。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">add_option</span><span class="params">(Opt, Val, State)</span> -&gt;</span></span><br><span class="line">    Table = <span class="keyword">case</span> Opt <span class="keyword">of</span></span><br><span class="line">        hosts -&gt;</span><br><span class="line">            config;</span><br><span class="line">        language -&gt;</span><br><span class="line">            config;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            local_config</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    <span class="keyword">case</span> Table <span class="keyword">of</span></span><br><span class="line">    config -&gt;</span><br><span class="line">        State#state&#123;opts = [#config&#123;key = Opt, value = Val&#125; |</span><br><span class="line">                State#state.opts]&#125;;</span><br><span class="line">    local_config -&gt;</span><br><span class="line">        <span class="keyword">case</span> Opt <span class="keyword">of</span></span><br><span class="line">        &#123;&#123;add, OptName&#125;, Host&#125; -&gt;</span><br><span class="line">            State#state&#123;opts = compact(&#123;OptName, Host&#125;, Val,</span><br><span class="line">                           State#state.opts, [])&#125;;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            State#state&#123;opts = [#local_config&#123;key = Opt, value = Val&#125; |</span><br><span class="line">                    State#state.opts]&#125;</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+
+
+<p>add_option将指定选项以Key&#x2F;Value形式添加进状态结构的opts域中。其中，hosts和language使用记录config, 其他选项使用local_config。这与最初创建的MNESIA表相对应。<br>状态结构如下:</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">-record</span><span class="params">(state, &#123;opts = [],</span></span><br><span class="line"><span class="params">        hosts = [],</span></span><br><span class="line"><span class="params">        override_local = false,</span></span><br><span class="line"><span class="params">        override_global = false,</span></span><br><span class="line"><span class="params">        override_acls = false&#125;)</span>.</span><br></pre></td></tr></table></figure>
+
+<p>接下来，load_file调用replace_macros来替换配置中的宏为相应的值。我们来看replace_macros实现。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">replace_macros</span><span class="params">(Terms)</span> -&gt;</span></span><br><span class="line">    &#123;TermsOthers, Macros&#125; = split_terms_macros(Terms),</span><br><span class="line">    replace(TermsOthers, Macros).</span><br></pre></td></tr></table></figure>
+
+<p>首先, 调用split_terms_macros将宏选项和其他选项分开。</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">split_terms_macros</span><span class="params">(Terms)</span> -&gt;</span></span><br><span class="line">    lists:foldl(</span><br><span class="line">      <span class="keyword">fun</span>(Term, &#123;TOs, Ms&#125;) -&gt;</span><br><span class="line">          <span class="keyword">case</span> Term <span class="keyword">of</span></span><br><span class="line">          &#123;define_macro, Key, Value&#125; -&gt;</span><br><span class="line">              <span class="keyword">case</span> is_atom(Key) <span class="keyword">and</span> is_all_uppercase(Key) <span class="keyword">of</span></span><br><span class="line">              <span class="literal">true</span> -&gt;</span><br><span class="line">                  &#123;TOs, Ms++[&#123;Key, Value&#125;]&#125;;</span><br><span class="line">              <span class="literal">false</span> -&gt;</span><br><span class="line">                  exit(&#123;macro_not_properly_defined, Term&#125;)</span><br><span class="line">              <span class="keyword">end</span>;</span><br><span class="line">          Term -&gt;</span><br><span class="line">              &#123;TOs ++ [Term], Ms&#125;</span><br><span class="line">          <span class="keyword">end</span></span><br><span class="line">      <span class="keyword">end</span>,</span><br><span class="line">      &#123;[], []&#125;,</span><br><span class="line">      Terms).</span><br></pre></td></tr></table></figure>
+
+<p>宏定义选项格式为:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;define_macro, &#x27;KEY&#x27;, bar&#125;.</span><br></pre></td></tr></table></figure>
+<p>其中key必须为atom类型且必须全部为大写字母，得到的宏选项列表为<code>&#123;key, value&#125;</code>格式的列表。<br>接着, replace_macros调用replace&#x2F;2。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">replace</span><span class="params">([], _)</span> -&gt;</span></span><br><span class="line">    [];</span><br><span class="line"><span class="function"><span class="title">replace</span><span class="params">([Term|Terms], Macros)</span> -&gt;</span></span><br><span class="line">    [replace_term(Term, Macros) | replace(Terms, Macros)].</span><br></pre></td></tr></table></figure>
+<p>replace通过递归对每个选项调用replace_term&#x2F;2。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">replace_term</span><span class="params">(Key, Macros)</span> <span class="title">when</span> <span class="title">is_atom</span><span class="params">(Key)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> is_all_uppercase(Key) <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        <span class="keyword">case</span> proplists:get_value(Key, Macros) <span class="keyword">of</span></span><br><span class="line">        undefined -&gt; exit(&#123;undefined_macro, Key&#125;);</span><br><span class="line">        Value -&gt; Value</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    <span class="literal">false</span> -&gt;</span><br><span class="line">        Key</span><br><span class="line">    <span class="keyword">end</span>;</span><br><span class="line"><span class="function"><span class="title">replace_term</span><span class="params">(&#123;use_macro, Key, Value&#125;, Macros)</span> -&gt;</span></span><br><span class="line">    proplists:get_value(Key, Macros, Value);</span><br><span class="line"><span class="function"><span class="title">replace_term</span><span class="params">(Term, Macros)</span> <span class="title">when</span> <span class="title">is_list</span><span class="params">(Term)</span> -&gt;</span></span><br><span class="line">    replace(Term, Macros);</span><br><span class="line"><span class="function"><span class="title">replace_term</span><span class="params">(Term, Macros)</span> <span class="title">when</span> <span class="title">is_tuple</span><span class="params">(Term)</span> -&gt;</span></span><br><span class="line">    List = tuple_to_list(Term),</span><br><span class="line">    List2 = replace(List, Macros),</span><br><span class="line">    list_to_tuple(List2);</span><br><span class="line"><span class="function"><span class="title">replace_term</span><span class="params">(Term, _)</span> -&gt;</span></span><br><span class="line">    Term.</span><br></pre></td></tr></table></figure>
+<p>replace_term遍历选项中的所有子项，如果在宏列表中查找到相应的值，则替换该子项为找到的值。<br>另外，如果配置中某子项指定了{use_macro, Key, Value}这种格式的配置，在替换时优先从宏列表中查找相应的值，找不到再使用use_macro指定的Value来替换。</p>
+<p>至此，获得了所有配置选项的列表，接下来对每个选项调用process_term。</p>
+<p>选项存储主要分为3种类型, process_term分别进行不同处理:</p>
+<ul>
+<li>在状态结构中以独立域进行存储，如<code>override_global</code>选项:<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">override_global -&gt;</span><br><span class="line">    State#state&#123;override_global = true&#125;;</span><br></pre></td></tr></table></figure></li>
+<li>以选项名做为key进行存储, 如<code>max_fsm_queue</code>选项:<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&#123;max_fsm_queue, N&#125; -&gt;</span><br><span class="line">    add_option(max_fsm_queue, N, State);</span><br></pre></td></tr></table></figure></li>
+<li>以选项名和Host一起做为key进行存储，如<code>domain_certfile</code>选项:<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;domain_certfile, Domain, CertFile&#125; -&gt;</span><br><span class="line">    <span class="keyword">case</span> ejabberd_config:is_file_readable(CertFile) <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt; add_option(&#123;domain_certfile, Domain&#125;, CertFile, State);</span><br><span class="line">    <span class="literal">false</span> -&gt;</span><br><span class="line">        ErrorText = <span class="string">&quot;There is a problem in the configuration: &quot;</span></span><br><span class="line">        <span class="string">&quot;the specified file is not readable: &quot;</span>,</span><br><span class="line">        throw(&#123;error, ErrorText ++ CertFile&#125;)</span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+其中由host_config指定的绝大多数配置选项都以这种方式存储:<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#123;host_config, Host, Terms&#125; -&gt;</span><br><span class="line">    lists:foldl(<span class="keyword">fun</span>(T, S) -&gt; process_host_term(T, Host, S) <span class="keyword">end</span>,</span><br><span class="line">        State, Terms);</span><br></pre></td></tr></table></figure>
+process_terms对于没有明确列出的选项，给配置的每个HOST都调用process_host_term添加了一个以选项名和HOST一起做为Key的配置选项。<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#123;_Opt, _Val&#125; -&gt;</span><br><span class="line">    lists:foldl(<span class="keyword">fun</span>(Host, S) -&gt; process_host_term(Term, Host, S) <span class="keyword">end</span>,</span><br><span class="line">        State, State#state.hosts)</span><br></pre></td></tr></table></figure>
+这样，如果我们自定义配置选项dummy_config：<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;dummy_config, [foo, bar]&#125;.</span><br></pre></td></tr></table></figure>
+查询时应使用如下提供Host参数的语句:<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ejabberd_config:get_local_option(&#123;dummy_config, Host&#125;)</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>此外，<code>acl</code>, <code>access</code>和<code>shaper</code>三个选项比较特殊。<br><code>acl</code>存储acl记录结构在状态结构的opts域中, 在set_opts中这些记录会被写入acl表中。<br><code>access</code>和<code>shaper</code>选项的KEY中除了选项名，HOST，还包括了规则名称。</p>
+<p>至此，load_file将所有选项保存到了状态结构的opts域中，最后调用set_opts进行存储:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">set_opts</span><span class="params">(State)</span> -&gt;</span></span><br><span class="line">    Opts = lists:reverse(State#state.opts),</span><br><span class="line">    F = <span class="keyword">fun</span>() -&gt;</span><br><span class="line">        <span class="keyword">if</span></span><br><span class="line">            State#state.override_global -&gt;</span><br><span class="line">            Ksg = mnesia:all_keys(config),</span><br><span class="line">            lists:foreach(<span class="keyword">fun</span>(K) -&gt;</span><br><span class="line">                          mnesia:delete(&#123;config, K&#125;)</span><br><span class="line">                      <span class="keyword">end</span>, Ksg);</span><br><span class="line">            <span class="literal">true</span> -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        <span class="keyword">if</span></span><br><span class="line">            State#state.override_local -&gt;</span><br><span class="line">            Ksl = mnesia:all_keys(local_config),</span><br><span class="line">            lists:foreach(<span class="keyword">fun</span>(K) -&gt;</span><br><span class="line">                          mnesia:delete(&#123;local_config, K&#125;)</span><br><span class="line">                      <span class="keyword">end</span>, Ksl);</span><br><span class="line">            <span class="literal">true</span> -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        <span class="keyword">if</span></span><br><span class="line">            State#state.override_acls -&gt;</span><br><span class="line">            Ksa = mnesia:all_keys(acl),</span><br><span class="line">            lists:foreach(<span class="keyword">fun</span>(K) -&gt;</span><br><span class="line">                          mnesia:delete(&#123;acl, K&#125;)</span><br><span class="line">                      <span class="keyword">end</span>, Ksa);</span><br><span class="line">            <span class="literal">true</span> -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        lists:foreach(<span class="keyword">fun</span>(R) -&gt;</span><br><span class="line">                      mnesia:write(R)</span><br><span class="line">                  <span class="keyword">end</span>, Opts)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    <span class="keyword">case</span> mnesia:transaction(F) <span class="keyword">of</span></span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>如果配置了<code>override_global</code>, <code>override_local</code>, <code>override_acls</code>选项，set_opts首先会分别删除表config, local_config和acl中的所有内容。接着分别将状态结构opts域中的配置写入config, local_config和acl三个表中。</p>
+<p>配置加载过程结束。</p>
+<p>ejabberd_config模块提供了添加和查询选项的API:</p>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">add_global_option</span><span class="params">(Opt, Val)</span> -&gt;</span></span><br><span class="line">    mnesia:transaction(<span class="keyword">fun</span>() -&gt;</span><br><span class="line">                   mnesia:write(#config&#123;key = Opt,</span><br><span class="line">                            value = Val&#125;)</span><br><span class="line">               <span class="keyword">end</span>).</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">add_local_option</span><span class="params">(Opt, Val)</span> -&gt;</span></span><br><span class="line">    mnesia:transaction(<span class="keyword">fun</span>() -&gt;</span><br><span class="line">                   mnesia:write(#local_config&#123;key = Opt,</span><br><span class="line">                              value = Val&#125;)</span><br><span class="line">               <span class="keyword">end</span>).</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">get_global_option</span><span class="params">(Opt)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ets:lookup(config, Opt) <span class="keyword">of</span></span><br><span class="line">    [#config&#123;value = Val&#125;] -&gt;</span><br><span class="line">        Val;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        undefined</span><br><span class="line">    <span class="keyword">end</span>.</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">get_local_option</span><span class="params">(Opt)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ets:lookup(local_config, Opt) <span class="keyword">of</span></span><br><span class="line">    [#local_config&#123;value = Val&#125;] -&gt;</span><br><span class="line">        Val;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        undefined</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+
+<p>add_global_option和add_local_option分别向config和local_config表中添加选项记录。get_global_option和get_local_option直接使用<code>ets:lookup</code>查找相应配置。这是由于mnesia底层由ETS实现，直接使用<code>ets:lookup</code>性能会更高。不过，我个人不太欣赏这种写法。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/07/ejabberd-hooks/" rel="prev" title="ejabberd中hook机制分析">
+      <i class="fa fa-chevron-left"></i> ejabberd中hook机制分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/17/flashcache-init/" rel="next" title="flashcache简介及模块初始化">
+      flashcache简介及模块初始化 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="XMPP使用SASL进行登录验证。ejabberd中模仿CyrusSASL库自己实现了SASL协议，API用法与CyrusSASL类似。 ejabberd启动时，ejabberd_app:start&#x2F;0会调用cyrsasl:start&#x2F;0。它创建了一个ets表sasl_mechanism，然后调用各个SASL机制模块的start函数。 123456789start() -&amp;gt">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd登录验证流程分析">
+<meta property="og:url" content="http://just4coding.com/2014/11/14/ejabberd-login/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="XMPP使用SASL进行登录验证。ejabberd中模仿CyrusSASL库自己实现了SASL协议，API用法与CyrusSASL类似。 ejabberd启动时，ejabberd_app:start&#x2F;0会调用cyrsasl:start&#x2F;0。它创建了一个ets表sasl_mechanism，然后调用各个SASL机制模块的start函数。 123456789start() -&amp;gt">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-14T10:13:27.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.467Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/11/14/ejabberd-login/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd登录验证流程分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/14/ejabberd-login/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd登录验证流程分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-14 18:13:27" itemprop="dateCreated datePublished" datetime="2014-11-14T18:13:27+08:00">2014-11-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>XMPP使用SASL进行登录验证。ejabberd中模仿CyrusSASL库自己实现了SASL协议，API用法与CyrusSASL类似。</p>
+<p>ejabberd启动时，ejabberd_app:start&#x2F;0会调用cyrsasl:start&#x2F;0。它创建了一个ets表<code>sasl_mechanism</code>，然后调用各个SASL机制模块的start函数。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    ets:new(sasl_mechanism, [named_table,</span><br><span class="line">                             public,</span><br><span class="line">                             &#123;keypos, #sasl_mechanism.mechanism&#125;]),</span><br><span class="line">    cyrsasl_plain:start([]),</span><br><span class="line">    cyrsasl_digest:start([]),</span><br><span class="line">    cyrsasl_scram:start([]),</span><br><span class="line">    cyrsasl_anonymous:start([]),</span><br><span class="line">    ok.</span><br></pre></td></tr></table></figure>
+<p>各个SASL机制模块的start&#x2F;1函数会调用cyrsasl:register_mechanism&#x2F;3, 参数分别为SASL机制名称，机制处理模块，机制支持的密码存储类型。register_mechanism会将机制信息添加到sasl_mechanism表中。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">(_Opts)</span> -&gt;</span></span><br><span class="line">    cyrsasl:register_mechanism(<span class="string">&quot;PLAIN&quot;</span>, ?MODULE, plain),</span><br><span class="line">    ok.</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">register_mechanism</span><span class="params">(Mechanism, Module, PasswordType)</span> -&gt;</span></span><br><span class="line">    ets:insert(sasl_mechanism,</span><br><span class="line">               #sasl_mechanism&#123;mechanism = Mechanism,</span><br><span class="line">                               module = Module,</span><br><span class="line">                               password_type = PasswordType&#125;).</span><br></pre></td></tr></table></figure>
+<p>客户端连接到ejabberd后，ejabberd会创建两个进程。一个ejabberd_c2s进程来处理连接状态并向客户端发送数据，另一个ejabberd_receiver进程接收客户端数据。ejabberd_c2s进程实现了gen_fsm行为，有限状态机的初始状态为wait_for_stream。ejabberd_c2s:init&#x2F;1的简化代码逻辑为:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init</span><span class="params">([&#123;SockMod, Socket&#125;, Opts])</span> -&gt;</span></span><br><span class="line">    ...</span><br><span class="line">    IP = peerip(SockMod, Socket),</span><br><span class="line">    <span class="comment">%% Check if IP is blacklisted:</span></span><br><span class="line">    <span class="keyword">case</span> is_ip_blacklisted(IP) <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        ?INFO_MSG(<span class="string">&quot;Connection attempt from blacklisted IP: ~s (~w)&quot;</span>,</span><br><span class="line">                  [jlib:ip_to_list(IP), IP]),</span><br><span class="line">        &#123;stop, normal&#125;;</span><br><span class="line">    <span class="literal">false</span> -&gt;</span><br><span class="line">        ...</span><br><span class="line">        &#123;ok, wait_for_stream, #state&#123;socket         = Socket1,</span><br><span class="line">                                     sockmod        = SockMod,</span><br><span class="line">                                     socket_monitor = SocketMonitor,</span><br><span class="line">                                     xml_socket     = XMLSocket,</span><br><span class="line">                                     zlib           = Zlib,</span><br><span class="line">                                     tls            = TLS,</span><br><span class="line">                                     tls_required   = StartTLSRequired,</span><br><span class="line">                                     tls_enabled    = TLSEnabled,</span><br><span class="line">                                     tls_options    = TLSOpts,</span><br><span class="line">                                     streamid       = new_id(),</span><br><span class="line">                                     access         = Access,</span><br><span class="line">                                     shaper         = Shaper,</span><br><span class="line">                                     ip             = IP&#125;,</span><br><span class="line">         ?C2S_OPEN_TIMEOUT&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>ejabberd_receiver进程解析到XML流头之后会调用gen_fsm:send_event向ejabberd_c2s进程发送消息。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">process_data</span><span class="params">([Element|Els], #state&#123;c2s_pid = C2SPid&#125; = State)</span></span></span><br><span class="line"><span class="function">  <span class="title">when</span> <span class="title">element</span><span class="params">(<span class="number">1</span>, Element)</span> == <span class="title">xmlelement</span>;</span></span><br><span class="line"><span class="function">       <span class="title">element</span><span class="params">(<span class="number">1</span>, Element)</span> == <span class="title">xmlstreamstart</span>;</span></span><br><span class="line"><span class="function">       <span class="title">element</span><span class="params">(<span class="number">1</span>, Element)</span> == <span class="title">xmlstreamelement</span>;</span></span><br><span class="line"><span class="function">       <span class="title">element</span><span class="params">(<span class="number">1</span>, Element)</span> == <span class="title">xmlstreamend</span> -&gt;</span></span><br><span class="line">    <span class="keyword">if</span></span><br><span class="line">    C2SPid == undefined -&gt;</span><br><span class="line">        State;</span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        <span class="keyword">catch</span> gen_fsm:send_event(C2SPid, element_wrapper(Element)),</span><br><span class="line">        process_data(Els, State)</span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+<p>ejabberd_c2s进程接收到<code>&#123;xmlstreamstart, _Name, Attrs&#125;</code>消息后，调用状态函数wait_for_stream&#x2F;2来处理。wait_for_stream在一系列正确性校验通过之后，回应给客户端XML流头。如果这个XML流之前还没有通过登录验证，则进行登录验证过程。简化的代码逻辑如下:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> StateData#state.authenticated <span class="keyword">of</span></span><br><span class="line"><span class="literal">false</span> -&gt;</span><br><span class="line">    SASLState = cyrsasl:server_new(</span><br><span class="line">        <span class="string">&quot;jabber&quot;</span>, Server, <span class="string">&quot;&quot;</span>, [],</span><br><span class="line">        <span class="keyword">fun</span>(U) -&gt;</span><br><span class="line">            ejabberd_auth:get_password_with_authmodule(U, Server)</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        <span class="keyword">fun</span>(U, P) -&gt;</span><br><span class="line">            ejabberd_auth:check_password_with_authmodule(U, Server, P)</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        <span class="keyword">fun</span>(U, P, D, DG) -&gt;</span><br><span class="line">            ejabberd_auth:check_password_with_authmodule(U, Server, P, D, DG)</span><br><span class="line">        <span class="keyword">end</span>),</span><br><span class="line">    Mechs = lists:map(</span><br><span class="line">            <span class="keyword">fun</span>(S) -&gt;</span><br><span class="line">                &#123;xmlelement, <span class="string">&quot;mechanism&quot;</span>, [], [&#123;xmlcdata, S&#125;]&#125;</span><br><span class="line">            <span class="keyword">end</span>, cyrsasl:listmech(Server)),</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    send_element(StateData,</span><br><span class="line">            &#123;xmlelement, <span class="string">&quot;stream:features&quot;</span>, [],</span><br><span class="line">            TLSFeature ++ CompressFeature ++</span><br><span class="line">            [&#123;xmlelement, <span class="string">&quot;mechanisms&quot;</span>,</span><br><span class="line">            [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_SASL&#125;],</span><br><span class="line">            Mechs&#125;] ++</span><br><span class="line">            ejabberd_hooks:run_fold(</span><br><span class="line">                c2s_stream_features,</span><br><span class="line">                Server,</span><br><span class="line">                [], [Server])&#125;),</span><br><span class="line">    fsm_next_state(wait_for_feature_request,</span><br><span class="line">            StateData#state&#123;</span><br><span class="line">            server = Server,</span><br><span class="line">            sasl_state = SASLState,</span><br><span class="line">            lang = Lang&#125;);</span><br><span class="line">_ -&gt;</span><br><span class="line">    ...</span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+<p>首先调用cyrsasl:server_new&#x2F;7创建一个SASL验证状态, 其中存储了3个用于密码校验的回调函数。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">server_new</span><span class="params">(Service, ServerFQDN, UserRealm, _SecFlags,</span></span></span><br><span class="line"><span class="params"><span class="function">       GetPassword, CheckPassword, CheckPasswordDigest)</span> -&gt;</span></span><br><span class="line">    #sasl_state&#123;service = Service,</span><br><span class="line">                myname = ServerFQDN,</span><br><span class="line">                realm = UserRealm,</span><br><span class="line">                get_password = GetPassword,</span><br><span class="line">                check_password = CheckPassword,</span><br><span class="line">                check_password_digest= CheckPasswordDigest&#125;.</span><br></pre></td></tr></table></figure>
+<p>wait_for_stream函数接着调用cyrsasl:listmech&#x2F;1获取当前域名所支持的SASL验证机制。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">listmech</span><span class="params">(Host)</span> -&gt;</span></span><br><span class="line">    Mechs = ets:select(sasl_mechanism,</span><br><span class="line">       [&#123;#sasl_mechanism&#123;mechanism = &#x27;$<span class="number">1</span>&#x27;,</span><br><span class="line">                         password_type = &#x27;$<span class="number">2</span>&#x27;,</span><br><span class="line">                         _ = &#x27;_&#x27;&#125;,</span><br><span class="line">        <span class="keyword">case</span> <span class="keyword">catch</span> ejabberd_auth:store_type(Host) <span class="keyword">of</span></span><br><span class="line">        external -&gt;</span><br><span class="line">             [&#123;&#x27;==&#x27;, &#x27;$<span class="number">2</span>&#x27;, plain&#125;];</span><br><span class="line">        scram -&gt;</span><br><span class="line">             [&#123;&#x27;/=&#x27;, &#x27;$<span class="number">2</span>&#x27;, digest&#125;];</span><br><span class="line">        &#123;&#x27;EXIT&#x27;,&#123;undef,[&#123;Module,store_type,[]&#125; | _]&#125;&#125; -&gt;</span><br><span class="line">             ?WARNING_MSG(<span class="string">&quot;~p doesn&#x27;t implement the function store_type/0&quot;</span>, [Module]),</span><br><span class="line">             [];</span><br><span class="line">        _Else -&gt;</span><br><span class="line">             []</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">        [&#x27;$<span class="number">1</span>&#x27;]&#125;]),</span><br><span class="line">    filter_anonymous(Host, Mechs).</span><br></pre></td></tr></table></figure>
+<p>listmech函数调用ejabberd_auth:store_type&#x2F;1从ejabberd.cfg文件获取密码存储格式(auth_password_format)的配置。从sasl_mechanism表中查询出支持该密码存储格式的SASL机制。wait_for_stream函数将这些机制组织成XMPP协议格式发送回客户端，将当前进程状态改为wait_for_feature_request。比如，发送的机制列表为：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">stream:features</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mechanisms</span> <span class="attr">xmlns</span>=<span class="string">&quot;urn:ietf:params:xml:ns:xmpp-sasl&quot;</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mechanism</span>&gt;</span>PLAIN<span class="tag">&lt;/<span class="name">mechanism</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mechanism</span>&gt;</span>DIGEST-MD5<span class="tag">&lt;/<span class="name">mechanism</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">mechanism</span>&gt;</span>SCRAM-SHA-1<span class="tag">&lt;/<span class="name">mechanism</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">mechanisms</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">c</span> <span class="attr">xmlns</span>=<span class="string">&quot;http://jabber.org/protocol/caps&quot;</span> <span class="attr">node</span>=<span class="string">&quot;http://www.process-one.net/en/ejabberd/&quot;</span> <span class="attr">ver</span>=<span class="string">&quot;yy7di5kE0syuCXOQTXNBTclpNTo=&quot;</span> <span class="attr">hash</span>=<span class="string">&quot;sha-1&quot;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">register</span> <span class="attr">xmlns</span>=<span class="string">&quot;http://jabber.org/features/iq-register&quot;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">stream:features</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>客户端从其中选择一个机制并发送给ejabberd服务器。如:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">auth</span> <span class="attr">xmlns</span>=<span class="string">&quot;urn:ietf:params:xml:ns:xmpp-sasl&quot;</span> <span class="attr">mechanism</span>=<span class="string">&quot;PLAIN&quot;</span>&gt;</span>AGFhYQAxMjM=<span class="tag">&lt;/<span class="name">auth</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>ejabberd_receiver进程解析完这个XML元素后，发送消息<code>&#123;xmlstreamelement, El&#125;</code>给ejabberd_c2s进程。ejabberd_c2s进程调用wait_for_feature_request函数进行处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line">Mech = xml:get_attr_s(<span class="string">&quot;mechanism&quot;</span>, Attrs),</span><br><span class="line">ClientIn = jlib:decode_base64(xml:get_cdata(Els)),</span><br><span class="line"><span class="keyword">case</span> cyrsasl:server_start(StateData#state.sasl_state,</span><br><span class="line">                          Mech,</span><br><span class="line">                          ClientIn) <span class="keyword">of</span></span><br><span class="line">&#123;ok, Props&#125; -&gt;</span><br><span class="line">    (StateData#state.sockmod):reset_stream(StateData#state.socket),</span><br><span class="line">    send_element(StateData, &#123;xmlelement, <span class="string">&quot;success&quot;</span>, [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_SASL&#125;], []&#125;),</span><br><span class="line">    U = xml:get_attr_s(username, Props),</span><br><span class="line">    AuthModule = xml:get_attr_s(auth_module, Props),</span><br><span class="line">    ...</span><br><span class="line">    fsm_next_state(wait_for_stream,</span><br><span class="line">                   StateData#state&#123;</span><br><span class="line">                       streamid = new_id(),</span><br><span class="line">                       authenticated = true,</span><br><span class="line">                       auth_module = AuthModule,</span><br><span class="line">                       user = U &#125;);</span><br><span class="line">&#123;continue, ServerOut, NewSASLState&#125; -&gt;</span><br><span class="line">    send_element(StateData,</span><br><span class="line">                 &#123;xmlelement, <span class="string">&quot;challenge&quot;</span>,</span><br><span class="line">                 [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_SASL&#125;],</span><br><span class="line">                 [&#123;xmlcdata,</span><br><span class="line">                 jlib:encode_base64(ServerOut)&#125;]&#125;),</span><br><span class="line">    fsm_next_state(wait_for_sasl_response,</span><br><span class="line">                   StateData#state&#123;</span><br><span class="line">                       sasl_state = NewSASLState&#125;);</span><br><span class="line">&#123;error, Error, Username&#125; -&gt;</span><br><span class="line">    IP = peerip(StateData#state.sockmod, StateData#state.socket),</span><br><span class="line">    ...</span><br><span class="line">    send_element(StateData,</span><br><span class="line">                 &#123;xmlelement, <span class="string">&quot;failure&quot;</span>,</span><br><span class="line">                 [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_SASL&#125;],</span><br><span class="line">                 [&#123;xmlelement, Error, [], []&#125;]&#125;),</span><br><span class="line">    &#123;next_state, wait_for_feature_request, StateData, ?C2S_OPEN_TIMEOUT&#125;;</span><br><span class="line">&#123;error, Error&#125; -&gt;</span><br><span class="line">    send_element(StateData,</span><br><span class="line">                 &#123;xmlelement, <span class="string">&quot;failure&quot;</span>,</span><br><span class="line">                 [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_SASL&#125;],</span><br><span class="line">                 [&#123;xmlelement, Error, [], []&#125;]&#125;),</span><br><span class="line">    fsm_next_state(wait_for_feature_request, StateData)</span><br><span class="line"><span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+<p>ejabberd_c2s进程判断收到的XML元素是auth请求后，从请求中获取客户端选择的机制mechanism，读取客户端发送的信息，然后调用cyrsasl:server_start&#x2F;3。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">server_start</span><span class="params">(State, Mech, ClientIn)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> lists:member(Mech, listmech(State#sasl_state.myname)) <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        <span class="keyword">case</span> ets:lookup(sasl_mechanism, Mech) <span class="keyword">of</span></span><br><span class="line">        [#sasl_mechanism&#123;module = Module&#125;] -&gt;</span><br><span class="line">            &#123;ok, MechState&#125; = Module:mech_new(</span><br><span class="line">                    State#sasl_state.myname,</span><br><span class="line">                    State#sasl_state.get_password,</span><br><span class="line">                    State#sasl_state.check_password,</span><br><span class="line">                    State#sasl_state.check_password_digest),</span><br><span class="line">            server_step(State#sasl_state&#123;mech_mod = Module,</span><br><span class="line">                         mech_state = MechState&#125;,</span><br><span class="line">                ClientIn);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            &#123;error, <span class="string">&quot;no-mechanism&quot;</span>&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    <span class="literal">false</span> -&gt;</span><br><span class="line">        &#123;error, <span class="string">&quot;no-mechanism&quot;</span>&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>server_start从sasl_mechanism表中查询出机制模块，并调用机制模块的mech_new&#x2F;4。这个函数会创建一个机制本身的状态结构。如，PLAIN机制模块的mech_new&#x2F;4：</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">mech_new</span><span class="params">(_Host, _GetPassword, CheckPassword, _CheckPasswordDigest)</span> -&gt;</span></span><br><span class="line">    &#123;ok, #state&#123;check_password = CheckPassword&#125;&#125;.</span><br></pre></td></tr></table></figure>
+<p>server_start函数将这个机制状态保存到SASL状态结构里的mech_state字段，调用server_step。而server_step则调用机制模块的mech_step。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">server_step</span><span class="params">(State, ClientIn)</span> -&gt;</span></span><br><span class="line">    Module = State#sasl_state.mech_mod,</span><br><span class="line">    MechState = State#sasl_state.mech_state,</span><br><span class="line">    <span class="keyword">case</span> Module:mech_step(MechState, ClientIn) <span class="keyword">of</span></span><br><span class="line">    &#123;ok, Props&#125; -&gt;</span><br><span class="line">        <span class="keyword">case</span> check_credentials(State, Props) <span class="keyword">of</span></span><br><span class="line">        ok -&gt;</span><br><span class="line">            &#123;ok, Props&#125;;</span><br><span class="line">        &#123;error, Error&#125; -&gt;</span><br><span class="line">            &#123;error, Error&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    &#123;ok, Props, ServerOut&#125; -&gt;</span><br><span class="line">        <span class="keyword">case</span> check_credentials(State, Props) <span class="keyword">of</span></span><br><span class="line">        ok -&gt;</span><br><span class="line">            &#123;ok, Props, ServerOut&#125;;</span><br><span class="line">        &#123;error, Error&#125; -&gt;</span><br><span class="line">            &#123;error, Error&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    &#123;continue, ServerOut, NewMechState&#125; -&gt;</span><br><span class="line">        &#123;continue, ServerOut,</span><br><span class="line">         State#sasl_state&#123;mech_state = NewMechState&#125;&#125;;</span><br><span class="line">    &#123;error, Error, Username&#125; -&gt;</span><br><span class="line">        &#123;error, Error, Username&#125;;</span><br><span class="line">    &#123;error, Error&#125; -&gt;</span><br><span class="line">        &#123;error, Error&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>Module:mech_step根据自身机制状态，返回不同的值。当验证通过时，返回ok信息。如若还需要其他信息继续验证，则返回continue信息。验证出错时，返回error信息。wait_for_feature_request函数根据不同的返回值，进行不同的处理。</p>
+<ul>
+<li>当返回ok信息时，ejabberd_c2s进程向客户端发送验证成功的消息，登录验证流程结束。</li>
+<li>当返回continue信息时，表示验证流程需要继续，因而向客户端返回服务端的chelange信息，ejabberd_c2s进程状态变为wait_for_sasl_response。当客户端再回应验证信息后，wait_for_sasl_response函数再次调用server_step进行验证处理。</li>
+<li>当返回error信息时，ejabberd_c2s进程向客户端发送验证失败的消息，登录验证流程结束。</li>
+</ul>
+<p>PLAIN机制只需要用户名和密码，这些信息附在客户端选择机制的AUTH请求中。因而只需要调用一次mech_step函数，mech_step也因而不会返回continue。cyrsasl_plain:mech_step调用mech_new中传入的check_password回调函数(不同机制会调用不同的回调函数)来检查用户名和密码是否正确。这部分逻辑由ejabberd_auth模块封装不同的模块完成，本文略过。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">mech_step</span><span class="params">(State, ClientIn)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> prepare(ClientIn) <span class="keyword">of</span></span><br><span class="line">    [AuthzId, User, Password] -&gt;</span><br><span class="line">        <span class="keyword">case</span> (State#state.check_password)(User, Password) <span class="keyword">of</span></span><br><span class="line">        &#123;true, AuthModule&#125; -&gt;</span><br><span class="line">            &#123;ok, [&#123;username, User&#125;, &#123;authzid, AuthzId&#125;,</span><br><span class="line">              &#123;auth_module, AuthModule&#125;]&#125;;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            &#123;error, <span class="string">&quot;not-authorized&quot;</span>, User&#125;</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        &#123;error, <span class="string">&quot;bad-protocol&quot;</span>&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>SCRAM机制需要多次Chelange&#x2F;Response交互，需要多次调用它的mech_step。因而它在机制状态内部来分步骤完成，具体可以参考cyrsasl_scram.erl，本文不详述。</p>
+<p>当机制mech_step返回ok或error时，ejabberd_c2s进程返回给客户端相应的回应，登录验证的流程结束。</p>
+<p>注: ejabberd代码版本为2.1.13。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/06/sasl/" rel="prev" title="SASL与身份验证">
+      <i class="fa fa-chevron-left"></i> SASL与身份验证
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/11/18/nginx-response-sending/" rel="next" title="NGINX发送响应分析">
+      NGINX发送响应分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

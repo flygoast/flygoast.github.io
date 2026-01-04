@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="PowerDNS是一个开源DNS服务器。它包括了授权DNS服务器和递归DNS服务器。本文只讨论授权DNS服务器，主要分析PowerDNS的架构及Backend模块机制的实现。 PowerDNS由各种各样的backend来处理DNS解析相关数据，数据可以存储在BIND模式的ZONE文件中，也可以存储在关系型数据库中。官方实现了很多backend，如Bind, Postgresql, Mysql等。每">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PowerDNS模块机制分析">
+<meta property="og:url" content="http://just4coding.com/2014/11/01/powerdns-module-scheme/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="PowerDNS是一个开源DNS服务器。它包括了授权DNS服务器和递归DNS服务器。本文只讨论授权DNS服务器，主要分析PowerDNS的架构及Backend模块机制的实现。 PowerDNS由各种各样的backend来处理DNS解析相关数据，数据可以存储在BIND模式的ZONE文件中，也可以存储在关系型数据库中。官方实现了很多backend，如Bind, Postgresql, Mysql等。每">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-01T03:15:45.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.466Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/11/01/powerdns-module-scheme/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>PowerDNS模块机制分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/01/powerdns-module-scheme/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          PowerDNS模块机制分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-01 11:15:45" itemprop="dateCreated datePublished" datetime="2014-11-01T11:15:45+08:00">2014-11-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/DNS/" itemprop="url" rel="index">
+                    <span itemprop="name">DNS</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="http://www.powerdns.com/">PowerDNS</a>是一个开源DNS服务器。它包括了授权DNS服务器和递归DNS服务器。本文只讨论授权DNS服务器，主要分析PowerDNS的架构及Backend模块机制的实现。</p>
+<p>PowerDNS由各种各样的backend来处理DNS解析相关数据，数据可以存储在BIND模式的ZONE文件中，也可以存储在关系型数据库中。官方实现了很多backend，如Bind, Postgresql, Mysql等。每种backend实现为一个SO文件。PowerDNS启动时根据配置中的launch语句加载指定的so文件。这种方式使得PowerDNS的可扩展性非常高。<br>简略的PowerDNS架构图如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">+-----------------------------------------------------------------------+</span><br><span class="line">|                    |                 |                                |</span><br><span class="line">|    +------------+  |  +-----------+  |                                |</span><br><span class="line">|    |main thread |  |  |PacketCache|  |                                |</span><br><span class="line">|    +------------+  |  +-----------+  |                                |</span><br><span class="line">|                    |                 |                                |</span><br><span class="line">|    +------------+  |                 |                                |</span><br><span class="line">|    |DynListerner|  |                 |                                |</span><br><span class="line">|    +------------+  |                 |  +-----------+   +----------+  |</span><br><span class="line">|                    |       +---------+--|Distributor|---|DNSBackend|  |</span><br><span class="line">|    +--------+      |       |         |  +-----------+   +----------+  |</span><br><span class="line">|    |receiver|------+-------+         |                                |</span><br><span class="line">|    +--------+      |       |         |  +-----------+   +----------+  |</span><br><span class="line">|                    |       +---------+--|Distributor|---|DNSBackend|  |</span><br><span class="line">|       ...          |                 |  +-----------+   +----------+  |</span><br><span class="line">|                    |                 |     ...                        |</span><br><span class="line">|                    |                 |                                |</span><br><span class="line">|    +--------+      |                 |  +-----------+   +----------+  |</span><br><span class="line">|    |receiver|------+-------+---------+--|Distributor|---|DNSBackend|  |</span><br><span class="line">|    +--------+      |       |         |  +-----------+   +----------+  |</span><br><span class="line">|                    |       |         |                                |</span><br><span class="line">|                    |       |         |  +-----------+   +----------+  |</span><br><span class="line">|                    |       +---------+--|Distributor|---|DNSBackend|  |</span><br><span class="line">|                    |                 |  +-----------+   +----------+  |</span><br><span class="line">|                                                                       |</span><br><span class="line">+-----------------------------------------------------------------------+</span><br></pre></td></tr></table></figure>
+
+<p>下面具体分析PowerDNS的启动流程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(::arg().mustDo(<span class="string">&quot;guardian&quot;</span>) &amp;&amp; !isGuarded(argv)) &#123;</span><br><span class="line">  <span class="keyword">if</span>(::arg().mustDo(<span class="string">&quot;daemon&quot;</span>)) &#123;</span><br><span class="line">    L.toConsole(Logger::Critical);</span><br><span class="line">    daemonize();</span><br><span class="line">  &#125;</span><br><span class="line">  guardian(argc, argv);</span><br><span class="line">  <span class="comment">// never get here, guardian will reinvoke process</span></span><br><span class="line">  <span class="built_in">cerr</span>&lt;&lt;<span class="string">&quot;Um, we did get here!&quot;</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// we really need to do work - either standalone or as an instance</span></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>如果启动参数中指定了“–guardian&#x3D;yes”，则PowerDNS运行在guardian模式，主进程fork出一个子进程执行正常的启动流程，而父进程则一秒钟探测一次子进程是否存活，如果子进程异常退出则重新启动子进程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(;;) &#123;</span><br><span class="line">  <span class="type">int</span> ret=waitpid(pid,&amp;status,WNOHANG);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ret&lt;<span class="number">0</span>) &#123;</span><br><span class="line">    L&lt;&lt;Logger::Error&lt;&lt;<span class="string">&quot;In guardian loop, waitpid returned error: &quot;</span>&lt;&lt;strerror(errno)&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">    L&lt;&lt;Logger::Error&lt;&lt;<span class="string">&quot;Dying&quot;</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">1</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">else</span> <span class="keyword">if</span>(ret) <span class="comment">// something exited</span></span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">else</span> &#123; <span class="comment">// child is alive</span></span><br><span class="line">    <span class="comment">// execute some kind of ping here</span></span><br><span class="line">    <span class="keyword">if</span>(DLQuitPlease())</span><br><span class="line">      takedown(<span class="number">1</span>); <span class="comment">// needs a parameter..</span></span><br><span class="line">    setStatus(<span class="string">&quot;Child running on pid &quot;</span>+itoa(pid));</span><br><span class="line">    sleep(<span class="number">1</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">pthread_mutex_lock(&amp;g_guardian_lock);</span><br><span class="line">close(g_fd1[<span class="number">1</span>]);</span><br><span class="line">fclose(g_fp);</span><br><span class="line">g_fp=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span>(WIFEXITED(status)) &#123;</span><br><span class="line">  <span class="type">int</span> ret=WEXITSTATUS(status);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ret==<span class="number">99</span>) &#123;</span><br><span class="line">    L&lt;&lt;Logger::Error&lt;&lt;<span class="string">&quot;Child requested a stop, exiting&quot;</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">1</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  setStatus(<span class="string">&quot;Child died with code &quot;</span>+itoa(ret));</span><br><span class="line">  L&lt;&lt;Logger::Error&lt;&lt;<span class="string">&quot;Our pdns instance exited with code &quot;</span>&lt;&lt;ret&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">  L&lt;&lt;Logger::Error&lt;&lt;<span class="string">&quot;Respawning&quot;</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">goto</span> respawn;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>子进程或非guardian模式的原生进程执行正常的启动流程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">loadModules();</span><br><span class="line">BackendMakers().launch(::arg()[<span class="string">&quot;launch&quot;</span>]); <span class="comment">// vrooooom!</span></span><br></pre></td></tr></table></figure>
+
+<p>loadModules()会根据”load-modules”配置语句调用dlopen来加载相应的SO文件。BackendMakers().launch(::arg()[“launch”]);来加载launch语句指定的modules。然后开始监听指定的UDP和TCP端口。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">N=new UDPNameserver; <span class="comment">// this fails when we are not root, throws exception</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span>(!::arg().mustDo(<span class="string">&quot;disable-tcp&quot;</span>))</span><br><span class="line">  TN=new TCPNameserver;</span><br></pre></td></tr></table></figure>
+
+<p>接着调用mainthread()来初始化若干网络包接收线程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">unsigned</span> <span class="type">int</span> max_rthreads= ::arg().asNum(<span class="string">&quot;receiver-threads&quot;</span>);</span><br><span class="line"><span class="keyword">for</span>(<span class="type">unsigned</span> <span class="type">int</span> n=<span class="number">0</span>; n &lt; max_rthreads; ++n)</span><br><span class="line">  pthread_create(&amp;qtid,<span class="number">0</span>,qthread, reinterpret_cast&lt;<span class="type">void</span> *&gt;(n)); <span class="comment">// receives packets</span></span><br></pre></td></tr></table></figure>
+
+<p>而每个接收线程则会创建若干自己的distributor线程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">DNSDistributor *distributor = DNSDistributor::Create(::arg().asNum(<span class="string">&quot;distributor-threads&quot;</span>)); <span class="comment">// the big dispatcher!</span></span><br></pre></td></tr></table></figure>
+
+<p>接下来接收线程开始自己处理网络数据。接收到DNS查询包后，首先在PacketCache中查询是否有相应的响应。PacketCache是PowerDNS中Backend响应的Cache，它减少对于Backend的访问，可以大大提高性能。如果在PacketCache中没有找到，则调用distributor-&gt;question分发给distributor线程。示意代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(;;) &#123;</span><br><span class="line">  <span class="keyword">if</span>(!(P=NS-&gt;receive(&amp;question))) &#123; <span class="comment">// receive a packet         inline</span></span><br><span class="line">    <span class="keyword">continue</span>;                    <span class="comment">// packet was broken, try again</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(P-&gt;couldBeCached() &amp;&amp; PC.get(P, &amp;cached)) &#123; <span class="comment">// short circuit - does the PacketCache recognize this question?</span></span><br><span class="line">    NS-&gt;send(&amp;cached);   <span class="comment">// answer it then</span></span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  distributor-&gt;question(P, &amp;sendout);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在调用question方法时会传递一个回调函数sendout。distributor线程处理完DNS请求后将调用该回调函数将响应返回给客户端。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">sendout</span><span class="params">(<span class="type">const</span> DNSDistributor::AnswerData &amp;AD)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> &amp;numanswered=*S.getPointer(<span class="string">&quot;udp-answers&quot;</span>);</span><br><span class="line">  <span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> &amp;numanswered4=*S.getPointer(<span class="string">&quot;udp4-answers&quot;</span>);</span><br><span class="line">  <span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> &amp;numanswered6=*S.getPointer(<span class="string">&quot;udp6-answers&quot;</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(!AD.A)</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line"></span><br><span class="line">  N-&gt;send(AD.A);</span><br><span class="line">  numanswered++;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(AD.A-&gt;d_remote.getSocklen()==<span class="keyword">sizeof</span>(sockaddr_in))</span><br><span class="line">    numanswered4++;</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    numanswered6++;</span><br><span class="line"></span><br><span class="line">  <span class="type">int</span> diff=AD.A-&gt;d_dt.udiff();</span><br><span class="line">  avg_latency=(<span class="type">int</span>)(<span class="number">1023</span>*avg_latency/<span class="number">1024</span>+diff/<span class="number">1024</span>);</span><br><span class="line"></span><br><span class="line">  delete AD.A;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>distributor线程中调用backend来处理DNS响应。示意代码如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">B.lookup;</span><br><span class="line">DNSResourceRecord rr;</span><br><span class="line"><span class="keyword">while</span>(yb.get(rr))</span><br><span class="line">    <span class="built_in">cout</span>&lt;&lt;<span class="string">&quot;Found cname pointing to &#x27;&quot;</span>+rr.content+<span class="string">&quot;&#x27;&quot;</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中B为UeberBackend实例。UeberBackend是一个特殊的Backend。启动时被加载的其他backend向它注册，被保存在一个vector中。UeberBackend按注册顺序依次调用其他backend的相应成员方法。以reload操作为例:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">UeberBackend::reload</span><span class="params">()</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">for</span> ( <span class="built_in">vector</span>&lt; DNSBackend * &gt;::iterator i = backends.begin(); i != backends.end(); ++i )</span><br><span class="line">  &#123;</span><br><span class="line">    ( *i )-&gt;reload();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>lookup和get成员方法实现比较特殊。UeberBackend有一个成员变量d_handle表示当前处理请求的真实backend.在lookup中，会将第一个注册的backend赋给d_handle, 并调用该backend的lookup。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(d_handle.d_hinterBackend=backends[d_handle.i++])-&gt;lookup(qtype, qname,pkt_p,zoneId);</span><br></pre></td></tr></table></figure>
+
+<p>UeberBackend的get方法会调用d_handle实例的get方法。而d_handle.get首先调用第一个backend的get方法。如果成功，则返回。否则调用下一个backend的lookup和get方法。直到get方法返回成功或者遍历完所有backend.这种实现保证了get方法所获取的响应是由本backend的lookup所生成。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">bool</span> UeberBackend::handle::get(DNSResourceRecord &amp;r)</span><br><span class="line">&#123;</span><br><span class="line">  DLOG(L &lt;&lt; <span class="string">&quot;Ueber get() was called for a &quot;</span>&lt;&lt;qtype.getName()&lt;&lt;<span class="string">&quot; record&quot;</span> &lt;&lt; <span class="built_in">endl</span>);</span><br><span class="line">  <span class="type">bool</span> isMore=<span class="literal">false</span>;</span><br><span class="line">  <span class="keyword">while</span>(d_hinterBackend &amp;&amp; !(isMore=d_hinterBackend-&gt;get(r))) &#123; <span class="comment">// this backend out of answers</span></span><br><span class="line">    <span class="keyword">if</span>(i&lt;parent-&gt;backends.size()) &#123;</span><br><span class="line">      DLOG(L&lt;&lt;<span class="string">&quot;Backend #&quot;</span>&lt;&lt;i&lt;&lt;<span class="string">&quot; of &quot;</span>&lt;&lt;parent-&gt;backends.size()</span><br><span class="line">           &lt;&lt;<span class="string">&quot; out of answers, taking next&quot;</span>&lt;&lt;<span class="built_in">endl</span>);</span><br><span class="line"></span><br><span class="line">      d_hinterBackend=parent-&gt;backends[i++];</span><br><span class="line">      d_hinterBackend-&gt;lookup(qtype,qname,pkt_p,parent-&gt;domain_id);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    DLOG(L&lt;&lt;<span class="string">&quot;Now asking backend #&quot;</span>&lt;&lt;i&lt;&lt;<span class="built_in">endl</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(!isMore &amp;&amp; i==parent-&gt;backends.size()) &#123;</span><br><span class="line">    DLOG(L&lt;&lt;<span class="string">&quot;UeberBackend reached end of backends&quot;</span>&lt;&lt;<span class="built_in">endl</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  DLOG(L&lt;&lt;<span class="string">&quot;Found an answering backend - will not try another one&quot;</span>&lt;&lt;<span class="built_in">endl</span>);</span><br><span class="line">  i=parent-&gt;backends.size(); <span class="comment">// don&#x27;t go on to the next backend</span></span><br><span class="line">  <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面介绍module加载的过程。PowerDNS的module实现需要包含三个部分。</p>
+<ol>
+<li>Backend本身，它需要继承父类DNSBackend.</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* FIRST PART */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">RandomBackend</span> :</span> public DNSBackend&#123;&#125;</span><br></pre></td></tr></table></figure>
+<ol start="2">
+<li>工厂类，它用于产生Backend实例。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* SECOND PART */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">RandomFactory</span> :</span> public BackendFactory&#123;&#125;</span><br></pre></td></tr></table></figure>
+<ol start="3">
+<li>加载器类和该类的一个static实例。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* THIRD PART */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">RandomLoader</span>&#123;</span>&#125;;</span><br><span class="line"><span class="type">static</span> RandomLoader randomloader;</span><br></pre></td></tr></table></figure>
+
+<p>当进程调用dlopen时，该static loader实例的构造函数被调用，将其注册在UeberBackend中。</p>
+<p>可以参考我写的一个简单的PowerDNS模块: <a target="_blank" rel="noopener" href="https://github.com/flygoast/remoteipbackend">remoteipbackend</a>, 用于返回到达它的递归DNS的出口IP地址。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/01/nginx-purge-directory/" rel="prev" title="NGINX按目录清除缓存">
+      <i class="fa fa-chevron-left"></i> NGINX按目录清除缓存
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/11/01/ejabberd-stanza-processing/" rel="next" title="ejabberd消息处理流程分析">
+      ejabberd消息处理流程分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

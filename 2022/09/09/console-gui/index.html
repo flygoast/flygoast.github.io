@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="以虚拟机镜像或者自带操作系统形式交付的产品往往需要对系统进行各种各样的配置，如IP设置、DNS设置等等。为了提升用户体验，提供更简化的使用方式，往往会在console界面提供GUI&#x2F;TUI的交互方式, 如XenServer的console界面:   本文介绍在CentOS7系统上增加GUI界面的方法。 Linux系统的终端输入&#x2F;输出设备一般称为TTY，是TeleTypewriter的缩写">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CentOS7配置Console GUI&#x2F;TUI程序">
+<meta property="og:url" content="http://just4coding.com/2022/09/09/console-gui/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="以虚拟机镜像或者自带操作系统形式交付的产品往往需要对系统进行各种各样的配置，如IP设置、DNS设置等等。为了提升用户体验，提供更简化的使用方式，往往会在console界面提供GUI&#x2F;TUI的交互方式, 如XenServer的console界面:   本文介绍在CentOS7系统上增加GUI界面的方法。 Linux系统的终端输入&#x2F;输出设备一般称为TTY，是TeleTypewriter的缩写">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-09-09/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-09-09/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-09-09/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-09-09/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-09-09/5.png">
+<meta property="article:published_time" content="2022-09-09T09:30:25.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.504Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="TUI">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-09-09/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/09/09/console-gui/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>CentOS7配置Console GUI/TUI程序 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/09/09/console-gui/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          CentOS7配置Console GUI/TUI程序
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-09-09 17:30:25" itemprop="dateCreated datePublished" datetime="2022-09-09T17:30:25+08:00">2022-09-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>以虚拟机镜像或者自带操作系统形式交付的产品往往需要对系统进行各种各样的配置，如IP设置、DNS设置等等。为了提升用户体验，提供更简化的使用方式，往往会在<code>console</code>界面提供<code>GUI/TUI</code>的交互方式, 如<code>XenServer</code>的<code>console</code>界面:</p>
+<img src="/images/2022-09-09/1.png" class="">
+
+<p>本文介绍在<code>CentOS7</code>系统上增加<code>GUI</code>界面的方法。</p>
+<p>Linux系统的终端输入&#x2F;输出设备一般称为<code>TTY</code>，是<code>TeleTypewriter</code>的缩写, 它的历史可以参考这两篇文章:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://itsfoss.com/what-is-tty-in-linux/">https://itsfoss.com/what-is-tty-in-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.linusakesson.net/programming/tty/index.php">https://www.linusakesson.net/programming/tty/index.php</a></li>
+</ul>
+<p><code>getty</code>是管理物理或者虚拟终端(<code>ttys</code>)程序的通用名称，表示<code>get tty</code>，用于防止非授权访问系统。当<code>getty</code>检测到终端连接时，它获取用户输入用户名, 然后执行<code>login</code>程序获取用户输入密码来进行登录校验。</p>
+<p>从终端登录的一般过程是:</p>
+<ul>
+<li>系统内核启动完成后，会启动<code>init</code>进程，它是一号进程。</li>
+<li><code>init</code>进程会在特定的<code>tty</code>启动<code>getty</code>进程获取用户名。</li>
+<li>调用<code>exec</code>执行<code>login</code>程序处理登录过程</li>
+<li><code>login</code>登录校验成功后，执行相应用户指定的<code>shell</code>程序</li>
+</ul>
+<span id="more"></span>
+
+<p>整体的流程图如下:</p>
+<img src="/images/2022-09-09/2.png" class="">
+
+<p><code>CentOS7</code>上的<code>init</code>程序已经从<code>SysV init</code>换为<code>systemd</code>，安装的<code>getty</code>程序为<code>agetty</code>。默认情况下，<code>CentOS7</code>有<code>6</code>个可用的<code>tty</code>，可以使用<code>Ctrl + Alt + F[1-6]</code>进行切换访问。</p>
+<p>根据上述的终端登录流程，想要在终端显示<code>GUI</code>程序可以有几种方法:</p>
+<ul>
+<li>将<code>GUI</code>程序作为<code>getty</code>程序执行</li>
+<li>将<code>GUI</code>程序替换<code>login</code>程序执行，这种方式需要跳过<code>getty</code>程序读取用户名的步骤</li>
+<li>将<code>GUI</code>程序作为<code>shell</code>程序执行，这种方式需要完成自动登录，跳过密码校验之前的步骤</li>
+</ul>
+<p><code>CentOS</code>的<code>init</code>程序为<code>systemd</code>。它通过<code>service</code>模板来定义<code>getty</code>服务，从而支持多个<code>getty</code>程序启动：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># systemctl list-units --type=service |grep tty</span></span><br><span class="line">getty@tty1.service                 loaded active running Getty on tty1</span><br><span class="line">[root@default ~]<span class="comment"># systemctl list-unit-files --type=service |grep &#x27;^getty@&#x27;</span></span><br><span class="line">getty@.service                                enabled</span><br></pre></td></tr></table></figure>
+
+
+<p>下面分别来简单实验一下这几种方式。</p>
+<h6 id="将GUI程序作为getty程序执行"><a href="#将GUI程序作为getty程序执行" class="headerlink" title="将GUI程序作为getty程序执行"></a>将<code>GUI</code>程序作为<code>getty</code>程序执行</h6><p>我们写一个简单的<code>GUI</code>程序来替换<code>getty</code>, <code>getty</code>程序需要将标准输入&#x2F;输出指向<code>/dev/ttyN</code>(<code>N</code>为数字)驱动文件。可以参考<code>agetty</code>的实现，它位于包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># rpm -qf /sbin/agetty</span></span><br><span class="line">util-linux-2.23.2-63.el7.x86_64</span><br></pre></td></tr></table></figure>
+
+<p>之前的文章&lt;&lt;<a href="/2018/09/07/newt/">TUI库newt和snack简要介绍</a>&gt;&gt;介绍过<code>Redhat</code>的<code>TUI</code>库<code>newt</code>, 这里基于<code>newt</code>实现一个简单的登录界面，<code>tuilogin.c</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ctype.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;newt.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/stat.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;limits.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">show_login_failed_window</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    newtComponent label, button, form;</span><br><span class="line"></span><br><span class="line">    newtCls();</span><br><span class="line">    newtCenteredWindow(<span class="number">60</span>, <span class="number">6</span>, <span class="string">&quot;NOTE&quot;</span>);</span><br><span class="line">    label = newtLabel(<span class="number">10</span>, <span class="number">2</span>, <span class="string">&quot;Login failed!&quot;</span>);</span><br><span class="line"></span><br><span class="line">    button = newtCompactButton(<span class="number">30</span>, <span class="number">4</span>, <span class="string">&quot;Exit&quot;</span>);</span><br><span class="line"></span><br><span class="line">    form = newtForm(<span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line">    newtFormAddComponents(form, label, button, <span class="literal">NULL</span>);</span><br><span class="line">    newtRunForm(form);</span><br><span class="line"></span><br><span class="line">    newtFormDestroy(form);</span><br><span class="line">    newtPopWindow();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">open_tty</span><span class="params">(<span class="type">char</span> *tty)</span> &#123;</span><br><span class="line">    <span class="type">int</span> fd;</span><br><span class="line">    <span class="type">char</span> buf[PATH_MAX+<span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">    <span class="built_in">snprintf</span>(buf, <span class="keyword">sizeof</span>(buf), <span class="string">&quot;/dev/%s&quot;</span>, tty);</span><br><span class="line"></span><br><span class="line">    fd = open(buf, O_RDWR|O_NOCTTY|O_NONBLOCK, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (fd &lt; <span class="number">-1</span>) &#123;</span><br><span class="line">       <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;open %s failed: %d\n&quot;</span>, fd);</span><br><span class="line">       <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    close(STDIN_FILENO);</span><br><span class="line">    close(STDOUT_FILENO);</span><br><span class="line">    close(STDERR_FILENO);</span><br><span class="line"></span><br><span class="line">    assert(dup2(fd, <span class="number">0</span>) == <span class="number">0</span>);</span><br><span class="line">    assert(dup2(fd, <span class="number">1</span>) == <span class="number">1</span>);</span><br><span class="line">    assert(dup2(fd, <span class="number">2</span>) == <span class="number">2</span>);</span><br><span class="line"></span><br><span class="line">    close(fd);</span><br><span class="line"></span><br><span class="line">    setvbuf(<span class="built_in">stdout</span>, <span class="literal">NULL</span>, _IONBF, <span class="number">0</span>);</span><br><span class="line">    setenv(<span class="string">&quot;TERM&quot;</span>, <span class="string">&quot;linux&quot;</span>, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span> &#123;</span><br><span class="line">    <span class="type">int</span> cols, rows;</span><br><span class="line">    <span class="type">char</span> *bash_args[<span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc != <span class="number">2</span>) &#123;</span><br><span class="line">        <span class="built_in">fprintf</span>(<span class="built_in">stderr</span>, <span class="string">&quot;usage: menu &lt;tty&gt;\n&quot;</span>);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    open_tty(argv[<span class="number">1</span>]);</span><br><span class="line"></span><br><span class="line">    newtInit();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        newtCls();</span><br><span class="line">        newtPushHelpLine(<span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">        newtGetScreenSize(&amp;cols, &amp;rows);</span><br><span class="line">        newtOpenWindow(<span class="number">1</span>, <span class="number">1</span>, cols - <span class="number">2</span>, rows - <span class="number">4</span>, <span class="string">&quot;LOGIN&quot;</span>);</span><br><span class="line"></span><br><span class="line">        newtComponent form, btn_ok, label_username, label_password,</span><br><span class="line">                      entry_username, entry_password, result;</span><br><span class="line">        <span class="type">const</span> <span class="type">char</span> *username, *password;</span><br><span class="line"></span><br><span class="line">        label_username = newtLabel(<span class="number">10</span>, <span class="number">3</span>, <span class="string">&quot;Username:&quot;</span>);</span><br><span class="line">        entry_username = newtEntry(<span class="number">20</span>, <span class="number">3</span>, <span class="string">&quot;&quot;</span>, <span class="number">20</span>, &amp;username,</span><br><span class="line">                                   NEWT_FLAG_SCROLL);</span><br><span class="line">        label_password = newtLabel(<span class="number">10</span>, <span class="number">5</span>, <span class="string">&quot;Password:&quot;</span>);</span><br><span class="line">        entry_password = newtEntry(<span class="number">20</span>, <span class="number">5</span>, <span class="string">&quot;&quot;</span>, <span class="number">20</span>, &amp;password,</span><br><span class="line">                                   NEWT_FLAG_PASSWORD | NEWT_FLAG_SCROLL);</span><br><span class="line"></span><br><span class="line">        result = newtLabel(<span class="number">10</span>, <span class="number">10</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line"></span><br><span class="line">        btn_ok = newtButton(<span class="number">20</span>, <span class="number">7</span>, <span class="string">&quot;  OK  &quot;</span>);</span><br><span class="line"></span><br><span class="line">        form = newtForm(<span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">        newtFormAddComponents(form, label_username, entry_username,</span><br><span class="line">                              label_password, entry_password,</span><br><span class="line">                              btn_ok, result,</span><br><span class="line">                              <span class="literal">NULL</span>);</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">newtExitStruct</span> <span class="title">exit_status</span>;</span></span><br><span class="line">        newtFormRun(form, &amp;exit_status);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (exit_status.reason == NEWT_EXIT_COMPONENT) &#123;</span><br><span class="line">            <span class="keyword">if</span> (exit_status.u.co == btn_ok) &#123;</span><br><span class="line">                <span class="keyword">if</span> ((<span class="built_in">strcmp</span>(username, <span class="string">&quot;root&quot;</span>) == <span class="number">0</span>)</span><br><span class="line">                    &amp;&amp; (<span class="built_in">strcmp</span>(password, <span class="string">&quot;123456&quot;</span>) == <span class="number">0</span>))</span><br><span class="line">                &#123;</span><br><span class="line">                    <span class="comment">/* login success */</span></span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    show_login_failed_window();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        newtRefresh();</span><br><span class="line">        newtFormDestroy(form);</span><br><span class="line">        newtPopWindow();</span><br><span class="line">        newtPopHelpLine();</span><br><span class="line"></span><br><span class="line">    &#125; <span class="keyword">while</span> (<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    newtFinished();</span><br><span class="line"></span><br><span class="line">    bash_args[<span class="number">0</span>] = <span class="string">&quot;bash&quot;</span>;</span><br><span class="line"></span><br><span class="line">    execv(<span class="string">&quot;/bin/bash&quot;</span>, bash_args);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -o tuilogin tuilogin.c -lnewt</span><br></pre></td></tr></table></figure>
+
+<p>程序功能为，当用户名输入<code>root</code>，密码输入<code>123456</code>时，执行<code>bash</code>进程。</p>
+<p>将编译后的<code>tuilogin</code>放到<code>/sbin/</code>目录。</p>
+<p>然后使用<code>systemd</code>的<code>drop-in files</code>机制来修改<code>tty1</code>的启动逻辑:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl edit getty@tty1</span><br></pre></td></tr></table></figure>
+<p>输入内容:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[Service]</span><br><span class="line">ExecStart=</span><br><span class="line">ExecStart=-/sbin/tuilogin %I</span><br></pre></td></tr></table></figure>
+<p>这会创建文件<code>/etc/systemd/system/getty@tty1.service.d/override.conf</code></p>
+<p>重启系统:</p>
+<img src="/images/2022-09-09/3.png" class="">
+
+<p>可以看到<code>TUI</code>程序在机器启动时执行，当输入<code>root</code>和<code>123456</code>之后，进入<code>bash</code>界面。</p>
+<h6 id="将GUI程序替换login程序执行"><a href="#将GUI程序替换login程序执行" class="headerlink" title="将GUI程序替换login程序执行"></a>将<code>GUI</code>程序替换<code>login</code>程序执行</h6><p>因为<code>agetty</code>已经处理了<code>/dev/ttyN</code>文件的处理，我们去掉上述代码中<code>tty</code>的处理逻辑:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;ctype.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;newt.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">show_login_failed_window</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    newtComponent label, button, form;</span><br><span class="line"></span><br><span class="line">    newtCls();</span><br><span class="line">    newtCenteredWindow(<span class="number">60</span>, <span class="number">6</span>, <span class="string">&quot;NOTE&quot;</span>);</span><br><span class="line">    label = newtLabel(<span class="number">10</span>, <span class="number">2</span>, <span class="string">&quot;Login failed!&quot;</span>);</span><br><span class="line"></span><br><span class="line">    button = newtCompactButton(<span class="number">30</span>, <span class="number">4</span>, <span class="string">&quot;Exit&quot;</span>);</span><br><span class="line"></span><br><span class="line">    form = newtForm(<span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line">    newtFormAddComponents(form, label, button, <span class="literal">NULL</span>);</span><br><span class="line">    newtRunForm(form);</span><br><span class="line"></span><br><span class="line">    newtFormDestroy(form);</span><br><span class="line">    newtPopWindow();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> cols, rows;</span><br><span class="line">    <span class="type">char</span> *bash_args[<span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">    newtInit();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        newtCls();</span><br><span class="line">        newtPushHelpLine(<span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">        newtGetScreenSize(&amp;cols, &amp;rows);</span><br><span class="line">        newtOpenWindow(<span class="number">1</span>, <span class="number">1</span>, cols - <span class="number">2</span>, rows - <span class="number">4</span>, <span class="string">&quot;LOGIN NOTTY&quot;</span>);</span><br><span class="line"></span><br><span class="line">        newtComponent form, btn_ok, label_username, label_password,</span><br><span class="line">                      entry_username, entry_password, result;</span><br><span class="line">        <span class="type">const</span> <span class="type">char</span> *username, *password;</span><br><span class="line"></span><br><span class="line">        label_username = newtLabel(<span class="number">10</span>, <span class="number">3</span>, <span class="string">&quot;Username:&quot;</span>);</span><br><span class="line">        entry_username = newtEntry(<span class="number">20</span>, <span class="number">3</span>, <span class="string">&quot;&quot;</span>, <span class="number">20</span>, &amp;username,</span><br><span class="line">                                   NEWT_FLAG_SCROLL);</span><br><span class="line">        label_password = newtLabel(<span class="number">10</span>, <span class="number">5</span>, <span class="string">&quot;Password:&quot;</span>);</span><br><span class="line">        entry_password = newtEntry(<span class="number">20</span>, <span class="number">5</span>, <span class="string">&quot;&quot;</span>, <span class="number">20</span>, &amp;password,</span><br><span class="line">                                   NEWT_FLAG_PASSWORD | NEWT_FLAG_SCROLL);</span><br><span class="line"></span><br><span class="line">        result = newtLabel(<span class="number">10</span>, <span class="number">10</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line"></span><br><span class="line">        btn_ok = newtButton(<span class="number">20</span>, <span class="number">7</span>, <span class="string">&quot;  OK  &quot;</span>);</span><br><span class="line"></span><br><span class="line">        form = newtForm(<span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">        newtFormAddComponents(form, label_username, entry_username,</span><br><span class="line">                              label_password, entry_password,</span><br><span class="line">                              btn_ok, result,</span><br><span class="line">                              <span class="literal">NULL</span>);</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">newtExitStruct</span> <span class="title">exit_status</span>;</span></span><br><span class="line">        newtFormRun(form, &amp;exit_status);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (exit_status.reason == NEWT_EXIT_COMPONENT) &#123;</span><br><span class="line">            <span class="keyword">if</span> (exit_status.u.co == btn_ok) &#123;</span><br><span class="line">                <span class="keyword">if</span> ((<span class="built_in">strcmp</span>(username, <span class="string">&quot;root&quot;</span>) == <span class="number">0</span>)</span><br><span class="line">                    &amp;&amp; (<span class="built_in">strcmp</span>(password, <span class="string">&quot;123456&quot;</span>) == <span class="number">0</span>))</span><br><span class="line">                &#123;</span><br><span class="line">                    <span class="comment">/* login success */</span></span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    show_login_failed_window();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        newtRefresh();</span><br><span class="line">        newtFormDestroy(form);</span><br><span class="line">        newtPopWindow();</span><br><span class="line">        newtPopHelpLine();</span><br><span class="line"></span><br><span class="line">    &#125; <span class="keyword">while</span> (<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    newtFinished();</span><br><span class="line"></span><br><span class="line">    bash_args[<span class="number">0</span>] = <span class="string">&quot;bash&quot;</span>;</span><br><span class="line"></span><br><span class="line">    execv(<span class="string">&quot;/bin/bash&quot;</span>, bash_args);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>agetty</code>程序支持通过命令行指令被调用的<code>login</code>程序:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">-l, --login-program login_program</span><br><span class="line">    Invoke the specified login_program instead of /bin/login.</span><br><span class="line">    This allows the use of a non-standard login program. Such a</span><br><span class="line">    program could, for example, ask for a dial-up password or use</span><br><span class="line">    a different password file. See --login-options.</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">-n, --skip-login</span><br><span class="line">    Do not prompt the user for a login name. This can be used in</span><br><span class="line">    connection with the --login-program option to invoke a</span><br><span class="line">    non-standard login process such as a BBS system. Note that</span><br><span class="line">    with the --skip-login option, agetty gets no input from the</span><br><span class="line">    user who logs in and therefore will not be able to figure out</span><br><span class="line">    parity, character size, and newline processing of the</span><br><span class="line">    connection. It defaults to space parity, 7 bit characters,</span><br><span class="line">    and ASCII CR (13) end-of-line character. Beware that the</span><br><span class="line">    program that agetty starts (usually /bin/login) is run as</span><br><span class="line">    root.</span><br></pre></td></tr></table></figure>
+
+
+<p>再次修改<code>getty@tty1</code>的<code>drop-in file</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl edit getty@tty1</span><br></pre></td></tr></table></figure>
+<p>内容为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[Service]</span><br><span class="line">ExecStart=</span><br><span class="line">ExecStart=-/usr/sbin/agetty --login-program=/sbin/tuilogin_notty -n %I $TERM</span><br></pre></td></tr></table></figure>
+
+<p>重启系统, 可以看到新的<code>TUI</code>程序正常执行:</p>
+<img src="/images/2022-09-09/4.png" class="">
+
+
+<h6 id="将GUI程序作为shell程序执行"><a href="#将GUI程序作为shell程序执行" class="headerlink" title="将GUI程序作为shell程序执行"></a>将<code>GUI</code>程序作为<code>shell</code>程序执行</h6><p>这种方式需要完成自动登录，跳过密码校验之前的步骤，可以使用<code>agetty</code>的<code>-a</code>选项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">-a, --autologin username</span><br><span class="line">    Automatically log in the specified user without asking for a</span><br><span class="line">    username or password. Using this option causes an -f username</span><br><span class="line">    option and argument to be added to the /bin/login command</span><br><span class="line">    line. See --login-options, which can be used to modify this</span><br><span class="line">    option’s behavior.</span><br><span class="line"></span><br><span class="line">    Note that --autologin may affect the way in which getty</span><br><span class="line">    initializes the serial line, because on auto-login agetty</span><br><span class="line">    does not read from the line and it has no opportunity</span><br><span class="line">    optimize the line setting.</span><br></pre></td></tr></table></figure>
+<p>再次修改<code>getty@tty1</code>的<code>drop-in file</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl edit getty@tty1</span><br></pre></td></tr></table></figure>
+<p>内容为:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[Service]</span><br><span class="line">ExecStart=</span><br><span class="line">ExecStart=-/usr/sbin/agetty --autologin root --noclear %I <span class="variable">$TERM</span></span><br></pre></td></tr></table></figure>
+
+<p>这次我们使用<code>dialog</code>程序来创建一个<code>TUI</code>程序用来和之前的窗口区分。<br>安装<code>dialog</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y dialog</span><br></pre></td></tr></table></figure>
+
+<p>创建<code>/sbin/tuilogin_shell</code>文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"><span class="keyword">while</span> <span class="literal">true</span></span><br><span class="line"><span class="keyword">do</span></span><br><span class="line">    USERNAME=$(dialog --backtitle <span class="string">&quot;Welcome&quot;</span> --title <span class="string">&quot;login&quot;</span> --colors --no-shadow --stdout --nocancel --inputbox <span class="string">&quot;Username:&quot;</span> 10 60)</span><br><span class="line">    <span class="keyword">if</span> [ x<span class="string">&quot;<span class="variable">$USERNAME</span>&quot;</span> == x<span class="string">&quot;&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">        <span class="built_in">continue</span></span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line">    PASSWORD=$(dialog --backtitle <span class="string">&quot;Welcome&quot;</span> --title <span class="string">&quot;login&quot;</span> --colors --no-shadow --stdout --insecure --passwordbox <span class="string">&quot;Password:&quot;</span> 10 60)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> [ x<span class="string">&quot;<span class="variable">$PASSWORD</span>&quot;</span> == x<span class="string">&quot;&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">        <span class="built_in">continue</span></span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> [ x<span class="string">&quot;<span class="variable">$USERNAME</span>&quot;</span> == x<span class="string">&quot;root&quot;</span> ] &amp;&amp; [ x<span class="string">&quot;<span class="variable">$PASSWORD</span>&quot;</span> == x<span class="string">&quot;123456&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">        clear</span><br><span class="line">        <span class="built_in">exec</span> /bin/bash</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        dialog --backtitle <span class="string">&quot;Welcome&quot;</span> --title <span class="string">&quot;login&quot;</span> --colors --no-shadow --msgbox <span class="string">&quot;Invalid username or password!&quot;</span> 10 60</span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+
+<p>修改<code>/etc/passwd</code>中<code>root</code>帐号的<code>shell</code>部分为<code>/sbin/tuilogin_shell</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">root:x:0:0:root:/root:/sbin/tuilogin_shell</span><br></pre></td></tr></table></figure>
+
+<p>重启系统, 可以看到执行成功:</p>
+<img src="/images/2022-09-09/5.png" class="">
+
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://itsfoss.com/what-is-tty-in-linux/">https://itsfoss.com/what-is-tty-in-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.linusakesson.net/programming/tty/index.php">https://www.linusakesson.net/programming/tty/index.php</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Getty_(Unix)">https://en.wikipedia.org/wiki/Getty_(Unix)</a></li>
+<li><a target="_blank" rel="noopener" href="https://linux.die.net/sag/login-via-terminal.html">https://linux.die.net/sag/login-via-terminal.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://vedslinux.blogspot.com/2014/06/login-process-in-linux.html">https://vedslinux.blogspot.com/2014/06/login-process-in-linux.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.howtogeek.com/428174/what-is-a-tty-on-linux-and-how-to-use-the-tty-command/">https://www.howtogeek.com/428174/what-is-a-tty-on-linux-and-how-to-use-the-tty-command/</a></li>
+<li><a target="_blank" rel="noopener" href="https://everyday.codes/linux/services-in-systemd-in-depth-tutorial/">https://everyday.codes/linux/services-in-systemd-in-depth-tutorial/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.linux.com/training-tutorials/understanding-and-using-systemd/">https://www.linux.com/training-tutorials/understanding-and-using-systemd/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.digitalocean.com/community/tutorials/systemd-essentials-working-with-services-units-and-the-journal">https://www.digitalocean.com/community/tutorials/systemd-essentials-working-with-services-units-and-the-journal</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units">https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.digitalocean.com/community/tutorials/how-to-use-journalctl-to-view-and-manipulate-systemd-logs">https://www.digitalocean.com/community/tutorials/how-to-use-journalctl-to-view-and-manipulate-systemd-logs</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.digitalocean.com/community/tutorials/understanding-systemd-units-and-unit-files">https://www.digitalocean.com/community/tutorials/understanding-systemd-units-and-unit-files</a></li>
+<li><a target="_blank" rel="noopener" href="https://fedoramagazine.org/what-is-an-init-system/">https://fedoramagazine.org/what-is-an-init-system/</a></li>
+<li><a target="_blank" rel="noopener" href="https://fedoramagazine.org/systemd-template-unit-files/">https://fedoramagazine.org/systemd-template-unit-files/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/centos-rhel-7-how-to-disable-all-tty-consoles-and-enable-only-1/">https://www.thegeekdiary.com/centos-rhel-7-how-to-disable-all-tty-consoles-and-enable-only-1/</a></li>
+<li><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man8/agetty.8.html">https://man7.org/linux/man-pages/man8/agetty.8.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.humbug.in/2010/utility-to-send-commands-or-data-to-other-terminals-ttypts/">https://www.humbug.in/2010/utility-to-send-commands-or-data-to-other-terminals-ttypts/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/TUI/" rel="tag"># TUI</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/08/11/client-uuid/" rel="prev" title="C/S架构下UUID冲突处理方案简要说明">
+      <i class="fa fa-chevron-left"></i> C/S架构下UUID冲突处理方案简要说明
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/09/24/mktime/" rel="next" title="Glibc mktime函数时区信息分析">
+      Glibc mktime函数时区信息分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-6"><a class="nav-link" href="#%E5%B0%86GUI%E7%A8%8B%E5%BA%8F%E4%BD%9C%E4%B8%BAgetty%E7%A8%8B%E5%BA%8F%E6%89%A7%E8%A1%8C"><span class="nav-number">1.</span> <span class="nav-text">将GUI程序作为getty程序执行</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#%E5%B0%86GUI%E7%A8%8B%E5%BA%8F%E6%9B%BF%E6%8D%A2login%E7%A8%8B%E5%BA%8F%E6%89%A7%E8%A1%8C"><span class="nav-number">2.</span> <span class="nav-text">将GUI程序替换login程序执行</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#%E5%B0%86GUI%E7%A8%8B%E5%BA%8F%E4%BD%9C%E4%B8%BAshell%E7%A8%8B%E5%BA%8F%E6%89%A7%E8%A1%8C"><span class="nav-number">3.</span> <span class="nav-text">将GUI程序作为shell程序执行</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

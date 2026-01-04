@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="iptables是Linux系统上的包过滤防火墙。它基于netfilter框架实现，分为内核模块和用户态程序。内核模块负责根据规则过滤数据包，用户态程序负责将规则写入内核模块。 iptables根据功能将过滤规则组织成表, 按处理时机组成链。每个表中含有多个链，每个链中包含一组规则。每条规则由数据包的匹配条件和匹配之后要执行的目标构成。iptables内核模块依次检查规则过滤数据包。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="IPTABLES机制分析">
+<meta property="og:url" content="http://just4coding.com/2016/12/11/iptables/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="iptables是Linux系统上的包过滤防火墙。它基于netfilter框架实现，分为内核模块和用户态程序。内核模块负责根据规则过滤数据包，用户态程序负责将规则写入内核模块。 iptables根据功能将过滤规则组织成表, 按处理时机组成链。每个表中含有多个链，每个链中包含一组规则。每条规则由数据包的匹配条件和匹配之后要执行的目标构成。iptables内核模块依次检查规则过滤数据包。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2016-12-11/1.png">
+<meta property="article:published_time" content="2016-12-11T11:05:47.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.477Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2016-12-11/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2016/12/11/iptables/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>IPTABLES机制分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/11/iptables/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          IPTABLES机制分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-12-11 19:05:47" itemprop="dateCreated datePublished" datetime="2016-12-11T19:05:47+08:00">2016-12-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>iptables是Linux系统上的包过滤防火墙。它基于netfilter框架实现，分为内核模块和用户态程序。内核模块负责根据规则过滤数据包，用户态程序负责将规则写入内核模块。</p>
+<p>iptables根据功能将过滤规则组织成表, 按处理时机组成链。每个表中含有多个链，每个链中包含一组规则。每条规则由数据包的匹配条件和匹配之后要执行的目标构成。iptables内核模块依次检查规则过滤数据包。</p>
+<span id="more"></span>
+
+<p>iptables内置了4个表:</p>
+<ul>
+<li>filter: 表filter是iptables命令没有指定表时默认使用的表，它主要用于对数据包进行过滤，内置了3个链:<ul>
+<li>INPUT: 过滤发送给目的地址是本机IP的数据包</li>
+<li>FORWARD: 过滤通过本机进行路由转发的数据包</li>
+<li>OUTPUT: 过滤本机生成的数据包</li>
+</ul>
+</li>
+<li>nat: 表nat主要用于对数据包进行NAT操作，内置了3个链:<ul>
+<li>PREROUTING: 在数据包刚进入本机时对数据包修改目的地址</li>
+<li>OUTPUT: 在路由前对本机生成的数据包修改目的地址</li>
+<li>POSTROUTING: 在路由后即将离开本机前对数据包修改源地址</li>
+</ul>
+</li>
+<li>mangle: 主要用来修改数据包的TOS，TTL等信息，以及为数据包设置MARK标记，内置了5个链:<ul>
+<li>PREROUTING: 在数据包刚到达本机时路由前修改数据包</li>
+<li>INPUT: 对目的地址是本机IP的数据进行修改</li>
+<li>FORWARD: 对通过本机进行路由转发的数据包进行修改</li>
+<li>OUTPUT: 对路由前对本机生成的数据包进行修改</li>
+<li>POSTROUTING: 对路由后即前离开本机前进行修改</li>
+</ul>
+</li>
+<li>raw: 它主要用于决定是否被连接跟踪机制处理，内置了2个链: PREROUTING, OUTPUT。iptables中连接有4种状态:<ul>
+<li>NEW: 该包想开始一个新的连接</li>
+<li>RELATED: 该包属于一个已建连接的新连接</li>
+<li>ESTABLISHED: 该包只要发送并接受应答，一个连接从NEW变为ESTABLISHED</li>
+<li>INVALID: 数据包不能识别出属于哪个连接</li>
+</ul>
+</li>
+</ul>
+<p>在netfilter的各个HOOK点调用时，表的匹配顺序依次为: raw, mangle, nat, filter。链中规则按顺序进行检查，若一个规则没有匹配，则继续检查下一个。若规则匹配，则根据规则目标来完成不同操作。若所有规则都没有匹配，则使用链的默认目标。</p>
+<p>各链的整体处理顺序为:</p>
+<img src="/images/2016-12-11/1.png" class="">
+
+<p>规则目标的主要类型有:</p>
+<ul>
+<li>ACCEPT: 允许该数据包通过</li>
+<li>DROP: 丢弃该数据包</li>
+<li>QUEUE: 将该数据包传递到用户空间</li>
+<li>RETURN: 停止处理当前链中的规则</li>
+<li>REJECT: 拒绝接收该数据包并发送错误响应</li>
+<li>LOG: 记录匹配的数据包<br>还有许多其他的类型，参考: <code>iptables(8)</code></li>
+</ul>
+<p>除了内置的链，我们还可以添加自定义链，通过将自定义的链名设为内置链中规则的目标来生效。</p>
+<p>iptables支持多种匹配条件, 常见的如:</p>
+<ul>
+<li>协议匹配: 检查数据包的协议字段<br>如，拒绝ICMP数据包:<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -I INPUT -p icmp -j REJECT</span><br></pre></td></tr></table></figure></li>
+<li>地址匹配: 匹配IP目的地址(-p)、源地址(-s)<br>如，拒绝转发源IP为<code>192.168.1.111</code>的数据包，而对来自<code>192.168.1.0/24</code>其他地址的数据包进行转发<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">iptables -A FORWARD -s 192.168.1.111 -j REJECT</span><br><span class="line">iptables -A FORWARD -s 192.168.1.0/24 -j ACCEPT</span><br></pre></td></tr></table></figure></li>
+<li>接口匹配: 对接收(-i)和发送(-o)数据的网络接口进行匹配<br>如: 丢弃eth0上接收的所有来自<code>10.0.0.1/24</code>网段的数据包<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -A INPUT -i eth0 -s 10.0.0.1/24 -j DROP</span><br></pre></td></tr></table></figure>
+还有许多其他的匹配方法，参考: <code>iptables(8)</code></li>
+</ul>
+<p>当需要保存和恢复iptables规则时,可以使用iptables-save和iptables-restore命令</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">iptables-save &gt; iptables.rules</span><br><span class="line">iptables-restore &lt; iptables.rules</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2016/12/10/linux-route/" rel="prev" title="Linux路由分析">
+      <i class="fa fa-chevron-left"></i> Linux路由分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2016/12/17/arp/" rel="next" title="ARP协议介绍">
+      ARP协议介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

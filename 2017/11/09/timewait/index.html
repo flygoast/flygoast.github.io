@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="TIME_WAIT是排查TCP连接问题经常遇到的一种TCP状态。首先我们来看TIME_WAIT状态是如何产生的。TCP关闭连接的状态变化图如下:   可以看到，主动关闭连接的一端在发送最后一个ACK后进入TIME_WAIT状态。TIME_WAIT状态会持续2倍的MSL(Maximum Segment Lifetime)，MSL是指一个TCP分段在网络上存在的最大时间，因而TIME_WAIT状态也被">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TIME_WAIT状态实验分析">
+<meta property="og:url" content="http://just4coding.com/2017/11/09/timewait/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="TIME_WAIT是排查TCP连接问题经常遇到的一种TCP状态。首先我们来看TIME_WAIT状态是如何产生的。TCP关闭连接的状态变化图如下:   可以看到，主动关闭连接的一端在发送最后一个ACK后进入TIME_WAIT状态。TIME_WAIT状态会持续2倍的MSL(Maximum Segment Lifetime)，MSL是指一个TCP分段在网络上存在的最大时间，因而TIME_WAIT状态也被">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-09/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-09/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-09/3.png">
+<meta property="article:published_time" content="2017-11-09T15:03:34.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.485Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-11-09/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/11/09/timewait/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>TIME_WAIT状态实验分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/09/timewait/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          TIME_WAIT状态实验分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-09 23:03:34" itemprop="dateCreated datePublished" datetime="2017-11-09T23:03:34+08:00">2017-11-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>TIME_WAIT是排查TCP连接问题经常遇到的一种TCP状态。首先我们来看TIME_WAIT状态是如何产生的。TCP关闭连接的状态变化图如下:</p>
+<img src="/images/2017-11-09/1.png" class="">
+
+<p>可以看到，主动关闭连接的一端在发送最后一个<code>ACK</code>后进入TIME_WAIT状态。TIME_WAIT状态会持续2倍的MSL(Maximum Segment Lifetime)，MSL是指一个TCP分段在网络上存在的最大时间，因而TIME_WAIT状态也被称为<code>2MSL</code>状态。</p>
+<span id="more"></span>
+
+<p>TIME_WAIT状态的作用主要有两个:</p>
+<ul>
+<li>可靠的关闭连接。假设主动关闭连接的一端发送的最后一个<code>ACK</code>分段在网络中丢包或被延迟了，被动关闭的一端因收不到<code>ACK</code>，会重新发送<code>FIN</code>包。这时如果没有TIME_WAIT状态直接处于CLOSED状态，就会直接响应<code>RST</code>而不会响应<code>ACK</code>。极端情况下，ACK到达对端需要一个MSL，对端重发的FIN到达需要一个MSL，当2个MSL之后仍未收到重传的<code>FIN</code>，则认为对端已经收到了<code>ACK</code>。</li>
+<li>防止上一次连接中的分段延迟到达后影响新连接。TCP连接由五元组(协议，源IP，源端口，目的IP，目的端口, 因而协议固定是TCP，也可以说是四元组)唯一标识。假设没有TIME_WAIT状态，一个连接关闭后，可能使用相同的五元组的新连接被建立，这时若原连接上的TCP分段因为网络延时刚刚到达，且它的序列号刚好在新连接的接收窗口，则会令新连接接收的数据混乱。尽管每次建立连接使用的序列号都是随机产生的，但是序列号的长度只有32位，在高速网络上可能很快出现序列号循环。TIME_WAIT状态持续2MSL后，原连接的数据包都已经在网络上消失，不会再干扰新连接。</li>
+</ul>
+<p>现在我们知道TIME_WAIT是TCP的正常状态。然而，当机器上存在大量TIME_WAIT状态的socket时， 不主动连接(客户端)和被动连接(服务器端)的场景下对服务器有不同的影响。</p>
+<p>首先来看主动连接场景。</p>
+<p>主动连接端会占用本地端口，TIME_WAIT状态socket占用的本地端口过多的话，会导致本地端口不足，TCP连接不能成功建立。</p>
+<p>可以调整参数<code>net.ipv4.ip_local_port_range</code>来增加本地端口的选择范围，但这样效果有限。还可以启用<code>net.ipv4.tcp_tw_reuse</code>参数来重用TIME_WAIT状态的socket。</p>
+<p>内核文档对于该参数的描述如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">tcp_tw_reuse - BOOLEAN</span><br><span class="line">    Allow to reuse TIME-WAIT sockets for new connections when it is</span><br><span class="line">    safe from protocol viewpoint. Default value is 0.</span><br><span class="line">    It should not be changed without advice/request of technical</span><br><span class="line">    experts.</span><br></pre></td></tr></table></figure>
+
+<p>下面来看该参数具体如何实现。</p>
+<p>本地端口的选取过程如图:</p>
+<img src="/images/2017-11-09/2.png" class="">
+
+<p><code>net/ipv4/inet_hashtables.c</code>中的函数<code>__inet_check_established</code>用来检查已经在使用的端口是否能够重用，对于TIME_WAIT状态的socket会调用<code>tcp_twsk_unique</code>来判断。</p>
+<p><code>tcp_twsk_unique</code>的源码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">tcp_twsk_unique</span><span class="params">(<span class="keyword">struct</span> sock *sk, <span class="keyword">struct</span> sock *sktw, <span class="type">void</span> *twp)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">tcp_timewait_sock</span> *<span class="title">tcptw</span> =</span> tcp_twsk(sktw);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">tcp_sock</span> *<span class="title">tp</span> =</span> tcp_sk(sk);</span><br><span class="line">    <span class="comment">/* With PAWS, it is safe from the viewpoint</span></span><br><span class="line"><span class="comment">       of data integrity. Even without PAWS it is safe provided sequence</span></span><br><span class="line"><span class="comment">       spaces do not overlap i.e. at data rates &lt;= 80Mbit/sec.</span></span><br><span class="line"><span class="comment">       Actually, the idea is close to VJ&#x27;s one, only timestamp cache is</span></span><br><span class="line"><span class="comment">       held not per host, but per port pair and TW bucket is used as state</span></span><br><span class="line"><span class="comment">       holder.</span></span><br><span class="line"><span class="comment">       If TW bucket has been already destroyed we fall back to VJ&#x27;s scheme</span></span><br><span class="line"><span class="comment">       and use initial timestamp retrieved from peer table.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (tcptw-&gt;tw_ts_recent_stamp &amp;&amp;</span><br><span class="line">        (twp == <span class="literal">NULL</span> || (sysctl_tcp_tw_reuse &amp;&amp;</span><br><span class="line">                 get_seconds() - tcptw-&gt;tw_ts_recent_stamp &gt; <span class="number">1</span>))) &#123;</span><br><span class="line">        tp-&gt;write_seq = tcptw-&gt;tw_snd_nxt + <span class="number">65535</span> + <span class="number">2</span>;</span><br><span class="line">        <span class="keyword">if</span> (tp-&gt;write_seq == <span class="number">0</span>)</span><br><span class="line">            tp-&gt;write_seq = <span class="number">1</span>;</span><br><span class="line">        tp-&gt;rx_opt.ts_recent       = tcptw-&gt;tw_ts_recent;</span><br><span class="line">        tp-&gt;rx_opt.ts_recent_stamp = tcptw-&gt;tw_ts_recent_stamp;</span><br><span class="line">        sock_hold(sktw);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只有当<code>net.ipv4.tcp_timestamps</code>选项启用时，<code>tcptw-&gt;tw_ts_recent_stamp</code>才会为真, <code>net.ipv4.tcp_tw_reuse</code>启用时，<code>sysctl_tcp_tw_reuse</code>才会为真。从代码可以看到，当<code>tcp_timestamps</code>和<code>tcp_tw_reuse</code>两个选项开启时，若该socket距离上次收到数据包已经超过1秒，则可以重用该端口。</p>
+<p>Linux的TCP实现将TIME_WAIT状态持续时间硬编码在了源码中, 设置为60秒，在<code>include/net/tcp.h</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> TCP_TIMEWAIT_LEN (60*HZ) <span class="comment">/* how long to wait to destroy TIME-WAIT</span></span></span><br><span class="line"><span class="comment"><span class="meta">                  * state, about 60 seconds */</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这个值并不能通过<code>sysctl</code>来修改，如果需要修改该时间值，则需要修改内核代码重新编译。</p>
+<p>下面来验证<code>tcp_tw_reuse</code>的效果:<br>我们准备一个服务器，运行<code>NGINX</code>并且不主动关闭连接，客户端使用<code>curl</code>来访问服务器并主动关闭连接来产生TIME_WAIT状态的socket。<code>curl</code>连接成功时返回值为<code>0</code>，失败时返回值为<code>7</code>。我们以此判断连接是否成功。</p>
+<p>为了使实验简单，将本地端口范围修改为只有三个端口可用:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.ip_local_port_range=<span class="string">&quot;32768 32770&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>确保<code>tcp_tw_reuse</code>选项为关闭状态:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# sysctl -a |grep reuse</span><br><span class="line">net.ipv4.tcp_tw_reuse = 0</span><br></pre></td></tr></table></figure>
+
+<p>编写实验脚本，脚本逻辑为先执行3次curl访问服务器，占满全部本地端口，2秒之后再执行一次<code>curl</code>访问。脚本内容如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> `<span class="built_in">seq</span> 1 3`</span><br><span class="line"><span class="keyword">do</span></span><br><span class="line">  <span class="built_in">echo</span> <span class="variable">$i</span></span><br><span class="line">  <span class="built_in">date</span></span><br><span class="line">  curl http://10.95.48.11/ -o /dev/null -s</span><br><span class="line">  <span class="built_in">echo</span> <span class="string">&quot;RETURN: &quot;</span> $?</span><br><span class="line">  ss -atn |grep TIME</span><br><span class="line"><span class="keyword">done</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">sleep</span> 2</span><br><span class="line"></span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;4&quot;</span></span><br><span class="line"><span class="built_in">date</span></span><br><span class="line">curl http://10.95.48.11/ -o /dev/null -s</span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;RETURN: &quot;</span> $?</span><br></pre></td></tr></table></figure>
+
+<p>在客户端执行脚本, 可以看到第4次请求会失败:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# sh t.sh</span><br><span class="line">1</span><br><span class="line">Thu Nov  9 15:51:57 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">2</span><br><span class="line">Thu Nov  9 15:51:57 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32770          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">3</span><br><span class="line">Thu Nov  9 15:51:57 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32768          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32770          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">4</span><br><span class="line">Thu Nov  9 15:51:59 CST 2017</span><br><span class="line">RETURN:  7</span><br></pre></td></tr></table></figure>
+
+<p>接着我们将<code>tcp_tw_reuse</code>和<code>tcp_timestamps</code>选项启用:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# sysctl -w net.ipv4.tcp_tw_reuse=1</span><br><span class="line">net.ipv4.tcp_tw_reuse = 1</span><br><span class="line">[root@localhost ~]# sysctl -w net.ipv4.tcp_timestamps=1</span><br><span class="line">net.ipv4.tcp_timestamps = 1</span><br></pre></td></tr></table></figure>
+
+<p>再次执行shell脚本, 第4次请求会成功返回0:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# sh t.sh</span><br><span class="line">1</span><br><span class="line">Thu Nov  9 15:50:10 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32768          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32770          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">2</span><br><span class="line">Thu Nov  9 15:50:10 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32768          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32770          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">3</span><br><span class="line">Thu Nov  9 15:50:10 CST 2017</span><br><span class="line">RETURN:  0</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32768          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32770          10.95.48.11:80</span><br><span class="line">TIME-WAIT  0      0            192.168.10.131:32769          10.95.48.11:80</span><br><span class="line">4</span><br><span class="line">Thu Nov  9 15:50:12 CST 2017</span><br><span class="line">RETURN:  0</span><br></pre></td></tr></table></figure>
+
+<p>开启<code>tcp_tw_reuse</code>选项可以使主动连接的一端在主动关闭的场景下每秒能建立6万多个连接。如果每秒要建立更多的连接呢？可以使用<code>tcp_tw_recycle</code>选项。</p>
+<p>内核文档对于该参数的描述如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tcp_tw_recycle - BOOLEAN</span><br><span class="line">    Enable fast recycling TIME-WAIT sockets. Default value is 0.</span><br><span class="line">    It should not be changed without advice/request of technical</span><br><span class="line">    experts.</span><br></pre></td></tr></table></figure>
+
+<p>相较于<code>tcp_tw_reuse</code>只在需要时重用TIME_WAIT状态socket, <code>tcp_tw_recycle</code>处理更激进，它会快速回收TIME_WAIT状态的socket。</p>
+<p>内核代码中有定时器来调用<code>tcp_time_wait</code>函数来处理TIME_WAIT状态的socket，函数源码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Move a socket to time-wait or dead fin-wait-2 state.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">tcp_time_wait</span><span class="params">(<span class="keyword">struct</span> sock *sk, <span class="type">int</span> state, <span class="type">int</span> timeo)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">inet_timewait_sock</span> *<span class="title">tw</span> =</span> <span class="literal">NULL</span>;</span><br><span class="line">    <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">inet_connection_sock</span> *<span class="title">icsk</span> =</span> inet_csk(sk);</span><br><span class="line">    <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">tcp_sock</span> *<span class="title">tp</span> =</span> tcp_sk(sk);</span><br><span class="line">    <span class="type">int</span> recycle_ok = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (tcp_death_row.sysctl_tw_recycle &amp;&amp; tp-&gt;rx_opt.ts_recent_stamp)</span><br><span class="line">        recycle_ok = icsk-&gt;icsk_af_ops-&gt;remember_stamp(sk);</span><br><span class="line">    <span class="keyword">if</span> (tcp_death_row.tw_count &lt; tcp_death_row.sysctl_max_tw_buckets)</span><br><span class="line">        tw = inet_twsk_alloc(sk, state);</span><br><span class="line">    <span class="keyword">if</span> (tw != <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">tcp_timewait_sock</span> *<span class="title">tcptw</span> =</span> tcp_twsk((<span class="keyword">struct</span> sock *)tw);</span><br><span class="line">        <span class="type">const</span> <span class="type">int</span> rto = (icsk-&gt;icsk_rto &lt;&lt; <span class="number">2</span>) - (icsk-&gt;icsk_rto &gt;&gt; <span class="number">1</span>);</span><br><span class="line">        tw-&gt;tw_rcv_wscale   = tp-&gt;rx_opt.rcv_wscale;</span><br><span class="line">        tcptw-&gt;tw_rcv_nxt   = tp-&gt;rcv_nxt;</span><br><span class="line">        tcptw-&gt;tw_snd_nxt   = tp-&gt;snd_nxt;</span><br><span class="line">        tcptw-&gt;tw_rcv_wnd   = tcp_receive_window(tp);</span><br><span class="line">        tcptw-&gt;tw_ts_recent = tp-&gt;rx_opt.ts_recent;</span><br><span class="line">        tcptw-&gt;tw_ts_recent_stamp = tp-&gt;rx_opt.ts_recent_stamp;</span><br><span class="line"><span class="meta">#<span class="keyword">if</span> defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)</span></span><br><span class="line">        <span class="keyword">if</span> (tw-&gt;tw_family == PF_INET6) &#123;</span><br><span class="line">            <span class="class"><span class="keyword">struct</span> <span class="title">ipv6_pinfo</span> *<span class="title">np</span> =</span> inet6_sk(sk);</span><br><span class="line">            <span class="class"><span class="keyword">struct</span> <span class="title">inet6_timewait_sock</span> *<span class="title">tw6</span>;</span></span><br><span class="line">            tw-&gt;tw_ipv6_offset = inet6_tw_offset(sk-&gt;sk_prot);</span><br><span class="line">            tw6 = inet6_twsk((<span class="keyword">struct</span> sock *)tw);</span><br><span class="line">            ipv6_addr_copy(&amp;tw6-&gt;tw_v6_daddr, &amp;np-&gt;daddr);</span><br><span class="line">            ipv6_addr_copy(&amp;tw6-&gt;tw_v6_rcv_saddr, &amp;np-&gt;rcv_saddr);</span><br><span class="line">            tw-&gt;tw_ipv6only = np-&gt;ipv6only;</span><br><span class="line">        &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_TCP_MD5SIG</span></span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * The timewait bucket does not have the key DB from the</span></span><br><span class="line"><span class="comment">         * sock structure. We just make a quick copy of the</span></span><br><span class="line"><span class="comment">         * md5 key being used (if indeed we are using one)</span></span><br><span class="line"><span class="comment">         * so the timewait ack generating code has the key.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">do</span> &#123;</span><br><span class="line">            <span class="class"><span class="keyword">struct</span> <span class="title">tcp_md5sig_key</span> *<span class="title">key</span>;</span></span><br><span class="line">            <span class="built_in">memset</span>(tcptw-&gt;tw_md5_key, <span class="number">0</span>, <span class="keyword">sizeof</span>(tcptw-&gt;tw_md5_key));</span><br><span class="line">            tcptw-&gt;tw_md5_keylen = <span class="number">0</span>;</span><br><span class="line">            key = tp-&gt;af_specific-&gt;md5_lookup(sk, sk);</span><br><span class="line">            <span class="keyword">if</span> (key != <span class="literal">NULL</span>) &#123;</span><br><span class="line">                <span class="built_in">memcpy</span>(&amp;tcptw-&gt;tw_md5_key, key-&gt;key, key-&gt;keylen);</span><br><span class="line">                tcptw-&gt;tw_md5_keylen = key-&gt;keylen;</span><br><span class="line">                <span class="keyword">if</span> (tcp_alloc_md5sig_pool(sk) == <span class="literal">NULL</span>)</span><br><span class="line">                    BUG();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">while</span> (<span class="number">0</span>);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        <span class="comment">/* Linkage updates. */</span></span><br><span class="line">        __inet_twsk_hashdance(tw, sk, &amp;tcp_hashinfo);</span><br><span class="line">        <span class="comment">/* Get the TIME_WAIT timeout firing. */</span></span><br><span class="line">        <span class="keyword">if</span> (timeo &lt; rto)</span><br><span class="line">            timeo = rto;</span><br><span class="line">        <span class="keyword">if</span> (recycle_ok) &#123;</span><br><span class="line">            tw-&gt;tw_timeout = rto;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            tw-&gt;tw_timeout = TCP_TIMEWAIT_LEN;</span><br><span class="line">            <span class="keyword">if</span> (state == TCP_TIME_WAIT)</span><br><span class="line">                timeo = TCP_TIMEWAIT_LEN;</span><br><span class="line">        &#125;</span><br><span class="line">        inet_twsk_schedule(tw, &amp;tcp_death_row, timeo,</span><br><span class="line">                   TCP_TIMEWAIT_LEN);</span><br><span class="line">        inet_twsk_put(tw);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* Sorry, if we&#x27;re out of memory, just CLOSE this</span></span><br><span class="line"><span class="comment">         * socket up.  We&#x27;ve got bigger problems than</span></span><br><span class="line"><span class="comment">         * non-graceful socket closings.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        LIMIT_NETDEBUG(KERN_INFO <span class="string">&quot;TCP: time wait bucket table overflow\n&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    tcp_update_metrics(sk);</span><br><span class="line">    tcp_done(sk);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从代码上可以看到只有当<code>tcp_timestamps</code>和<code>tcp_tw_recycle</code>都开启时，才会快速回收。而根据代码:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> <span class="type">int</span> rto = (icsk-&gt;icsk_rto &lt;&lt; <span class="number">2</span>) - (icsk-&gt;icsk_rto &gt;&gt; <span class="number">1</span>);</span><br></pre></td></tr></table></figure>
+
+<p>可以看到回收的超时时间为<code>3.5 * RTO</code>, <code>RTO</code>是由TCP分段中timestamp选项计算得到的，一般场景下这个时间在几百毫秒左右。</p>
+<p>从上面的<code>tcp_time_wait</code>源码也可以看出, 当TIME_WAIT状态的socket数量超过<code>tcp_max_tw_buckets</code>选项指定的数量值时，会直接关闭socket，进入CLOSED状态，内核日志中会报错:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">TCP: time wait bucket table overflow</span><br></pre></td></tr></table></figure>
+
+<p>的错误。若把<code>tcp_max_tw_buckets</code>选项设置为0，则可以直接跳过TIME_WAIT状态。</p>
+<p>然而，<code>tcp_tw_recycle</code>选项在NAT环境使用有一些隐患，下面来分析一下。</p>
+<p>协议栈收到<code>syn</code>包时会调用到函数<code>tcp_v4_conn_request</code>, 该函数部分源码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* VJ&#x27;s idea. We save last timestamp seen</span></span><br><span class="line"><span class="comment"> * from the destination in peer table, when entering</span></span><br><span class="line"><span class="comment"> * state TIME-WAIT, and check against it before</span></span><br><span class="line"><span class="comment"> * accepting new connection request.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * If &quot;isn&quot; is not zero, this request hit alive</span></span><br><span class="line"><span class="comment"> * timewait bucket, so that all the necessary checks</span></span><br><span class="line"><span class="comment"> * are made in the function processing timewait state.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">if</span> (tmp_opt.saw_tstamp &amp;&amp;</span><br><span class="line">    tcp_death_row.sysctl_tw_recycle &amp;&amp;</span><br><span class="line">    (dst = inet_csk_route_req(sk, req)) != <span class="literal">NULL</span> &amp;&amp;</span><br><span class="line">    (peer = rt_get_peer((<span class="keyword">struct</span> rtable *)dst)) != <span class="literal">NULL</span> &amp;&amp;</span><br><span class="line">    peer-&gt;v4daddr == saddr) &#123;</span><br><span class="line">    <span class="keyword">if</span> (get_seconds() &lt; peer-&gt;tcp_ts_stamp + TCP_PAWS_MSL &amp;&amp;</span><br><span class="line">        (s32)(peer-&gt;tcp_ts - req-&gt;ts_recent) &gt;</span><br><span class="line">                    TCP_PAWS_WINDOW) &#123;</span><br><span class="line">        NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSPASSIVEREJECTED);</span><br><span class="line">        <span class="keyword">goto</span> drop_and_release;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中<code>TCP_PAWS_MSL</code>和<code>TCP_PAWS_WINDOW</code>分别为<code>60</code>和<code>1</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> TCP_PAWS_MSL    60      <span class="comment">/* Per-host timestamps are invalidated</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * after this time. It should be equal</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * (or greater than) TCP_TIMEWAIT_LEN</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * to provide reliability equal to one</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * provided by timewait state.</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     */</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> TCP_PAWS_WINDOW 1       <span class="comment">/* Replay window for per-host</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * timestamps. It must be less than</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     * minimal timewait lifetime.</span></span></span><br><span class="line"><span class="comment"><span class="meta">                     */</span></span></span><br></pre></td></tr></table></figure>
+
+<p>从代码上我们可以看到，当开启<code>tcp_timestamps</code>和<code>tcp_tw_recycle</code>选项时，60秒内来自同一源IP主机的TCP分段的时间戳必须递增，否则该分段会被直接丢弃。</p>
+<p>假如多个客户端从NAT环境访问服务器，服务器端看到的对端IP是一样的，但是TCP分段的时间戳会不一样。当时间戳较大的客户端连接成功后的60秒内，时间戳较小的客户端再次连接服务器，<code>syn</code>包会被服务器直接丢弃，导致连接失败。</p>
+<p>我们来通过实验验证。首先基于<code>libvirt</code>构造NAT环境。<br>编辑实验网络描述文件<code>n1.xml</code>:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">network</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">name</span>&gt;</span>n1<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">bridge</span> <span class="attr">name</span>=<span class="string">&quot;n1&quot;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">forward</span> <span class="attr">mode</span>=<span class="string">&quot;nat&quot;</span> /&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">ip</span> <span class="attr">address</span>=<span class="string">&quot;192.168.10.1&quot;</span> <span class="attr">netmask</span>=<span class="string">&quot;255.255.255.0&quot;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dhcp</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">range</span> <span class="attr">start</span>=<span class="string">&quot;192.168.10.2&quot;</span> <span class="attr">end</span>=<span class="string">&quot;192.168.10.254&quot;</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dhcp</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">ip</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">network</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>启用实验网络:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">virsh net-define n1.xml</span><br><span class="line">virsh net-start n1</span><br></pre></td></tr></table></figure>
+
+<p>再启动两台虚拟机做为客户端，将其接口设置在实验网络中:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">interface</span> <span class="attr">type</span>=<span class="string">&quot;network&quot;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">source</span> <span class="attr">network</span>=<span class="string">&quot;n1&quot;</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">interface</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>虚拟机启动后，在两台机器上抓包确认出两台机器TCP时间戳的大小。</p>
+<p>将服务器端的<code>NGINX</code>配置<code>keepalive_timeout</code>设为0，令服务器端主动关闭连接，重新加载NGINX配置生效。</p>
+<p>将服务器的<code>tcp_timestamps</code>和<code>tcp_tw_recycle</code>选项启动:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@bogon conf]# sysctl -w net.ipv4.tcp_tw_recycle=1</span><br><span class="line">net.ipv4.tcp_tw_recycle = 1</span><br><span class="line">[root@bogon conf]# sysctl -w net.ipv4.tcp_timestamps=1</span><br><span class="line">net.ipv4.tcp_timestamps = 1</span><br></pre></td></tr></table></figure>
+
+<p>首先在时间戳较小的客户端上执行<code>curl</code>, 连接成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# curl http://10.95.48.11 -o /dev/null -s -v</span><br><span class="line">* About to connect() to 10.95.48.11 port 80 (#0)</span><br><span class="line">*   Trying 10.95.48.11... connected</span><br><span class="line">* Connected to 10.95.48.11 (10.95.48.11) port 80 (#0)</span><br><span class="line">&gt; GET / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.21 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2</span><br><span class="line">&gt; Host: 10.95.48.11</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: openresty/1.11.2.5</span><br><span class="line">&lt; Date: Thu, 09 Nov 2017 11:07:55 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 562</span><br><span class="line">&lt; Last-Modified: Thu, 21 Sep 2017 20:02:30 GMT</span><br><span class="line">&lt; Connection: close</span><br><span class="line">&lt; ETag: &quot;59c41ad6-232&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">&lt;</span><br><span class="line">&#123; [data not shown]</span><br><span class="line">* Closing connection #0</span><br></pre></td></tr></table></figure>
+
+<p>接着在时间戳较大的客户端上执行<code>curl</code>，连接也成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# curl http://10.95.48.11 -o /dev/null -s -v</span><br><span class="line">* About to connect() to 10.95.48.11 port 80 (#0)</span><br><span class="line">*   Trying 10.95.48.11... connected</span><br><span class="line">* Connected to 10.95.48.11 (10.95.48.11) port 80 (#0)</span><br><span class="line">&gt; GET / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.21 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2</span><br><span class="line">&gt; Host: 10.95.48.11</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: openresty/1.11.2.5</span><br><span class="line">&lt; Date: Thu, 09 Nov 2017 11:08:07 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 562</span><br><span class="line">&lt; Last-Modified: Thu, 21 Sep 2017 20:02:30 GMT</span><br><span class="line">&lt; Connection: close</span><br><span class="line">&lt; ETag: &quot;59c41ad6-232&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">&lt;</span><br><span class="line">&#123; [data not shown]</span><br><span class="line">* Closing connection #0</span><br></pre></td></tr></table></figure>
+
+<p>而这时立即再次从时间戳较小机器上执行，可以发现连接失败了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# curl http://10.95.48.11 -o /dev/null -s -v</span><br><span class="line">* About to connect() to 10.95.48.11 port 80 (#0)</span><br><span class="line">*   Trying 10.95.48.11... Connection timed out</span><br><span class="line">* couldn&#x27;t connect to host</span><br><span class="line">* Closing connection #0</span><br></pre></td></tr></table></figure>
+
+<p>一分钟之后重试, 则连接成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# curl http://10.95.48.11 -o /dev/null -s -v</span><br><span class="line">* About to connect() to 10.95.48.11 port 80 (#0)</span><br><span class="line">*   Trying 10.95.48.11... connected</span><br><span class="line">* Connected to 10.95.48.11 (10.95.48.11) port 80 (#0)</span><br><span class="line">&gt; GET / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.21 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2</span><br><span class="line">&gt; Host: 10.95.48.11</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: openresty/1.11.2.5</span><br><span class="line">&lt; Date: Thu, 09 Nov 2017 11:11:51 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 562</span><br><span class="line">&lt; Last-Modified: Thu, 21 Sep 2017 20:02:30 GMT</span><br><span class="line">&lt; Connection: close</span><br><span class="line">&lt; ETag: &quot;59c41ad6-232&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">&lt;</span><br><span class="line">&#123; [data not shown]</span><br><span class="line">* Closing connection #0</span><br></pre></td></tr></table></figure>
+
+<p>我们从服务器端的抓包结果可以看到失败请求的TCP时间戳小于之前的时间戳:</p>
+<img src="/images/2017-11-09/3.png" class="">
+
+<p>在被动连接的情况下，若产生了大量的TIME_WAIT状态，并没有特别大的性能影响，只是会多消耗一些内存与端口链表查找的CPU资源。</p>
+<p>了解了这些关于TIME_WAIT相关的知识背景就可以根据应用场景来灵活调整相应的参数设置了。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/11/07/port-mirroring/" rel="prev" title="VMware vSphere平台端口镜像">
+      <i class="fa fa-chevron-left"></i> VMware vSphere平台端口镜像
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/11/19/qemu-monitor/" rel="next" title="QEMU monitor机制实例分析">
+      QEMU monitor机制实例分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

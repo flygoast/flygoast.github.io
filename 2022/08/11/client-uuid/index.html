@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在C&#x2F;S架构中，Server端需要依赖ID来唯一标识Client，而客户端相关数据都由这个唯一标识来索引。 这个标识可以由服务端分配，也可以由客户端自行生成再注册到服务端。 服务端分配是一种中心化生成方式，可以保证唯一性。客户端自行生成方式可以采用UUID标准来生成，也可以保证唯一性。 尽管在生成方式可以保证唯一性，但是由于客户端某些特性的改变，服务端依然会出现ID冲突的场景。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="C&#x2F;S架构下UUID冲突处理方案简要说明">
+<meta property="og:url" content="http://just4coding.com/2022/08/11/client-uuid/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在C&#x2F;S架构中，Server端需要依赖ID来唯一标识Client，而客户端相关数据都由这个唯一标识来索引。 这个标识可以由服务端分配，也可以由客户端自行生成再注册到服务端。 服务端分配是一种中心化生成方式，可以保证唯一性。客户端自行生成方式可以采用UUID标准来生成，也可以保证唯一性。 尽管在生成方式可以保证唯一性，但是由于客户端某些特性的改变，服务端依然会出现ID冲突的场景。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-08-11/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-08-11/2.png">
+<meta property="article:published_time" content="2022-08-11T15:10:10.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.503Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-08-11/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/08/11/client-uuid/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>C/S架构下UUID冲突处理方案简要说明 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/08/11/client-uuid/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          C/S架构下UUID冲突处理方案简要说明
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-08-11 23:10:10" itemprop="dateCreated datePublished" datetime="2022-08-11T23:10:10+08:00">2022-08-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在<code>C/S</code>架构中，<code>Server</code>端需要依赖<code>ID</code>来唯一标识<code>Client</code>，而客户端相关数据都由这个唯一标识来索引。</p>
+<p>这个标识可以由服务端分配，也可以由客户端自行生成再注册到服务端。</p>
+<p>服务端分配是一种中心化生成方式，可以保证唯一性。客户端自行生成方式可以采用<code>UUID</code>标准来生成，也可以保证唯一性。</p>
+<p>尽管在生成方式可以保证唯一性，但是由于客户端某些特性的改变，服务端依然会出现<code>ID</code>冲突的场景。</p>
+<span id="more"></span>
+
+<p>比如，客户端在虚拟机中安装完成并已生成好<code>UUID</code>, 此时克隆虚拟机，克隆机中的客户端启动并使用原<code>UUID</code>与服务端通信。此时，如果服务端不使用客户端的属性进行校验，那么两个客户端在服务端就会被识别为一个客户端，从而可能造成数据混乱和覆盖。</p>
+<p>于是，服务端需要对客户端的某些属性进行校验来检测<code>UUID</code>冲突，常用的属性如<code>MAC</code>地址，<code>IP</code>地址等信息。如果已经正常运行的客户端所在的机器属性发生变化时，比如，更换网卡，<code>MAC</code>地址发生变化，更改<code>IP</code>地址，由于服务端会校验这些属性，在服务端看来这些变化的属性也造成<code>UUID</code>冲突。</p>
+<p>尽管都是相同的<code>UUID</code>，第一种情形，需要视为不同的客户端进行处理，第二种情况则需要视为同一个客户端进行处理。而单一从服务端角度是无法区分这两种情形的，需要引入人为判断，或者服务端根据业务场景提前配置好<code>UUID</code>冲突的处置方案。</p>
+<p>针对这种冲突处置方案，简单梳理了一下客户端和服务端的处理流程:</p>
+<p>客户端流程图:</p>
+<img src="/images/2022-08-11/1.png" class="">
+
+<p>控制中心流程图:</p>
+<img src="/images/2022-08-11/2.png" class="">
+
+<p>在不同场景下，可以根据实际业务需要选择需要校验的属性。</p>
+<p>而在<code>Linux</code>上具体生成<code>UUID</code>的方法有许多，常用的方法有:</p>
+<ul>
+<li>通过<code>dmidecode</code>工具获取:</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># dmidecode -s system-uuid</span></span><br><span class="line">cfba65ba-62dd-42f1-8976-8f3653de090a</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>从<code>sysfs</code>中获取:</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># cat /sys/class/dmi/id/product_uuid</span></span><br><span class="line">CFBA65BA-62DD-42F1-8976-8F3653DE090A</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>随机生成:</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># cat /proc/sys/kernel/random/uuid</span></span><br><span class="line">396fea55-23bb-4407-adf5-b527a117e8e8</span><br></pre></td></tr></table></figure>
+
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.uwintech.cn/blog/easyops-cmdb">https://www.uwintech.cn/blog/easyops-cmdb</a></li>
+<li><a target="_blank" rel="noopener" href="https://liuzehe.top/archives/2021083101">https://liuzehe.top/archives/2021083101</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy">https://www.tremplin-numerique.org/zh-CN/que-sont-les-uuid-et-pourquoi-sont-ils-utiles-informatique-cloudsavvy</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Universally_unique_identifier">https://en.wikipedia.org/wiki/Universally_unique_identifier</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/08/05/tc/" rel="prev" title="Linux流量控制(Traffic Control)介绍">
+      <i class="fa fa-chevron-left"></i> Linux流量控制(Traffic Control)介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/09/09/console-gui/" rel="next" title="CentOS7配置Console GUI/TUI程序">
+      CentOS7配置Console GUI/TUI程序 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

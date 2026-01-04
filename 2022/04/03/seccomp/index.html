@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="seccomp代表secure computing，是早在2.6.12版本就引入到内核的特性，用来限制进程可以使用的系统调用。它作用于进程里的线程(task)。 最初，seccomp只允许使用read, write, _exit, sigreturn4个系统调用，调用其他系统调用时，内核会发送SIGKILL信号终止进程。当时seccomp的提出主要是想用于出租空闲的CPU算力。这种模式叫做STRI">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Seccomp机制与seccomp notify介绍">
+<meta property="og:url" content="http://just4coding.com/2022/04/03/seccomp/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="seccomp代表secure computing，是早在2.6.12版本就引入到内核的特性，用来限制进程可以使用的系统调用。它作用于进程里的线程(task)。 最初，seccomp只允许使用read, write, _exit, sigreturn4个系统调用，调用其他系统调用时，内核会发送SIGKILL信号终止进程。当时seccomp的提出主要是想用于出租空闲的CPU算力。这种模式叫做STRI">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-04-03T14:26:56.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.500Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Seccomp">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2022/04/03/seccomp/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Seccomp机制与seccomp notify介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/04/03/seccomp/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Seccomp机制与seccomp notify介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-04-03 22:26:56" itemprop="dateCreated datePublished" datetime="2022-04-03T22:26:56+08:00">2022-04-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>seccomp</code>代表<code>secure computing</code>，是早在<code>2.6.12</code>版本就引入到内核的特性，用来限制进程可以使用的<code>系统调用</code>。它作用于进程里的线程(<code>task</code>)。</p>
+<p>最初，<code>seccomp</code>只允许使用<code>read</code>, <code>write</code>, <code>_exit</code>, <code>sigreturn</code>4个系统调用，调用其他系统调用时，内核会发送<code>SIGKILL</code>信号终止进程。当时<code>seccomp</code>的提出主要是想用于出租空闲的CPU算力。这种模式叫做<code>STRICT</code>模式。它限制过于严格，在实际应用上并没有太多发展。<code>Linus Torvald</code>甚至建议把它从内核中砍掉。</p>
+<span id="more"></span>
+
+<p>下面通过实例展示一下<code>STRICT</code>模式的<code>seccomp</code>机制:</p>
+<p><code>strict.c</code>代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/prctl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/seccomp.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    open(<span class="string">&quot;/dev/null&quot;</span>, O_RDONLY);</span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE1    <span class="string">&quot;open called\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE1, <span class="keyword">sizeof</span>(MESSAGE1));</span><br><span class="line"></span><br><span class="line">    prctl(PR_SET_SECCOMP, SECCOMP_MODE_STRICT);</span><br><span class="line"></span><br><span class="line">    open(<span class="string">&quot;/dev/null&quot;</span>, O_RDONLY);</span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE2    <span class="string">&quot;You can&#x27;t see this message\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE2, <span class="keyword">sizeof</span>(MESSAGE2));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>程序的执行结果是:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./strict</span></span><br><span class="line">open called</span><br><span class="line">Killed</span><br></pre></td></tr></table></figure>
+<p>可以看到第二个<code>write</code>调用没有执行到，因为在它之上的<code>open</code>调用执行时，内核终止了这个进程。我们代码里不使用<code>printf</code>而是使用<code>write</code>输出，是因为<code>printf</code>实现本身可能还会调用<code>write</code>之外其他的系统调用。</p>
+<p>沉寂了一些年之后，在<code>3.5</code>版本的内核中引入一种新的<code>seccomp</code>模式。它基于<code>BPF</code>来过滤系统调用，这种模式叫做<code>SECCOMP_MODE_FILTER</code>。这种模式下，可以自定义被允许使用的<code>系统调用</code>，而自定义过滤规则是借由<code>BPF</code>语言来实现。因而这种模式也叫做<code>Seccomp-BPF</code>。</p>
+<p>过滤规则仍旧使用<code>BPF</code>的<code>struct socket_filter</code>结构来表示，但匹配的内容却是<code>系统调用</code>号和参数内容，但是过滤程序不能解引用指针(<code>dereference pointer</code>)，去匹配指针指向的内容。<code>BPF</code>程序可以不同的返回值，指示内核进行不同的处理逻辑，如:</p>
+<ul>
+<li><code>SECCOMP_RET_KILL</code>: 立即终止进程</li>
+<li><code>SECCOMP_RET_TRAP</code>: 发送一个可捕获的<code>SIGSYS</code></li>
+<li><code>SECCOMP_RET_ERROR</code>: 指定<code>errno</code>的值并返回</li>
+<li><code>SECCOMP_RET_TRACE</code>: 由被附加的<code>ptrace tracer</code>裁决</li>
+<li><code>SECCOMP_RET_ALLOW</code>: 允许这个系统调用继续</li>
+</ul>
+<p>随着内核发展，返回值也在变化，<code>5.17</code>版本上已经有更多的返回值，可以参考<a target="_blank" rel="noopener" href="https://www.kernel.org/doc/html/v5.17/userspace-api/seccomp_filter.html">内核文档</a>。</p>
+<p>对于同一个<code>系统调用</code>可以加载多个过滤器。这种场景下，<code>系统调用</code>的裁决结果以最高优先级的返回值为准，返回值优先级也可以参考不同版本内核的上述文档。</p>
+<p><code>BPF</code>语言本身提供了一套指令集来实现过滤功能。可以直接基于<code>BPF</code>指令和内核定义的宏来编写过滤程序。<code>BPF</code>的指令规范可以参考<a target="_blank" rel="noopener" href="https://man.openbsd.org/bpf">这里</a>。</p>
+<p><code>seccomp-BPF</code>模式的使用流程是这样的:<br>1、以<code>struct socket_filter</code>的数组承载过滤规则<br>2、以<code>struct sock_fprog</code>结构来封装上述过滤规则<br>3、使用<code>prctl</code>系统调用加载上述<code>struct sock_fprog</code></p>
+<p>而<code>BPF</code>程序的输入是<code>struct seccomp_data</code>结构:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">seccomp_data</span> &#123;</span></span><br><span class="line">    <span class="type">int</span> nr;</span><br><span class="line">    __u32 arch;</span><br><span class="line">    __u64 instruction_pointer;</span><br><span class="line">    __u64 args[<span class="number">6</span>];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>下面用内核定义的<code>BPF</code>宏来展示<code>Seccomp-BPF</code>模式:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/prctl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/seccomp.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/filter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stddef.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> ret;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock_filter</span> <span class="title">filter</span>[] =</span> &#123;</span><br><span class="line">        BPF_STMT(BPF_LD+BPF_W+BPF_ABS, (offsetof(<span class="keyword">struct</span> seccomp_data, nr))),</span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_read, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_write, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_exit, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_exit_group, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_rt_sigreturn, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line"></span><br><span class="line"><span class="comment">//        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_dup2, 0, 1),</span></span><br><span class="line"><span class="comment">//        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span></span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL),</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock_fprog</span> <span class="title">prog</span> =</span> &#123;</span><br><span class="line">        .len = (<span class="type">unsigned</span> <span class="type">short</span>)(<span class="keyword">sizeof</span>(filter)/<span class="keyword">sizeof</span>(filter[<span class="number">0</span>])),</span><br><span class="line">        .filter = filter,</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    ret = prctl(PR_SET_NO_NEW_PRIVS, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &amp;prog)) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;prctl failed\n&quot;</span>);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE1    <span class="string">&quot;Filter loaded\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE1, <span class="keyword">sizeof</span>(MESSAGE1));</span><br><span class="line"></span><br><span class="line">    ret = dup2(<span class="number">1</span>, <span class="number">2</span>);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE2    <span class="string">&quot;dup2 called\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE2, <span class="keyword">sizeof</span>(MESSAGE2));</span><br><span class="line"></span><br><span class="line">    _exit(<span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们的过滤程序从<code>seccomp_data</code>结构中读取<code>nr</code>字段的值，装载到寄存器中，然后进行一系列的<code>系统调用</code>号的匹配和跳转操作。如果任何一个系统调用号都没有匹配到，则返回<code>SECCOMP_RET_KILL</code>, 内核将终止进程。</p>
+<p>加载<code>BPF</code>过滤器，需要调用线程有<code>CAP_SYS_ADMIN</code>权限，或者将<code>no_new_priv</code>置位，这可以通过<code>prctl</code>实现:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">prctl(PR_SET_NO_NEW_PRIVS, 1);</span><br></pre></td></tr></table></figure>
+
+<p>运行结果如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./raw_filter</span></span><br><span class="line">Filter loaded</span><br><span class="line">Bad system call (core dumped)</span><br></pre></td></tr></table></figure>
+
+<p>我们代码中注释掉了允许<code>dup2</code>调用的两行程序，当执行到<code>dup2</code>时，进程将被终止, 因而最后的”dup called”不会输出。</p>
+<p>将注释掉的两行代码放开后，执行结果如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./raw_filter2</span></span><br><span class="line">Filter loaded</span><br><span class="line">dup2 called</span><br></pre></td></tr></table></figure>
+
+<p>这种方式开发效率非常低下，可以使用<code>libseccomp</code>这种更高阶的<code>API</code>库，具体参考<a target="_blank" rel="noopener" href="https://github.com/seccomp/libseccomp">官网</a>。</p>
+<p>我们使用<code>libseccomp</code>来展示示例:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;seccomp.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> agrc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    scmp_filter_ctx ctx;</span><br><span class="line"></span><br><span class="line">    ctx = seccomp_init(SCMP_ACT_KILL);</span><br><span class="line"></span><br><span class="line">    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rt_sigreturn), <span class="number">0</span>);</span><br><span class="line">    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(<span class="built_in">exit</span>), <span class="number">0</span>);</span><br><span class="line">    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), <span class="number">0</span>);</span><br><span class="line">    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(dup2), <span class="number">2</span>,</span><br><span class="line">            SCMP_A0(SCMP_CMP_EQ, <span class="number">1</span>),</span><br><span class="line">            SCMP_A1(SCMP_CMP_EQ, <span class="number">2</span>));</span><br><span class="line"></span><br><span class="line">    seccomp_load(ctx);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE1 <span class="string">&quot;Filter loaded\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE1, <span class="keyword">sizeof</span>(MESSAGE1));</span><br><span class="line"></span><br><span class="line">    dup2(<span class="number">1</span>, <span class="number">2</span>);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE2 <span class="string">&quot;Dup2 succeeded\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE2, <span class="keyword">sizeof</span>(MESSAGE2));</span><br><span class="line"></span><br><span class="line">    dup2(<span class="number">2</span>, <span class="number">42</span>);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MESSAGE3 <span class="string">&quot;You can&#x27;t see this message\n&quot;</span></span></span><br><span class="line">    write(STDOUT_FILENO, MESSAGE3, <span class="keyword">sizeof</span>(MESSAGE3));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>scmp_filter_ctx</code>是过滤逻辑所使用的上下文结构，<code>seccomp_init</code>函数对上下文结构体进行初始化，若参数为<code>SCMP_ACT_ALLOW</code>, 则过滤为黑名单模式；若为<code>SCMP_ACT_KILL</code>，则为白名单模式，即进程调用没有匹配到规则的系统调用都会杀死，默认不允许所有的系统调用。<code>seccomp_rule_add</code>函数用来添加规则，<code>seccomp_load</code>函数加载过滤器。</p>
+<p>我们允许<code>read</code>,<code>write</code>, <code>sig_return</code>, <code>exit</code>4个<code>系统调用</code>。对于<code>dup2</code>调用，我们还会根据传入的参数来进行判断。只有传入的两个参数为<code>1</code>和<code>2</code>被允许，即:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dup2(<span class="number">1</span>, <span class="number">2</span>)</span><br></pre></td></tr></table></figure>
+
+<p>编译程序需要链接<code>libseccomp</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc seccomp_filter.c -lseccomp -o seccomp_filter</span><br></pre></td></tr></table></figure>
+
+<p>执行结果:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./seccomp_filter</span></span><br><span class="line">Filter loaded</span><br><span class="line">Dup2 succeeded</span><br><span class="line">Bad system call (core dumped)</span><br></pre></td></tr></table></figure>
+
+<p><code>dup2(1, 2)</code>成功执行，而后边的<code>dup2(2, 42)</code>没有成功执行，进程被终止。</p>
+<p>之后，在<code>5.0</code>版本内核又加入了<code>seccomp-unotify</code>机制，<code>5.9</code>版本又做了特性增强。<code>seccomp-BPF</code>模式对<code>系统调用</code>的裁决是由过滤程序自己完成的，而<code>seccomp-unotify</code>机制能够将裁决权转移给另一个用户态进程。这个<a target="_blank" rel="noopener" href="https://brauner.github.io/2020/07/23/seccomp-notify.html">文章</a>对这个特性介绍的非常详细。</p>
+<p>我们将加载过滤程序的进程叫做<code>target</code>, 接收通知的进程叫做<code>supervisor</code>。在这个模式中，<code>supervisor</code>不仅对是否允许<code>系统调用</code>能够做出裁决，它还可以代替<code>target</code>进程完成这个<code>系统调用</code>的行为。这大大扩大了<code>seccomp</code>机制的应用范围。上边我们介绍过，<code>Seccomp-BPF</code>模式只能检测系统调用的参数，不能解引用指针。而这个<code>unotify</code>模式则还可以去查看指针所指向的内存。</p>
+<p>具体的使用方式可以参考<a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/seccomp_unotify.2.html">这里</a>。</p>
+<p>我们再来展示一个示例。<code>target</code>进程代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/prctl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/seccomp.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/filter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stddef.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> ret;</span><br><span class="line">    <span class="type">int</span> notifyfd, fd;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc != <span class="number">2</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;usage: %s &lt;file path&gt;\n&quot;</span>, argv[<span class="number">0</span>]);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock_filter</span> <span class="title">filter</span>[] =</span> &#123;</span><br><span class="line">        BPF_STMT(BPF_LD+BPF_W+BPF_ABS, (offsetof(<span class="keyword">struct</span> seccomp_data, nr))),</span><br><span class="line"></span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_open, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_USER_NOTIF),</span><br><span class="line"></span><br><span class="line">        BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_openat, <span class="number">0</span>, <span class="number">1</span>),</span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_USER_NOTIF),</span><br><span class="line"></span><br><span class="line">        BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sock_fprog</span> <span class="title">prog</span> =</span> &#123;</span><br><span class="line">        .len = (<span class="type">unsigned</span> <span class="type">short</span>)(<span class="keyword">sizeof</span>(filter)/<span class="keyword">sizeof</span>(filter[<span class="number">0</span>])),</span><br><span class="line">        .filter = filter,</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    ret = prctl(PR_SET_NO_NEW_PRIVS, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    notifyfd = syscall(__NR_seccomp, SECCOMP_SET_MODE_FILTER,</span><br><span class="line">            SECCOMP_FILTER_FLAG_NEW_LISTENER, &amp;prog);</span><br><span class="line">    <span class="keyword">if</span> (notifyfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;seccomp failed: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;tid: %d, notify fd: %d\n&quot;</span>, syscall(SYS_gettid), notifyfd);</span><br><span class="line"></span><br><span class="line">    fd = open(argv[<span class="number">1</span>], O_CREAT|O_RDWR);</span><br><span class="line">    <span class="keyword">if</span> (fd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;open failed: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;open succeeded\n&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    close(fd);</span><br><span class="line">    close(notifyfd);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>target</code>进程使用<code>seccomp</code>系统调用来加载过滤程序，获得一个<code>seccomp-unotify</code>的<code>fd</code>, 接着将<code>线程ID</code>和<code>通知fd</code>输出。接下来调用<code>open</code>系统调用。我们的<code>BPF</code>程序里对于<code>open</code>和<code>openat</code>返回<code>SECCOMP_RET_USER_NOTIF</code>，因而执行到这里时，程序将会阻塞。</p>
+<p>再来看<code>supervisor</code>进程:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/limits.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/seccomp.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/ioctl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">process_notifications</span><span class="params">(<span class="type">int</span> notifyfd)</span></span><br><span class="line">&#123;</span><br><span class="line">    __u64  id;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">seccomp_notif_sizes</span> <span class="title">sizes</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">seccomp_notif</span> *<span class="title">req</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">seccomp_notif_resp</span> *<span class="title">resp</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="type">char</span> path[PATH_MAX];</span><br><span class="line">    <span class="type">int</span> memfd;</span><br><span class="line">    <span class="type">ssize_t</span> s;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (syscall(SYS_seccomp, SECCOMP_GET_NOTIF_SIZES, <span class="number">0</span>, &amp;sizes) == <span class="number">-1</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;seccomp failed: %s&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    assert((req = <span class="built_in">malloc</span>(sizes.seccomp_notif)));</span><br><span class="line">    assert((resp = <span class="built_in">malloc</span>(sizes.seccomp_notif_resp)));</span><br><span class="line"></span><br><span class="line">    <span class="built_in">memset</span>(req, <span class="number">0</span>, sizes.seccomp_notif);</span><br><span class="line">    <span class="built_in">memset</span>(resp, <span class="number">0</span>, sizes.seccomp_notif_resp);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ioctl(notifyfd, SECCOMP_IOCTL_NOTIF_RECV, req) == <span class="number">-1</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;ioctl failed: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Got notification for PID: %d, id is %llx\n&quot;</span>,</span><br><span class="line">            req-&gt;pid, req-&gt;id);</span><br><span class="line"></span><br><span class="line">    id = req-&gt;id;</span><br><span class="line">    <span class="keyword">if</span> (ioctl(notifyfd, SECCOMP_IOCTL_NOTIF_ID_VALID, &amp;id) == <span class="number">-1</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Notification ID check: target has died: %s\n&quot;</span>,</span><br><span class="line">                strerror(errno));</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">snprintf</span>(path, <span class="keyword">sizeof</span>(path), <span class="string">&quot;/proc/%d/mem&quot;</span>, req-&gt;pid);</span><br><span class="line">    memfd = open(path, O_RDONLY);</span><br><span class="line">    <span class="keyword">if</span> (memfd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;open mem file failed: %s\n&quot;</span>, path);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;SYSCALL: %d\n&quot;</span>, req-&gt;data.nr);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (req-&gt;data.nr == SYS_open) &#123;</span><br><span class="line">        assert(lseek(memfd, req-&gt;data.args[<span class="number">0</span>], SEEK_SET) &gt;= <span class="number">0</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (req-&gt;data.nr == SYS_openat) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;memory address: 0x%016X\n&quot;</span>, req-&gt;data.args[<span class="number">1</span>]);</span><br><span class="line">        assert(lseek(memfd, req-&gt;data.args[<span class="number">1</span>], SEEK_SET) &gt;= <span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    assert((s = read(memfd, path, <span class="keyword">sizeof</span>(path))) &gt; <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;open path: %s\n&quot;</span>, path);</span><br><span class="line"></span><br><span class="line">    close(memfd);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">strlen</span>(path) == <span class="built_in">strlen</span>(<span class="string">&quot;/tmp/noopen.txt&quot;</span>) &amp;&amp;</span><br><span class="line">        <span class="built_in">strncmp</span>(path, <span class="string">&quot;/tmp/noopen.txt&quot;</span>, <span class="built_in">strlen</span>(<span class="string">&quot;/tmp/noopen.txt&quot;</span>)) == <span class="number">0</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Denied\n&quot;</span>);</span><br><span class="line">        resp-&gt;error = -EPERM;</span><br><span class="line">        resp-&gt;flags = <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;Allowed\n&quot;</span>);</span><br><span class="line">        resp-&gt;error = <span class="number">0</span>;</span><br><span class="line">        resp-&gt;flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    resp-&gt;id = req-&gt;id;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ioctl(notifyfd, SECCOMP_IOCTL_NOTIF_SEND, resp) == <span class="number">-1</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (errno == ENOENT) &#123;</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;Response failed with ENOENT; perhaps target &quot;</span></span><br><span class="line">                   <span class="string">&quot;process&#x27;s syscall was interrupted by signal?\n&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;ioctl failed: %s\n&quot;</span>, strerror(errno));</span><br><span class="line">            <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">free</span>(req);</span><br><span class="line">    <span class="built_in">free</span>(resp);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> pidfd;</span><br><span class="line">    <span class="type">int</span> notifyfd, targetfd;</span><br><span class="line">    <span class="type">pid_t</span> pid;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc != <span class="number">3</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;usage: %s &lt;pid&gt; &lt;target fd&gt;\n&quot;</span>, argv[<span class="number">0</span>]);</span><br><span class="line">        <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pid = atoi(argv[<span class="number">1</span>]);</span><br><span class="line">    targetfd = atoi(argv[<span class="number">2</span>]);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;PID: %d, TARGET FD: %d\n&quot;</span>, pid, targetfd);</span><br><span class="line"></span><br><span class="line">    pidfd = syscall(SYS_pidfd_open, pid, <span class="number">0</span>);</span><br><span class="line">    assert(pidfd &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;PIDFD: %d\n&quot;</span>, pidfd);</span><br><span class="line"></span><br><span class="line">    notifyfd = syscall(SYS_pidfd_getfd, pidfd, targetfd, <span class="number">0</span>);</span><br><span class="line">    assert(notifyfd &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;NOTIFY FD: %d\n&quot;</span>, notifyfd);</span><br><span class="line"></span><br><span class="line">    process_notifications(notifyfd);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>supervisor</code>进程能过<code>pidfd_getfd</code>从<code>target</code>进程获取到<code>seccomp-unotify</code>的<code>fd</code>, 从<code>fd</code>中获取到系统调用的调用通知。通过<code>/proc/[pid]/mem</code>文件获取到<code>open</code>调用传入的指针所指向的文件名。当文件名为<code>/tmp/noopen.txt</code>时，<code>open</code>被禁止，其他文件名则允许执行。</p>
+<p>我们先执行<code>target</code>进程，可以看到输出的<code>PID</code>和<code>FD</code>, 同时进程被阻塞:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./target /tmp/noopen.txt</span></span><br><span class="line">tid: 9449, notify fd: 3</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>然后我们在另一个终端执行<code>supervisor</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./supervisor 9449 3</span></span><br><span class="line">PID: 9449, TARGET FD: 3</span><br><span class="line">PIDFD: 3</span><br><span class="line">NOTIFY FD: 4</span><br><span class="line">Got notification <span class="keyword">for</span> PID: 9449, <span class="built_in">id</span> is 5928d2192e65a0b5</span><br><span class="line">SYSCALL: 257</span><br><span class="line">memory address: 0x000000008FB87785</span><br><span class="line">open path: /tmp/noopen.txt</span><br><span class="line">Denied</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>open</code>被禁止，而另一个终端上<code>target</code>进程也返回:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./target /tmp/noopen.txt</span></span><br><span class="line">tid: 9449, notify fd: 3</span><br><span class="line">open failed: Operation not permitted</span><br></pre></td></tr></table></figure>
+
+<p>我们再以非<code>/tmp/noopen.txt</code>的文件来运行一次<code>target</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./target /tmp/dummy.txt</span></span><br><span class="line">tid: 9451, notify fd: 3</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>程序正常阻塞，然后运行<code>supervisor</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./supervisor 9451 3</span></span><br><span class="line">PID: 9451, TARGET FD: 3</span><br><span class="line">PIDFD: 3</span><br><span class="line">NOTIFY FD: 4</span><br><span class="line">Got notification <span class="keyword">for</span> PID: 9451, <span class="built_in">id</span> is 211503f5ffd2ddc3</span><br><span class="line">SYSCALL: 257</span><br><span class="line">memory address: 0x000000007E3EF786</span><br><span class="line">open path: /tmp/dummy.txt</span><br><span class="line">Allowed</span><br></pre></td></tr></table></figure>
+
+<p><code>open</code>调用被允许执行，这时<code>target</code>进程也返回:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ./target /tmp/dummy.txt</span></span><br><span class="line">tid: 9451, notify fd: 3</span><br><span class="line">open succeeded</span><br></pre></td></tr></table></figure>
+
+<p>查看创建的<code>/tmp/dummy.txt</code>可以看到文件被成功创建了:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@t8 seccomp]<span class="comment"># ls -l /tmp/dummy.txt</span></span><br><span class="line">---sr-----. 1 root root 0 Mar 29 08:01 /tmp/dummy.txt</span><br></pre></td></tr></table></figure>
+
+<p><code>seccomp-unotify</code>当前在容器环境里有比较大的使用空间，而且还在不断的发展之中，后续有新的进展，再来单独介绍。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/120647/">https://lwn.net/Articles/120647/</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Seccomp">https://en.wikipedia.org/wiki/Seccomp</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/656307/">https://lwn.net/Articles/656307/</a></li>
+<li><a target="_blank" rel="noopener" href="https://man7.org/conf/lpc2015/limiting_kernel_attack_surface_with_seccomp-LPC_2015-Kerrisk.pdf">https://man7.org/conf/lpc2015/limiting_kernel_attack_surface_with_seccomp-LPC_2015-Kerrisk.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2019/02/04/seccomp">http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2019/02/04/seccomp</a></li>
+<li><a target="_blank" rel="noopener" href="https://archive.fosdem.org/2021/schedule/event/containers_k8s_seccomp_notify/">https://archive.fosdem.org/2021/schedule/event/containers_k8s_seccomp_notify/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kinvolk.io/blog/2022/03/bringing-seccomp-notify-to-runc-and-kubernetes/">https://kinvolk.io/blog/2022/03/bringing-seccomp-notify-to-runc-and-kubernetes/</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/851813/">https://lwn.net/Articles/851813/</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/475678/">https://lwn.net/Articles/475678/</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/kinvolk/seccompagent/">https://github.com/kinvolk/seccompagent/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/html/v5.17/userspace-api/seccomp_filter.html">https://www.kernel.org/doc/html/v5.17/userspace-api/seccomp_filter.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.yadutaf.fr/2014/05/29/introduction-to-seccomp-bpf-linux-syscall-filter/">https://blog.yadutaf.fr/2014/05/29/introduction-to-seccomp-bpf-linux-syscall-filter/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.zhougy.top/2019/11/30/seccomp%E4%BB%8B%E7%BB%8D/">https://blog.zhougy.top/2019/11/30/seccomp%E4%BB%8B%E7%BB%8D/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.anquanke.com/post/id/208364">https://www.anquanke.com/post/id/208364</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1801887">https://cloud.tencent.com/developer/article/1801887</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/blob/master/samples/seccomp/bpf-direct.c">https://github.com/torvalds/linux/blob/master/samples/seccomp/bpf-direct.c</a></li>
+<li><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/seccomp_unotify.2.html">https://man7.org/linux/man-pages/man2/seccomp_unotify.2.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://man7.org/tlpi/code/online/dist/sockets/scm_functions.c.html">https://man7.org/tlpi/code/online/dist/sockets/scm_functions.c.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://man7.org/tlpi/code/online/dist/seccomp/seccomp_user_notification.c.html">https://man7.org/tlpi/code/online/dist/seccomp/seccomp_user_notification.c.html</a></li>
+<li><a target="_blank" rel="noopener" href="http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2021/05/20/seccomp-user-notify">http://terenceli.github.io/%E6%8A%80%E6%9C%AF/2021/05/20/seccomp-user-notify</a></li>
+<li><a target="_blank" rel="noopener" href="https://ajxchapman.github.io/linux/2016/08/31/seccomp-and-seccomp-bpf.html">https://ajxchapman.github.io/linux/2016/08/31/seccomp-and-seccomp-bpf.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://brauner.github.io/2020/07/23/seccomp-notify.html">https://brauner.github.io/2020/07/23/seccomp-notify.html</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Seccomp/" rel="tag"># Seccomp</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/03/22/totp/" rel="prev" title="TOTP介绍">
+      <i class="fa fa-chevron-left"></i> TOTP介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/04/20/fix-exit/" rel="next" title="Linux内核模块无法卸载分析与修复">
+      Linux内核模块无法卸载分析与修复 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

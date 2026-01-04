@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="OTP是One Time Password的缩写，是进一步加强身份认证的安全性的校验方法, 一般配合常规密码一起使用。OTP动态生成，只使用一次。手机验证码就是典型的OTP方式。用户请求一个短信验证码, 服务器随机生成一个验证码，然后临时存储起来，通过短信发送给用户。用户在系统上输入验证码发送回服务器，服务器根据临时存储的验证码进行校验。 生成OTP业内有许多标准算法，比如SHA-1。所有这些算法">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TOTP介绍">
+<meta property="og:url" content="http://just4coding.com/2022/03/22/totp/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="OTP是One Time Password的缩写，是进一步加强身份认证的安全性的校验方法, 一般配合常规密码一起使用。OTP动态生成，只使用一次。手机验证码就是典型的OTP方式。用户请求一个短信验证码, 服务器随机生成一个验证码，然后临时存储起来，通过短信发送给用户。用户在系统上输入验证码发送回服务器，服务器根据临时存储的验证码进行校验。 生成OTP业内有许多标准算法，比如SHA-1。所有这些算法">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-03-22/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-03-22/3.png">
+<meta property="article:published_time" content="2022-03-22T13:39:15.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.499Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="TOTP">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-03-22/2.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/03/22/totp/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>TOTP介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/22/totp/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          TOTP介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-03-22 21:39:15" itemprop="dateCreated datePublished" datetime="2022-03-22T21:39:15+08:00">2022-03-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>OTP</code>是<code>One Time Password</code>的缩写，是进一步加强身份认证的安全性的校验方法, 一般配合常规密码一起使用。<code>OTP</code>动态生成，只使用一次。手机验证码就是典型的<code>OTP</code>方式。用户请求一个短信验证码, 服务器随机生成一个验证码，然后临时存储起来，通过短信发送给用户。用户在系统上输入验证码发送回服务器，服务器根据临时存储的验证码进行校验。</p>
+<p>生成<code>OTP</code>业内有许多标准算法，比如<code>SHA-1</code>。所有这些算法都包括两部分输入:</p>
+<ul>
+<li><code>种子值(seed)</code>：静态值，和帐号关联的密钥</li>
+<li><code>可变因子(moving factor)</code>：每次生成<code>OTP</code>都变化的部分</li>
+</ul>
+<span id="more"></span>
+
+<p>根据<code>可变因子</code>的不同，<code>OTP</code>可以分为两种类型:</p>
+<ul>
+<li><code>HOTP:</code>: <code>H</code>这里表示基于<code>HMAC: Hash-based Message Authentication Code</code>。每次<code>HTOP</code>被请求和校验时，服务器和客户端都增加<code>可变因子</code>的计数器，两端对计数器保持同步。这种方式已经由<a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc4226"><code>RFC 4226</code></a>标准化。</li>
+<li><code>TOTP</code>: <code>Time-based OTP</code>, 这种方法的<code>可变因子</code>是基于时间而不是计数器。<code>OTP</code>的有效期一般是30秒或者60秒。如果在这个时间窗口内没有使用这个<code>OTP</code>，那么它就失效了，需要使用新的<code>OTP</code>。这种方式由<a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc6238"><code>RFC 6238</code></a>标准化。</li>
+</ul>
+<p><code>TOTP</code>的算法实现非常简单, 几十行代码就可以实现，比如使用<code>Python</code>实现:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> hmac, base64, struct, hashlib, time</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">get_hotp_token</span>(<span class="params">secret, intervals_no</span>):</span><br><span class="line">    key = base64.b32decode(secret, <span class="literal">True</span>)</span><br><span class="line">    <span class="comment">#decoding our key</span></span><br><span class="line">    msg = struct.pack(<span class="string">&quot;&gt;Q&quot;</span>, intervals_no)</span><br><span class="line">    <span class="comment">#conversions between Python values and C structs represente</span></span><br><span class="line">    h = hmac.new(key, msg, hashlib.sha1).digest()</span><br><span class="line">    o = o = h[<span class="number">19</span>] &amp; <span class="number">15</span></span><br><span class="line">    <span class="comment">#Generate a hash using both of these. Hashing algorithm is HMAC</span></span><br><span class="line">    h = (struct.unpack(<span class="string">&quot;&gt;I&quot;</span>, h[o:o+<span class="number">4</span>])[<span class="number">0</span>] &amp; <span class="number">0x7fffffff</span>) % <span class="number">1000000</span></span><br><span class="line">    <span class="comment">#unpacking</span></span><br><span class="line">    <span class="keyword">return</span> h</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">get_totp_token</span>(<span class="params">secret</span>):</span><br><span class="line">    <span class="comment">#ensuring to give the same otp for 30 seconds</span></span><br><span class="line">    x =<span class="built_in">str</span>(get_hotp_token(secret,intervals_no=<span class="built_in">int</span>(time.time())//<span class="number">30</span>))</span><br><span class="line">    <span class="comment">#adding 0 in the beginning till OTP has 6 digits</span></span><br><span class="line">    <span class="keyword">while</span> <span class="built_in">len</span>(x)!=<span class="number">6</span>:</span><br><span class="line">        x+=<span class="string">&#x27;0&#x27;</span></span><br><span class="line">    <span class="keyword">return</span> x</span><br><span class="line"></span><br><span class="line"><span class="comment">#base64 encoded key</span></span><br><span class="line">secret = <span class="string">&#x27;MNUGC2DBGBZQ====&#x27;</span></span><br><span class="line"><span class="built_in">print</span>(get_totp_token(secret))</span><br></pre></td></tr></table></figure>
+
+<p>各种语言都有相应的<code>OTP</code>库，<code>Python</code>中常用的<code>OTP</code>库是<a target="_blank" rel="noopener" href="https://pyauth.github.io/pyotp/"><code>PyOTP</code></a>, 使用非常简单，下边我们简单实践一下。</p>
+<p>我们首先使用如下代码生成一个兼容<code>Google Authenticator</code>的随机密钥，我这次执行的结果是<code>NDQARABVHZLAZGEKVNWN72IZIDKZCAK7</code>:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> pyotp</span><br><span class="line"><span class="built_in">print</span>(pyotp.random_base32())</span><br></pre></td></tr></table></figure>
+
+<p>服务端使用如下代码生成<code>TOTP</code>, <code>totp.py</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">import pyotp</span><br><span class="line"></span><br><span class="line">totp = pyotp.TOTP(&#x27;NDQARABVHZLAZGEKVNWN72IZIDKZCAK7&#x27;)</span><br><span class="line"></span><br><span class="line">print(totp.now())</span><br></pre></td></tr></table></figure>
+
+<p>服务端使用如下代码生成<code>OTP</code>的<code>URI</code>:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> pyotp</span><br><span class="line"></span><br><span class="line">secretkey = <span class="string">&#x27;NDQARABVHZLAZGEKVNWN72IZIDKZCAK7&#x27;</span></span><br><span class="line"><span class="built_in">print</span>(pyotp.totp.TOTP(secretkey).provisioning_uri(name=<span class="string">&#x27;flygoast&#x27;</span>, issuer_name=<span class="string">&#x27;just4coding&#x27;</span>))</span><br></pre></td></tr></table></figure>
+
+<p>生成的<code>URI</code>如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">(py3) [root@default src]<span class="comment"># python uri.py</span></span><br><span class="line">otpauth://totp/just4coding:flygoast?secret=NDQARABVHZLAZGEKVNWN72IZIDKZCAK7&amp;issuer=just4coding</span><br></pre></td></tr></table></figure>
+
+<p>我们把这个<code>URI</code>转换成<code>QR</code>码:</p>
+<img src="/images/2022-03-22/2.png" class="">
+
+<p>现在服务端部分准备完成。客户端我们直接使用<code>Microsoft Authenticator</code>来进行验证。</p>
+<p>首先打开<code>Microsoft Authenticator</code>扫描生成的二维码，然后可以看到当前的<code>OTP</code>:</p>
+<img src="/images/2022-03-22/3.png" class="">
+
+<p>在服务器上执行<code>totp</code>查看<code>OTP</code>，结果是一致的:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">(py3) [root@default src]<span class="comment"># python totp.py</span></span><br><span class="line">775209</span><br><span class="line">(py3) [root@default src]<span class="comment"># python totp.py</span></span><br><span class="line">775209</span><br><span class="line">(py3) [root@default src]<span class="comment"># python totp.py</span></span><br><span class="line">775209</span><br></pre></td></tr></table></figure>
+
+<p>服务器上在收到用户发来的<code>OTP</code>后，可以使用如下方法进行校验:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">totp.verify(<span class="string">&#x27;775209&#x27;</span>) <span class="comment"># =&gt; True</span></span><br></pre></td></tr></table></figure>
+
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.onelogin.com/learn/otp-totp-hotp">https://www.onelogin.com/learn/otp-totp-hotp</a></li>
+<li><a target="_blank" rel="noopener" href="https://doubleoctopus.com/security-wiki/authentication/otp-totp-hotp/">https://doubleoctopus.com/security-wiki/authentication/otp-totp-hotp/</a></li>
+<li><a target="_blank" rel="noopener" href="https://pyauth.github.io/pyotp/">https://pyauth.github.io/pyotp/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.ruanyifeng.com/blog/2017/11/2fa-tutorial.html">https://www.ruanyifeng.com/blog/2017/11/2fa-tutorial.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://medium.com/analytics-vidhya/understanding-totp-in-python-bbe994606087">https://medium.com/analytics-vidhya/understanding-totp-in-python-bbe994606087</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/TOTP/" rel="tag"># TOTP</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/03/22/ebpf-c/" rel="prev" title="eBPF原理介绍与C语言实现eBPF程序">
+      <i class="fa fa-chevron-left"></i> eBPF原理介绍与C语言实现eBPF程序
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/04/03/seccomp/" rel="next" title="Seccomp机制与seccomp notify介绍">
+      Seccomp机制与seccomp notify介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

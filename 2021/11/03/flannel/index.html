@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="flannel是coreos开源的Kubernetes CNI实现。它使用etcd或者Kubernetes API存储整个集群的网络配置。每个kubernetes节点上运行flanneld组件，它从etcd或者Kubernetes API获取集群的网络地址空间，并在空间内获取一个subnet,该节点上的容器IP都从这个subnet中分配，从而保证不同节点上的IP不会冲突。flannel通过不同的b">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes flannel网络分析">
+<meta property="og:url" content="http://just4coding.com/2021/11/03/flannel/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="flannel是coreos开源的Kubernetes CNI实现。它使用etcd或者Kubernetes API存储整个集群的网络配置。每个kubernetes节点上运行flanneld组件，它从etcd或者Kubernetes API获取集群的网络地址空间，并在空间内获取一个subnet,该节点上的容器IP都从这个subnet中分配，从而保证不同节点上的IP不会冲突。flannel通过不同的b">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2021-11-03/1.png">
+<meta property="article:published_time" content="2021-11-03T14:06:57.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.496Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Network">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="CNI">
+<meta property="article:tag" content="Flannel">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2021-11-03/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2021/11/03/flannel/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes flannel网络分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/03/flannel/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes flannel网络分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-03 22:06:57" itemprop="dateCreated datePublished" datetime="2021-11-03T22:06:57+08:00">2021-11-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="https://github.com/flannel-io/flannel"><code>flannel</code></a>是<code>coreos</code>开源的<code>Kubernetes CNI</code>实现。它使用<code>etcd</code>或者<code>Kubernetes API</code>存储整个集群的网络配置。每个<code>kubernetes</code>节点上运行<code>flanneld</code>组件，它从<code>etcd</code>或者<code>Kubernetes API</code>获取集群的网络地址空间，并在空间内获取一个<code>subnet</code>,该节点上的容器<code>IP</code>都从这个<code>subnet</code>中分配，从而保证不同节点上的<code>IP</code>不会冲突。<code>flannel</code>通过不同的<code>backend</code>来实现跨主机的容器网络通信，目前支持<code>udp</code>,<code>vxlan</code>,<code>host-gw</code>等一系列<code>backend</code>实现。本文介绍<code>vxlan backend</code>下的容器通信过程。</p>
+<p><code>flannel</code>在<code>v0.9.0</code>版本上对<code>vxlan</code>的实现作了改动。<a target="_blank" rel="noopener" href="https://github.com/flannel-io/flannel/blob/v0.9.0/backend/vxlan/vxlan.go%60">源码</a>中有一段非常详细的注释介绍了不同版本的设计与实现:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">// Some design notes and history:</span><br><span class="line">// VXLAN encapsulates L2 packets (though flannel is L3 only so don&#x27;t expect to be able to send L2 packets across hosts)</span><br><span class="line">// The first versions of vxlan for flannel registered the flannel daemon as a handler for both &quot;L2&quot; and &quot;L3&quot; misses</span><br><span class="line">// - When a container sends a packet to a new IP address on the flannel network (but on a different host) this generates</span><br><span class="line">//   an L2 miss (i.e. an ARP lookup)</span><br><span class="line">// - The flannel daemon knows which flannel host the packet is destined for so it can supply the VTEP MAC to use.</span><br><span class="line">//   This is stored in the ARP table (with a timeout) to avoid constantly looking it up.</span><br><span class="line">// - The packet can then be encapsulated but the host needs to know where to send it. This creates another callout from</span><br><span class="line">//   the kernal vxlan code to the flannel daemon to get the public IP that should be used for that VTEP (this gets called</span><br><span class="line">//   an L3 miss). The L2/L3 miss hooks are registered when the vxlan device is created. At the same time a device route</span><br><span class="line">//   is created to the whole flannel network so that non-local traffic is sent over the vxlan device.</span><br><span class="line">//</span><br><span class="line">// In this scheme the scaling of table entries (per host) is:</span><br><span class="line">//  - 1 route (for the configured network out the vxlan device)</span><br><span class="line">//  - One arp entry for each remote container that this host has recently contacted</span><br><span class="line">//  - One FDB entry for each remote host</span><br><span class="line">//</span><br><span class="line">// The second version of flannel vxlan removed the need for the L3MISS callout. When a new remote host is found (either</span><br><span class="line">// during startup or when it&#x27;s created), flannel simply adds the required entries so that no further lookup/callout is required.</span><br><span class="line">//</span><br><span class="line">//</span><br><span class="line">// The latest version of the vxlan backend  removes the need for the L2MISS too, which means that the flannel deamon is not</span><br><span class="line">// listening for any netlink messages anymore. This improves reliability (no problems with timeouts if</span><br><span class="line">// flannel crashes or restarts) and simplifies upgrades.</span><br><span class="line">//</span><br><span class="line">// How it works:</span><br><span class="line">// Create the vxlan device but don&#x27;t register for any L2MISS or L3MISS messages</span><br><span class="line">// Then, as each remote host is discovered (either on startup or when they are added), do the following</span><br><span class="line">// 1) create routing table entry for the remote subnet. It goes via the vxlan device but also specifies a next hop (of the remote flannel host).</span><br><span class="line">// 2) Create a static ARP entry for the remote flannel host IP address (and the VTEP MAC)</span><br><span class="line">// 3) Create an FDB entry with the VTEP MAC and the public IP of the remote flannel daemon.</span><br><span class="line">//</span><br><span class="line">// In this scheme the scaling of table entries is linear to the number of remote hosts - 1 route, 1 arp entry and 1 FDB entry per host</span><br><span class="line">//</span><br><span class="line">// In this newest scheme, there is also the option of skipping the use of vxlan for hosts that are on the same subnet,</span><br><span class="line">// this is called &quot;directRouting&quot;</span><br></pre></td></tr></table></figure>
+
+<p><code>v0.9.0</code>之前版本的实现主要依赖<code>vxlan</code>内核模块的<code>L2MISS</code>和<code>L3MISS</code>消息机制。<code>L2MISS</code>是指<code>vxlan</code>设备在<code>ARP</code>表中找不到内层<code>IP</code>对应的<code>MAC</code>地址时会给用户态程序发送<code>netlink</code>消息。<code>L3MISS</code>是指<code>vxlan</code>设备在<code>FDB</code>表中找不到<code>VXLAN</code>协议内层<code>MAC</code>地址所属的<code>VTEP</code>的<code>IP</code>地址时会给用户态程序发送<code>netlink</code>消息。之前的文章<a href="/2020/04/20/vxlan-fdb/">&lt;&lt;动态维护FDB表项实现VXLAN通信&gt;&gt;</a>介绍过相关概念和操作。本文主要分析<code>v0.9.0</code>版本上的实现方式。</p>
+<span id="more"></span>
+
+<p>之前的方式实现是，<code>flanneld</code>作为<code>L2MISS</code>和<code>L3MISS</code>消息的处理器,当收到相应消息时从<code>etcd</code>或者<code>kubernetes API</code>获取到相应的<code>ARP</code>或者<code>FDB</code>信息来填充相应条目。如果<code>flanneld</code>异常退出，那么整个容器网络集群的网络就中断了。这是一个很大的隐患。<code>v0.9.0</code>实现不再需要处理<code>L2MISS</code>和<code>L3MISS</code>消息，而是由<code>flanneld</code>通过<code>watch</code> <code>etcd</code>或者<code>kubernetes API</code>的相关节点信息来动态地维护各节点通信所需的<code>ARP</code>、<code>FDB</code>以及路由条目。即使<code>flanneld</code>崩溃，整个集群网络数据转发依然可以运行。这个实现很优雅，每个节点只需要一条路由，一个<code>ARP</code>缓存条目和一个<code>FDB</code>条目。</p>
+<p>下面在实验环境中分析<code>flannel vxlan</code>的网络通信过程。整个网络架构如图:</p>
+<img src="/images/2021-11-03/1.png" class="">
+
+<p><code>CNI</code>配置文件<code>/etc/cni/net.d/09-flannel.conf</code>内容如下:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;cbr0&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;cniVersion&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.3.1&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;flannel&quot;</span><span class="punctuation">,</span></span><br><span class="line"></span><br><span class="line">    <span class="attr">&quot;delegate&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;isDefaultGateway&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>节点上每个<code>pod</code>会有一对<code>veth pair</code>设备，其中一端放在<code>pod</code>的<code>network namespace</code>中，另一端在宿主机上接在<code>cni0</code>网桥上。<code>flanneld</code>启动时创建了<code>vxlan</code>设备:<code>flannel.1</code>。</p>
+<p><code>node1</code>上的<code>flannel</code>网络信息如下,分配的<code>subnet</code>为<code>10.230.41.1/24</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# cat /run/flannel/subnet.env</span><br><span class="line">FLANNEL_NETWORK=10.230.0.0/16</span><br><span class="line">FLANNEL_SUBNET=10.230.41.1/24</span><br><span class="line">FLANNEL_MTU=1450</span><br><span class="line">FLANNEL_IPMASQ=false</span><br></pre></td></tr></table></figure>
+<p><code>node2</code>上的<code>flannel</code>网络信息如下, 分配的<code>subnet</code>为<code>10.230.93.1/24</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@node2 ~]# cat /run/flannel/subnet.env</span><br><span class="line">FLANNEL_NETWORK=10.230.0.0/16</span><br><span class="line">FLANNEL_SUBNET=10.230.93.1/24</span><br><span class="line">FLANNEL_MTU=1450</span><br><span class="line">FLANNEL_IPMASQ=false</span><br></pre></td></tr></table></figure>
+
+
+<p>我们来看<code>10.230.41.17</code>向<code>10.230.93.2</code>发送数据包的过程。</p>
+<p><code>10.230.93.2</code>与<code>10.230.41.17</code>不在同一二层网络，因而需要查找路由来决定由哪个设备发送到哪里。<code>10.230.41.17</code>的路由如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]# kubectl exec -it busybox2-6f8fdb784d-r6ln2 -- ip route</span><br><span class="line">default via 10.230.41.1 dev eth0</span><br><span class="line">10.230.0.0/16 via 10.230.41.1 dev eth0</span><br><span class="line">10.230.41.0/24 dev eth0 scope link  src 10.230.41.17</span><br></pre></td></tr></table></figure>
+<p>匹配到默认路由，因而需要发送到网关<code>10.230.41.1</code>。<code>10.230.41.1</code>配置在网桥<code>cni0</code>上。内核通过<code>ARP</code>请求获得<code>10.230.41.1</code>的<code>MAC</code>地址, 将数据包转发到<code>cni0</code>上。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip addr show dev cni0</span><br><span class="line">5: cni0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UP group default qlen 1000</span><br><span class="line">    link/ether 86:99:b6:37:95:b2 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.230.41.1/24 brd 10.230.41.255 scope global cni0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::8499:b6ff:fe37:95b2/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p><code>flanneld</code>在加入集群时会为每个其他节点生成一条<code>on-link</code>路由，<code>on-link</code>路由表示是直连路由，匹配该条路由的数据包将触发<code>ARP</code>请求获取目的IP的<code>MAC</code>地址。在<code>node1</code>上查看路由信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip route show dev flannel.1</span><br><span class="line">10.230.93.0/24 via 10.230.93.0 onlink</span><br></pre></td></tr></table></figure>
+
+<p><code>cni0</code>设备根据这条路由将数据包转给<code>vxlan</code>设备<code>flannel.1</code>，并且接收端的<code>IP</code>地址为<code>10.230.93.0</code>, 需要通过<code>ARP</code>获取<code>MAC</code>地址。</p>
+<p><code>flannel.1</code>的信息如下, 可以看到没有开启<code>l2miss</code>和<code>l3miss</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip -d link show flannel.1</span><br><span class="line">4: flannel.1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN mode DEFAULT group default</span><br><span class="line">    link/ether a6:f7:8b:a4:60:b0 brd ff:ff:ff:ff:ff:ff promiscuity 0</span><br><span class="line">    vxlan id 1 local 10.240.0.101 dev eth1 srcport 0 0 dstport 8472 nolearning ageing 300 noudpcsum noudp6zerocsumtx noudp6zerocsumrx addrgenmode eui64 numtxqueues 1 numrxqueues 1 gso_max_size 65536 gso_max_segs 65535</span><br></pre></td></tr></table></figure>
+
+<p><code>vxlan</code>设备需要对接收到的数据包进行<code>VXLAN</code>协议封装。它需要知道对端<code>10.230.93.0</code>的<code>MAC</code>地址。而<code>flanneld</code>在启动时已经根据从<code>etcd</code>或<code>kubernetes API</code>获取到的信息写入到<code>ARP</code>表中:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip neigh show dev flannel.1</span><br><span class="line">10.230.93.0 lladdr 2a:02:24:58:e9:07 PERMANENT</span><br></pre></td></tr></table></figure>
+
+<p>这样获取到<code>10.230.93.0</code>的<code>MAC</code>地址后，就可以完成内层数据的封装。数据包封装完成后，它需要获得对应这个<code>MAC</code>地址的<code>VTEP</code>的<code>IP</code>地址。<code>flanneld</code>已经在启动时写入<code>FDB</code>条目:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# bridge fdb show dev flannel.1</span><br><span class="line">2a:02:24:58:e9:07 dst 10.240.0.102 self permanent</span><br></pre></td></tr></table></figure>
+<p>可以看到<code>2a:02:24:58:e9:07</code>对应的<code>VTEP IP</code>为<code>10.240.0.102</code>。这时<code>flannel.1</code>这个<code>vxlan</code>设备知道数据包要发送的目的<code>IP</code>，根据主机的路由策略从<code>eth1</code>设备发出。主机路由信息如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip route</span><br><span class="line">default via 10.0.2.2 dev eth0</span><br><span class="line">10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15</span><br><span class="line">10.230.41.0/24 dev cni0 proto kernel scope link src 10.230.41.1</span><br><span class="line">10.230.93.0/24 via 10.230.93.0 dev flannel.1 onlink</span><br><span class="line">10.240.0.0/24 dev eth1 proto kernel scope link src 10.240.0.101</span><br><span class="line">169.254.0.0/16 dev eth0 scope link metric 1002</span><br><span class="line">169.254.0.0/16 dev eth1 scope link metric 1003</span><br></pre></td></tr></table></figure>
+<p>数据包到达<code>node2</code>的<code>eth1</code>后，<code>eth1</code>将收到<code>VXLAN</code>数据包, 数据包中的<code>MAC</code>地址为:<code>2a:02:24:58:e9:07</code>, 正是<code>node2</code>节点上<code>flannel.1</code>的地址, 将它转给<code>flannel.1</code>设备:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@node2 ~]# ip addr show flannel.1</span><br><span class="line">4: flannel.1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN group default</span><br><span class="line">    link/ether 2a:02:24:58:e9:07 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.230.93.0/32 scope global flannel.1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::2802:24ff:fe58:e907/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p><code>flannel.1</code>解包之后，根据内层目的地址:<code>10.240.93.2</code>查找路由转发到<code>cni0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@node2 ~]# ip route</span><br><span class="line">default via 10.0.2.2 dev eth0 proto dhcp metric 100</span><br><span class="line">10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100</span><br><span class="line">10.230.41.0/24 via 10.230.41.0 dev flannel.1 onlink</span><br><span class="line">10.230.93.0/24 dev cni0 proto kernel scope link src 10.230.93.1</span><br><span class="line">10.240.0.0/24 dev eth1 proto kernel scope link src 10.240.0.102 metric 101</span><br></pre></td></tr></table></figure>
+
+<p><code>cni0</code>再通过<code>ARP</code>请求获得<code>10.230.93.2</code>的<code>MAC</code>地址，从而将数据包转发到相应的POD中的<code>veth pair</code>设备，从而到达容器中。</p>
+<p>回包的路径是一样的，不再详述。</p>
+<p>下面简要分析一下<code>flanneld</code>的源码实现。</p>
+<p><code>main</code>函数中首先调用<code>newSubnetManager</code>创建<code>SubnetManager</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sm, err := newSubnetManager()</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Error(<span class="string">&quot;Failed to create SubnetManager: &quot;</span>, err)</span><br><span class="line">    os.Exit(<span class="number">1</span>)</span><br><span class="line">&#125;</span><br><span class="line">log.Infof(<span class="string">&quot;Created subnet manager: %s&quot;</span>, sm.Name())</span><br></pre></td></tr></table></figure>
+
+<p><code>SubnetManager</code>用于向网络配置存储租用或续组<code>subnet</code>。每个节点都会有自己的一个<code>subnet</code>,保证了节点之间的<code>IP</code>不会冲突。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">func newSubnetManager() (subnet.Manager, error) &#123;</span><br><span class="line">    if opts.kubeSubnetMgr &#123;</span><br><span class="line">        return kube.NewSubnetManager(opts.kubeApiUrl, opts.kubeConfigFile)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    cfg := &amp;etcdv2.EtcdConfig&#123;</span><br><span class="line">        Endpoints: strings.Split(opts.etcdEndpoints, &quot;,&quot;),</span><br><span class="line">        Keyfile:   opts.etcdKeyfile,</span><br><span class="line">        Certfile:  opts.etcdCertfile,</span><br><span class="line">        CAFile:    opts.etcdCAFile,</span><br><span class="line">        Prefix:    opts.etcdPrefix,</span><br><span class="line">        Username:  opts.etcdUsername,</span><br><span class="line">        Password:  opts.etcdPassword,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // Attempt to renew the lease for the subnet specified in the subnetFile</span><br><span class="line">    prevSubnet := ReadSubnetFromSubnetFile(opts.subnetFile)</span><br><span class="line"></span><br><span class="line">    return etcdv2.NewLocalManager(cfg, prevSubnet)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果命令行参数中指定了<code>kube-subnet-mgr</code>, 则使用<code>kubernetes API</code>作为全局网络配置存储，否则使用<code>etcd</code>。</p>
+<p>接着调用<code>getConfig</code>从全局配置存储获取网络配置, 包括容器集群的网络信息，<code>backend</code>的配置等等:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Fetch the network config (i.e. what backend to use etc..).</span></span><br><span class="line">config, err := getConfig(ctx, sm)</span><br><span class="line"><span class="keyword">if</span> err == errCanceled &#123;</span><br><span class="line">    wg.Wait()</span><br><span class="line">    os.Exit(<span class="number">0</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比如，我的实验环境写到<code>etcd</code>的配置内容为:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span><span class="attr">&quot;Network&quot;</span><span class="punctuation">:</span><span class="string">&quot;10.230.0.0/16&quot;</span><span class="punctuation">,</span><span class="attr">&quot;SubnetLen&quot;</span><span class="punctuation">:</span><span class="number">24</span><span class="punctuation">,</span> <span class="attr">&quot;Backend&quot;</span><span class="punctuation">:</span><span class="punctuation">&#123;</span><span class="attr">&quot;Type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;vxlan&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>接下来，<code>main</code>函数会调用<code>backend.NewManager</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Create a backend manager then use it to create the backend and register the network with it.</span></span><br><span class="line">bm := backend.NewManager(ctx, sm, extIface)</span><br><span class="line">be, err := bm.GetBackend(config.BackendType)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Errorf(<span class="string">&quot;Error fetching backend: %s&quot;</span>, err)</span><br><span class="line">    cancel()</span><br><span class="line">    wg.Wait()</span><br><span class="line">    os.Exit(<span class="number">1</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">bn, err := be.RegisterNetwork(ctx, config)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Errorf(<span class="string">&quot;Error registering network: %s&quot;</span>, err)</span><br><span class="line">    cancel()</span><br><span class="line">    wg.Wait()</span><br><span class="line">    os.Exit(<span class="number">1</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>开头时也介绍过，<code>flannel</code>通过<code>backend</code>机制来支持各种不同的跨主机通信方式。不同的实现方式会在<code>init</code>函数中向<code>backend</code>注册自己的构造函数。比如，<code>package vxlan</code>的<code>init</code>函数:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">init</span><span class="params">()</span></span> &#123;</span><br><span class="line">    backend.Register(<span class="string">&quot;vxlan&quot;</span>, New)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">const</span> (</span><br><span class="line">    defaultVNI = <span class="number">1</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> VXLANBackend <span class="keyword">struct</span> &#123;</span><br><span class="line">    subnetMgr subnet.Manager</span><br><span class="line">    extIface  *backend.ExternalInterface</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">(sm subnet.Manager, extIface *backend.ExternalInterface)</span></span> (backend.Backend, <span class="type">error</span>) &#123;</span><br><span class="line">    backend := &amp;VXLANBackend&#123;</span><br><span class="line">        subnetMgr: sm,</span><br><span class="line">        extIface:  extIface,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> backend, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>be.RegisterNetwork</code>会调用到<code>package vxlan</code>的<code>RegisterNetwork</code>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(be *VXLANBackend)</span></span> RegisterNetwork(ctx context.Context, config *subnet.Config) (backend.Network, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// Parse our configuration</span></span><br><span class="line">    cfg := <span class="keyword">struct</span> &#123;</span><br><span class="line">        VNI           <span class="type">int</span></span><br><span class="line">        Port          <span class="type">int</span></span><br><span class="line">        GBP           <span class="type">bool</span></span><br><span class="line">        DirectRouting <span class="type">bool</span></span><br><span class="line">    &#125;&#123;</span><br><span class="line">        VNI: defaultVNI,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(config.Backend) &gt; <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> err := json.Unmarshal(config.Backend, &amp;cfg); err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;error decoding VXLAN backend config: %v&quot;</span>, err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    log.Infof(<span class="string">&quot;VXLAN config: VNI=%d Port=%d GBP=%v DirectRouting=%v&quot;</span>, cfg.VNI, cfg.Port, cfg.GBP, cfg.DirectRouting)</span><br><span class="line"></span><br><span class="line">    devAttrs := vxlanDeviceAttrs&#123;</span><br><span class="line">        vni:       <span class="type">uint32</span>(cfg.VNI),</span><br><span class="line">        name:      fmt.Sprintf(<span class="string">&quot;flannel.%v&quot;</span>, cfg.VNI),</span><br><span class="line">        vtepIndex: be.extIface.Iface.Index,</span><br><span class="line">        vtepAddr:  be.extIface.IfaceAddr,</span><br><span class="line">        vtepPort:  cfg.Port,</span><br><span class="line">        gbp:       cfg.GBP,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    dev, err := newVXLANDevice(&amp;devAttrs)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    dev.directRouting = cfg.DirectRouting</span><br><span class="line"></span><br><span class="line">    subnetAttrs, err := newSubnetAttrs(be.extIface.ExtAddr, dev.MACAddr())</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    lease, err := be.subnetMgr.AcquireLease(ctx, subnetAttrs)</span><br><span class="line">    <span class="keyword">switch</span> err &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="literal">nil</span>:</span><br><span class="line">    <span class="keyword">case</span> context.Canceled, context.DeadlineExceeded:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;failed to acquire lease: %v&quot;</span>, err)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Ensure that the device has a /32 address so that no broadcast routes are created.</span></span><br><span class="line">    <span class="comment">// This IP is just used as a source address for host to workload traffic (so</span></span><br><span class="line">    <span class="comment">// the return path for the traffic has an address on the flannel network to use as the destination)</span></span><br><span class="line">    <span class="keyword">if</span> err := dev.Configure(ip.IP4Net&#123;IP: lease.Subnet.IP, PrefixLen: <span class="number">32</span>&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;failed to configure interface %s: %s&quot;</span>, dev.link.Attrs().Name, err)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> newNetwork(be.subnetMgr, be.extIface, dev, ip.IP4Net&#123;&#125;, lease)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>RegisterNetwork</code>函数会调用<code>newVXLANDevice</code>创建一个<code>vxlan</code>设备，就对应我们实验环境中的<code>flannel.1</code>。从代码也可以看到<code>flannel.1</code>设备名中的<code>1</code>指的是<code>VNI</code>, 我们可以通过在全局配置存储中设置为其他值。然后获取本地<code>VTEP</code>的<code>IP</code>地址以及<code>vxlan</code>设备的<code>MAC</code>地址填充到<code>subnetAttrs</code>结构调用<code>be.subnetMgr.AcquireLease</code>。这最终会调用到<code>package etcdv2</code>的<code>tryAcquireLease</code>。<code>tryAcquireLease</code>则会调用<code>m.registry.createSubnet</code>或者<code>m.registry.updateSubnet</code>去向<code>etcd</code>中写入相应的<code>Subnet</code>信息，完成相应<code>Subnet</code>的租用。这时，如果已经有其他节点的<code>flanneld</code>在<code>watch</code> <code>etcd</code>上的<code>subnets</code>的key，则会触发添加路由、<code>ARP</code>及<code>FDB</code>条目的逻辑。这个下面我们再详细描述具体实现。之后，调用<code>dev.Configure</code>给<code>vxlan</code>设备配置一个掩码为<code>32</code>的地址防止广播路由创建。</p>
+<p><code>RegisterNetwork</code>返回后，<code>main</code>函数会调用<code>WriteSubnetFile</code>将获取到的网络信息写入<code>subnetFile</code>中，默认是<code>/run/flannel/subnet.env</code>，后续<code>flanneld</code>再启动时就会优先尝试使用这个文件中记录的信息去续组<code>subnet</code>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> err := WriteSubnetFile(opts.subnetFile, config.Network, opts.ipMasq, bn); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="comment">// Continue, even though it failed.</span></span><br><span class="line">    log.Warningf(<span class="string">&quot;Failed to write subnet file: %s&quot;</span>, err)</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    log.Infof(<span class="string">&quot;Wrote subnet file to %s&quot;</span>, opts.subnetFile)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>接着，<code>main</code>函数中启动一个<code>goroutine</code>去运行<code>bn.Run</code>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Start &quot;Running&quot; the backend network. This will block until the context is done so run in another goroutine.</span></span><br><span class="line">log.Info(<span class="string">&quot;Running backend.&quot;</span>)</span><br><span class="line">wg.Add(<span class="number">1</span>)</span><br><span class="line"><span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">    bn.Run(ctx)</span><br><span class="line">    wg.Done()</span><br><span class="line">&#125;()</span><br></pre></td></tr></table></figure>
+<p>这会调用到<code>package vxlan</code>的<code>Run</code>实现，它会调用<code>subnet.WatchLeases</code>去获取全局范围的<code>subnet</code>情况:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nw *network)</span></span> Run(ctx context.Context) &#123;</span><br><span class="line">    wg := sync.WaitGroup&#123;&#125;</span><br><span class="line"></span><br><span class="line">    log.V(<span class="number">0</span>).Info(<span class="string">&quot;watching for new subnet leases&quot;</span>)</span><br><span class="line">    events := <span class="built_in">make</span>(<span class="keyword">chan</span> []subnet.Event)</span><br><span class="line">    wg.Add(<span class="number">1</span>)</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        subnet.WatchLeases(ctx, nw.subnetMgr, nw.SubnetLease, events)</span><br><span class="line">        log.V(<span class="number">1</span>).Info(<span class="string">&quot;WatchLeases exited&quot;</span>)</span><br><span class="line">        wg.Done()</span><br><span class="line">    &#125;()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">defer</span> wg.Wait()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> evtBatch := &lt;-events:</span><br><span class="line">            nw.handleSubnetEvents(evtBatch)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">case</span> &lt;-ctx.Done():</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>package subnet</code>的<code>WatchLeases</code>函数中会一直循环调用<code>sm.WatchLeases</code>。<code>sm.WatchLeases</code>首次运行时会获取到当前<code>etcd</code>中已有的<code>subnet</code>信息，之后则开始<code>watch</code> <code>etcd</code>中<code>subnets</code> <code>key</code>获得变更的<code>subnet</code>信息。这些<code>subnet</code>信息传送给<code>channel</code>:<code>receiver</code>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">WatchLeases</span><span class="params">(ctx context.Context, sm Manager, ownLease *Lease, receiver <span class="keyword">chan</span> []Event)</span></span> &#123;</span><br><span class="line">    lw := &amp;leaseWatcher&#123;</span><br><span class="line">        ownLease: ownLease,</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> cursor <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        res, err := sm.WatchLeases(ctx, cursor)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> err == context.Canceled || err == context.DeadlineExceeded &#123;</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            log.Errorf(<span class="string">&quot;Watch subnets: %v&quot;</span>, err)</span><br><span class="line">            time.Sleep(time.Second)</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        cursor = res.Cursor</span><br><span class="line"></span><br><span class="line">        <span class="keyword">var</span> batch []Event</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(res.Events) &gt; <span class="number">0</span> &#123;</span><br><span class="line">            batch = lw.update(res.Events)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            batch = lw.reset(res.Snapshot)</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(batch) &gt; <span class="number">0</span> &#123;</span><br><span class="line">            receiver &lt;- batch</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>receiver</code>的接收端协程则调用<code>nw.handleSubnetEvents(evtBatch)</code>来处理这些消息:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(nw *network)</span></span> handleSubnetEvents(batch []subnet.Event) &#123;</span><br><span class="line">    <span class="keyword">for</span> _, event := <span class="keyword">range</span> batch &#123;</span><br><span class="line">        sn := event.Lease.Subnet</span><br><span class="line">        attrs := event.Lease.Attrs</span><br><span class="line">        <span class="keyword">if</span> attrs.BackendType != <span class="string">&quot;vxlan&quot;</span> &#123;</span><br><span class="line">            log.Warningf(<span class="string">&quot;ignoring non-vxlan subnet(%s): type=%v&quot;</span>, sn, attrs.BackendType)</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">var</span> vxlanAttrs vxlanLeaseAttrs</span><br><span class="line">        <span class="keyword">if</span> err := json.Unmarshal(attrs.BackendData, &amp;vxlanAttrs); err != <span class="literal">nil</span> &#123;</span><br><span class="line">            log.Error(<span class="string">&quot;error decoding subnet lease JSON: &quot;</span>, err)</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// This route is used when traffic should be vxlan encapsulated</span></span><br><span class="line">        vxlanRoute := netlink.Route&#123;</span><br><span class="line">            LinkIndex: nw.dev.link.Attrs().Index,</span><br><span class="line">            Scope:     netlink.SCOPE_UNIVERSE,</span><br><span class="line">            Dst:       sn.ToIPNet(),</span><br><span class="line">            Gw:        sn.IP.ToIP(),</span><br><span class="line">        &#125;</span><br><span class="line">        vxlanRoute.SetFlag(syscall.RTNH_F_ONLINK)</span><br><span class="line"></span><br><span class="line">        <span class="comment">// directRouting is where the remote host is on the same subnet so vxlan isn&#x27;t required.</span></span><br><span class="line">        directRoute := netlink.Route&#123;</span><br><span class="line">            Dst: sn.ToIPNet(),</span><br><span class="line">            Gw:  attrs.PublicIP.ToIP(),</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">var</span> directRoutingOK = <span class="literal">false</span></span><br><span class="line">        <span class="keyword">if</span> nw.dev.directRouting &#123;</span><br><span class="line">            routes, err := netlink.RouteGet(attrs.PublicIP.ToIP())</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                log.Errorf(<span class="string">&quot;Couldn&#x27;t lookup route to %v: %v&quot;</span>, attrs.PublicIP, err)</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(routes) == <span class="number">1</span> &amp;&amp; routes[<span class="number">0</span>].Gw == <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="comment">// There is only a single route and there&#x27;s no gateway (i.e. it&#x27;s directly connected)</span></span><br><span class="line">                directRoutingOK = <span class="literal">true</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">switch</span> event.Type &#123;</span><br><span class="line">        <span class="keyword">case</span> subnet.EventAdded:</span><br><span class="line">            <span class="keyword">if</span> directRoutingOK &#123;</span><br><span class="line">                log.V(<span class="number">2</span>).Infof(<span class="string">&quot;Adding direct route to subnet: %s PublicIP: %s&quot;</span>, sn, attrs.PublicIP)</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> err := netlink.RouteReplace(&amp;directRoute); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Errorf(<span class="string">&quot;Error adding route to %v via %v: %v&quot;</span>, sn, attrs.PublicIP, err)</span><br><span class="line">                    <span class="keyword">continue</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                log.V(<span class="number">2</span>).Infof(<span class="string">&quot;adding subnet: %s PublicIP: %s VtepMAC: %s&quot;</span>, sn, attrs.PublicIP, net.HardwareAddr(vxlanAttrs.VtepMAC))</span><br><span class="line">                <span class="keyword">if</span> err := nw.dev.AddARP(neighbor&#123;IP: sn.IP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Error(<span class="string">&quot;AddARP failed: &quot;</span>, err)</span><br><span class="line">                    <span class="keyword">continue</span></span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> err := nw.dev.AddFDB(neighbor&#123;IP: attrs.PublicIP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Error(<span class="string">&quot;AddFDB failed: &quot;</span>, err)</span><br><span class="line"></span><br><span class="line">                    <span class="comment">// Try to clean up the ARP entry then continue</span></span><br><span class="line">                    <span class="keyword">if</span> err := nw.dev.DelARP(neighbor&#123;IP: event.Lease.Subnet.IP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                        log.Error(<span class="string">&quot;DelARP failed: &quot;</span>, err)</span><br><span class="line">                    &#125;</span><br><span class="line"></span><br><span class="line">                    <span class="keyword">continue</span></span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">// Set the route - the kernel would ARP for the Gw IP address if it hadn&#x27;t already been set above so make sure</span></span><br><span class="line">                <span class="comment">// this is done last.</span></span><br><span class="line">                <span class="keyword">if</span> err := netlink.RouteReplace(&amp;vxlanRoute); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Errorf(<span class="string">&quot;failed to add vxlanRoute (%s -&gt; %s): %v&quot;</span>, vxlanRoute.Dst, vxlanRoute.Gw, err)</span><br><span class="line"></span><br><span class="line">                    <span class="comment">// Try to clean up both the ARP and FDB entries then continue</span></span><br><span class="line">                    <span class="keyword">if</span> err := nw.dev.DelARP(neighbor&#123;IP: event.Lease.Subnet.IP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                        log.Error(<span class="string">&quot;DelARP failed: &quot;</span>, err)</span><br><span class="line">                    &#125;</span><br><span class="line"></span><br><span class="line">                    <span class="keyword">if</span> err := nw.dev.DelFDB(neighbor&#123;IP: event.Lease.Attrs.PublicIP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                        log.Error(<span class="string">&quot;DelFDB failed: &quot;</span>, err)</span><br><span class="line">                    &#125;</span><br><span class="line"></span><br><span class="line">                    <span class="keyword">continue</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> subnet.EventRemoved:</span><br><span class="line">            <span class="keyword">if</span> directRoutingOK &#123;</span><br><span class="line">                log.V(<span class="number">2</span>).Infof(<span class="string">&quot;Removing direct route to subnet: %s PublicIP: %s&quot;</span>, sn, attrs.PublicIP)</span><br><span class="line">                <span class="keyword">if</span> err := netlink.RouteDel(&amp;directRoute); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Errorf(<span class="string">&quot;Error deleting route to %v via %v: %v&quot;</span>, sn, attrs.PublicIP, err)</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                log.V(<span class="number">2</span>).Infof(<span class="string">&quot;removing subnet: %s PublicIP: %s VtepMAC: %s&quot;</span>, sn, attrs.PublicIP, net.HardwareAddr(vxlanAttrs.VtepMAC))</span><br><span class="line"></span><br><span class="line">                <span class="comment">// Try to remove all entries - don&#x27;t bail out if one of them fails.</span></span><br><span class="line">                <span class="keyword">if</span> err := nw.dev.DelARP(neighbor&#123;IP: sn.IP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Error(<span class="string">&quot;DelARP failed: &quot;</span>, err)</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> err := nw.dev.DelFDB(neighbor&#123;IP: attrs.PublicIP, MAC: net.HardwareAddr(vxlanAttrs.VtepMAC)&#125;); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Error(<span class="string">&quot;DelFDB failed: &quot;</span>, err)</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> err := netlink.RouteDel(&amp;vxlanRoute); err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Errorf(<span class="string">&quot;failed to delete vxlanRoute (%s -&gt; %s): %v&quot;</span>, vxlanRoute.Dst, vxlanRoute.Gw, err)</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            log.Error(<span class="string">&quot;internal error: unknown event type: &quot;</span>, <span class="type">int</span>(event.Type))</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>这里我们忽略<code>directRouting</code>相关内容。<code>EventAdded</code>表示有新的节点上线，首先调用<code>nw.dev.AddARP</code>给<code>vxlan</code>设备添加<code>ARP</code>条目，<code>MAC</code>和<code>IP</code>分别为新上线节点上<code>vxlan</code>设备的<code>MAC</code>地址以及上面所配置的<code>32</code>位掩码的<code>IP</code>地址。接着调用<code>nw.dev.AddFDB</code>在<code>vxlan</code>设备上添加<code>FDB</code>条目，<code>MAC</code>和<code>IP</code>分别为新上线节点上的<code>vxlan</code>设备的<code>MAC</code>地址以及新节点上的<code>VTEP</code>的IP地址。最后，再调用<code>netlink.RouteReplace(&amp;vxlanRoute)</code>去添加经由<code>32</code>位掩码地址到达新上线<code>subnet</code>的路由。代码注释里也说明了，最后再添加路由是为了防止在<code>ARP</code>缓存没有填加的情况下发起<code>ARP</code>请求。</p>
+<p><code>EventRemoved</code>表示有节点下线，这里分别调用<code>nw.dev.DelARP</code>,<code>nw.dev.DelFDB</code>,<code>netlink.RouteDel</code>删除相应的<code>ARP</code>,<code>FDB</code>和路由条目。</p>
+<p>在<code>main</code>函数的逻辑里接下来还会调用<code>MonitorLease</code>去定期续租<code>subnet</code>，这里不再详述。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/robinunix/articles/13275530.html">https://www.cnblogs.com/robinunix/articles/13275530.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://programmer.ink/think/5da939768e5cb.html">https://programmer.ink/think/5da939768e5cb.html</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Network/" rel="tag"># Network</a>
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/CNI/" rel="tag"># CNI</a>
+              <a href="/tags/Flannel/" rel="tag"># Flannel</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/10/31/core-dump/" rel="prev" title="Linux core dump过程分析">
+      <i class="fa fa-chevron-left"></i> Linux core dump过程分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/11/07/kubernetes-clusterip/" rel="next" title="Kubernetes Service网络通信分析">
+      Kubernetes Service网络通信分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

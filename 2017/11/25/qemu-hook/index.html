@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在我们的QEMU&#x2F;KVM虚拟化环境中，当所有的虚拟机启动时需要自动添加一个ivshmem设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用QEMU时，添加上ivshmem设备的相关参数，例如: 1-device ivshmem,shm&#x3D;fg_i3,size&#x3D;8m,bus&#x3D;pci.0,addr&#x3D;0x1f  Libvirt使用XML文件来定义虚拟机配置，并根据XML文件来生成QEMU命令">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Libvirt和QEMU hook机制介绍">
+<meta property="og:url" content="http://just4coding.com/2017/11/25/qemu-hook/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在我们的QEMU&#x2F;KVM虚拟化环境中，当所有的虚拟机启动时需要自动添加一个ivshmem设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用QEMU时，添加上ivshmem设备的相关参数，例如: 1-device ivshmem,shm&#x3D;fg_i3,size&#x3D;8m,bus&#x3D;pci.0,addr&#x3D;0x1f  Libvirt使用XML文件来定义虚拟机配置，并根据XML文件来生成QEMU命令">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-25/1.png">
+<meta property="article:published_time" content="2017-11-24T16:23:23.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.486Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-11-25/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/11/25/qemu-hook/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Libvirt和QEMU hook机制介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/25/qemu-hook/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Libvirt和QEMU hook机制介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-25 00:23:23" itemprop="dateCreated datePublished" datetime="2017-11-25T00:23:23+08:00">2017-11-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在我们的<code>QEMU/KVM</code>虚拟化环境中，当所有的虚拟机启动时需要自动添加一个<code>ivshmem</code>设备，用于虚拟机与宿主机之间通信。为了添加该设备，我们需要在调用<code>QEMU</code>时，添加上<code>ivshmem</code>设备的相关参数，例如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,shm=fg_i3,size=8m,bus=pci.0,addr=0x1f</span><br></pre></td></tr></table></figure>
+
+<p><code>Libvirt</code>使用XML文件来定义虚拟机配置，并根据XML文件来生成<code>QEMU</code>命令行参数，进而执行<code>QEMU</code>程序来启动虚拟机实例。我们可以在所有虚拟机的XML文件的<code>&lt;devices&gt;</code>节点中添加上<code>&lt;shmem&gt;</code>配置，如:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">shmem</span> <span class="attr">name</span>=<span class="string">&quot;fg_i3&quot;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">model</span> <span class="attr">type</span>=<span class="string">&quot;ivshmem&quot;</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">size</span> <span class="attr">unit</span>=<span class="string">&#x27;M&#x27;</span>&gt;</span>8<span class="tag">&lt;/<span class="name">size</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">address</span> <span class="attr">type</span>=<span class="string">&#x27;pci&#x27;</span> <span class="attr">domain</span>=<span class="string">&#x27;0x0000&#x27;</span> <span class="attr">bus</span>=<span class="string">&#x27;0x00&#x27;</span> <span class="attr">slot</span>=<span class="string">&#x27;0x1f&#x27;</span> <span class="attr">function</span>=<span class="string">&#x27;0x0&#x27;</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">shmem</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>这样，<code>libvirt</code>启用<code>QEMU</code>实例时，则会添加如下参数:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-device ivshmem,id=shmem0,size=8m,shm=fg_i3,bus=pci.0,addr=0x1f</span><br></pre></td></tr></table></figure>
+
+<p>Guest启动后，登录查看PCI设备，可以看到相应的<code>ivshmem</code>设备:</p>
+<img src="/images/2017-11-25/1.png" class="">
+
+<span id="more"></span>
+
+<p>Libvirt也支持在XML文件中直接定义要添加到QEMU命令行的参数，可以在<code>&lt;domain&gt;</code>节点中，添加<code>&lt;qemu:commandline&gt;</code>来直接添加命令行选项，需要注意的是，要在<code>&lt;domain&gt;</code>中添加命名空间属性: <code>xmlns:qemu=&#39;http://libvirt.org/schemas/domain/qemu/1.0’</code>, 以这种方式同样实现上述逻辑，XML文件如下:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">domain</span> <span class="attr">type</span>=<span class="string">&quot;kvm&quot;</span> <span class="attr">xmlns:qemu</span>=<span class="string">&#x27;http://libvirt.org/schemas/domain/qemu/1.0&#x27;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">name</span>&gt;</span>i3<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">    …</span><br><span class="line">    <span class="tag">&lt;<span class="name">qemu:commandline</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">qemu:arg</span> <span class="attr">value</span>=<span class="string">&#x27;-device&#x27;</span> /&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">qemu:arg</span> <span class="attr">value</span>=<span class="string">&#x27;ivshmem,shm=fg_i3,size=8m,bus=pci.0,addr=0x1f&#x27;</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">qemu:commandline</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">domain</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>一些场景下，虚拟机XML是由虚拟化平台或云平台动态生成，可能我们修改后又被覆盖回去。修改XML文件这种方式可能不再适用，我们需要寻找另外的方法。很直接的方式就是修改<code>libvirt</code>源码，这里使用的是libvirt-2.0.0版本。</p>
+<p><code>Libvirt</code>中使用<code>qemuBuildCommandLine()</code>函数来生成QEMU命令行，该函数位于<code>src/qemu/qemu_command.c</code>, 该文件中的函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> *</span><br><span class="line"><span class="title function_">qemuBuildShmemDevStr</span><span class="params">(virDomainDefPtr def,</span></span><br><span class="line"><span class="params">                     virDomainShmemDefPtr shmem,</span></span><br><span class="line"><span class="params">                     virQEMUCapsPtr qemuCaps)</span></span><br></pre></td></tr></table></figure>
+<p>就是用于生成<code>ivshmem</code>相关命令行参数。但这里我们不调用它，可以直接将相应参数字符串，添加进命令行中, 示意代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> ivshmem_device[<span class="number">1024</span>];</span><br><span class="line"><span class="built_in">snprintf</span>(ivshmem_device, <span class="number">1024</span>,</span><br><span class="line">         <span class="string">&quot;ivshmem,shm=fg_%s,size=8m,bus=pci.0,addr=0x1f&quot;</span>, uuid);</span><br><span class="line">virCommandAddArgList(cmd, <span class="string">&quot;-device&quot;</span>, ivshmem_device, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (virQEMUCapsGet(qemuCaps, QEMU_CAPS_MSG_TIMESTAMP) &amp;&amp;</span><br><span class="line">    cfg-&gt;logTimestamp)</span><br><span class="line">    virCommandAddArgList(cmd, <span class="string">&quot;-msg&quot;</span>, <span class="string">&quot;timestamp=on&quot;</span>, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+<p>如果<code>libvirt</code>是由其他厂商所开发，防止厂商对于<code>libvirt</code>做过修改，我们并不能直接修改代码后替换。这种情况下，我们只能使用更为灵活的HOOK方式。</p>
+<p><code>Libvirt</code>本身支持HOOK机制。虚拟机启动前, <code>libvirt</code>会调用文件<code>$SYSCONFDIR/libvirt/hooks/qemu</code>，在RHEL或CentOS上，一般为<code>/etc/libvirt/hooks/qemu</code>，<code>libvirt</code>会将XML文件做为标准输入，虚拟机名称和其他一些参数以标准参数传入，如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/etc/libvirt/hooks/qemu fg_i3 start begin -</span><br></pre></td></tr></table></figure>
+<p>我们可以在这个HOOK脚本中为虚拟机准备外部资源，如开放相应的<code>VNC</code>端口，建立<code>iptables</code>规则等等。不过，这个HOOK点并不支持修改<code>libvirt</code>所使用的XML文件，具体参考:<br><a target="_blank" rel="noopener" href="https://libvirt.org/hooks.html">https://libvirt.org/hooks.html</a></p>
+<p>而<code>RHEV(Red Hat Enterprise Virtualization)</code>和<code>oVirt</code>虚拟化平台中的VDSM则支持启动虚拟机实例前修改XML，这里不详细介绍，具体可以参考:<br><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_virtualization/3.6/html/administration_guide/appe-vdsm_and_hooks">https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_virtualization/3.6/html/administration_guide/appe-vdsm_and_hooks</a></p>
+<p><code>Libvirt</code>的HOOK机制不能满足我们的需求，我们可以有另外两种HOOK方式。一种是将原有<code>QEMU</code>二进制文件重命名，我们自己生成一个与原来同名的<code>QEMU</code> wrapper程序，在我们的wrapper程序中，添加参数后再调用原生<code>QEMU</code>，示例代码如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python</span></span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">import</span> subprocess</span><br><span class="line"></span><br><span class="line">_internal = <span class="string">&quot;/usr/libexec/qemu-kvm.bak&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">len</span>(sys.argv) == <span class="number">1</span>:</span><br><span class="line">    sys.exit(subprocess.call(_internal, shell=<span class="literal">True</span>))</span><br><span class="line"></span><br><span class="line">cmd = _internal + <span class="string">&quot; &quot;</span> + <span class="string">&#x27; &#x27;</span>.join(sys.argv[<span class="number">1</span>:])</span><br><span class="line"></span><br><span class="line">i = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> arg <span class="keyword">in</span> sys.argv:</span><br><span class="line">    <span class="keyword">if</span> arg == <span class="string">&#x27;-uuid&#x27;</span> <span class="keyword">and</span> i &lt; <span class="built_in">len</span>(sys.argv):</span><br><span class="line">        uuid = sys.argv[i + <span class="number">1</span>]</span><br><span class="line">        cmd += <span class="string">&quot; -device ivshmem,shm=fg_%s,size=8,bus=pci.0,addr=0x1f&quot;</span> % uuid</span><br><span class="line">        <span class="keyword">break</span></span><br><span class="line">    i = i + <span class="number">1</span></span><br><span class="line"></span><br><span class="line">sys.exit(subprocess.call(cmd, shell=<span class="literal">True</span>))</span><br></pre></td></tr></table></figure>
+<p>另外一种方式则是直接Hook <code>libc</code>中的<code>execve</code>调用。<code>libvirt</code>执行<code>QEMU</code>程序时，最终是使用<code>execve</code>来调用<code>QEMU</code>命令行的，我们可以生成我们自己的<code>execve</code>函数，基于<code>LD_PRELOAD</code>机制来覆盖<code>libc</code>中的<code>execve</code>, 在其中添加参数后，再调用<code>libc</code>中的<code>execve</code>, 示例代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> _GNU_SOURCE</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;dlfcn.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="title function_">ssize_t</span> <span class="params">(*<span class="type">execve_func_t</span>)</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* filename, <span class="type">char</span>* <span class="type">const</span> argv[], <span class="type">char</span>* <span class="type">const</span> envp[])</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">execve_func_t</span> old_execve = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">execve</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* filename, <span class="type">char</span>* <span class="type">const</span> argv[], <span class="type">char</span>* <span class="type">const</span> envp[])</span> &#123;</span><br><span class="line">    <span class="type">char</span>  **new_argv;</span><br><span class="line">    <span class="type">int</span>   i, len;</span><br><span class="line">    <span class="type">char</span>  device[<span class="number">1024</span>];</span><br><span class="line"></span><br><span class="line">    old_execve = dlsym(RTLD_NEXT, <span class="string">&quot;execve&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">strstr</span>(filename, <span class="string">&quot;qemu&quot;</span>) == <span class="literal">NULL</span> &amp;&amp; <span class="built_in">strstr</span>(filename, <span class="string">&quot;kvm&quot;</span>) == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> old_execve(filename, argv, envp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; argv[i]; i++) &#123;&#125;</span><br><span class="line"></span><br><span class="line">    new_argv = <span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(<span class="type">char</span> *) * (i + <span class="number">2</span>));</span><br><span class="line">    <span class="keyword">if</span> (new_argv == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> old_execve(filename, argv, envp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    device[<span class="number">0</span>] = <span class="string">&#x27;\0&#x27;</span>;</span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; argv[i]; i++) &#123;</span><br><span class="line">        new_argv[i] = argv[i];</span><br><span class="line">        <span class="keyword">if</span> ((<span class="built_in">strcmp</span>(argv[i], <span class="string">&quot;-uuid&quot;</span>) == <span class="number">0</span>) &amp;&amp; (argv[i + <span class="number">1</span>] != <span class="string">&#x27;\0&#x27;</span>)) &#123;</span><br><span class="line">            <span class="built_in">snprintf</span>(device, <span class="number">1024</span>,</span><br><span class="line">                     <span class="string">&quot;ivshmem,shm=fg_%s,size=8m,bus=pci.0,addr=0x1f&quot;</span>,</span><br><span class="line">                     argv[i + <span class="number">1</span>]);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (device[<span class="number">0</span>] == <span class="string">&#x27;\0&#x27;</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> old_execve(filename, argv, envp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    new_argv[i] = <span class="string">&quot;-device&quot;</span>;</span><br><span class="line">    new_argv[i + <span class="number">1</span>] = device;</span><br><span class="line">    new_argv[i + <span class="number">2</span>] = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> old_execve(filename, new_argv, envp);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们将代码编译为<code>so</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -fPIC -shared -o demo.so demo.c -ldl</span><br></pre></td></tr></table></figure>
+<p>使用<code>LD_PRELOAD</code>加载<code>demo.so</code>, 重新启用<code>libvirtd</code>, 此时再启动Guest，可以看到<code>ivshmem</code>设备参数也已经添加上。</p>
+<p>在<code>OpenStack</code>的计算结点上，还可以通过修改<code>nova/virt/libvirt/driver.py</code>文件来实现, 其中的<code>_get_guest_xml</code>函数返回实例的XML文件, <code>Newton</code>版本的代码如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">_get_guest_xml</span>(<span class="params">self, context, instance, network_info, disk_info,</span></span><br><span class="line"><span class="params">                   image_meta, rescue=<span class="literal">None</span>,</span></span><br><span class="line"><span class="params">                   block_device_info=<span class="literal">None</span></span>):</span><br><span class="line">    <span class="comment"># NOTE(danms): Stringifying a NetworkInfo will take a lock. Do</span></span><br><span class="line">    <span class="comment"># this ahead of time so that we don&#x27;t acquire it while also</span></span><br><span class="line">    <span class="comment"># holding the logging lock.</span></span><br><span class="line">    network_info_str = <span class="built_in">str</span>(network_info)</span><br><span class="line">    msg = (<span class="string">&#x27;Start _get_guest_xml &#x27;</span></span><br><span class="line">           <span class="string">&#x27;network_info=%(network_info)s &#x27;</span></span><br><span class="line">           <span class="string">&#x27;disk_info=%(disk_info)s &#x27;</span></span><br><span class="line">           <span class="string">&#x27;image_meta=%(image_meta)s rescue=%(rescue)s &#x27;</span></span><br><span class="line">           <span class="string">&#x27;block_device_info=%(block_device_info)s&#x27;</span> %</span><br><span class="line">           &#123;<span class="string">&#x27;network_info&#x27;</span>: network_info_str, <span class="string">&#x27;disk_info&#x27;</span>: disk_info,</span><br><span class="line">            <span class="string">&#x27;image_meta&#x27;</span>: image_meta, <span class="string">&#x27;rescue&#x27;</span>: rescue,</span><br><span class="line">            <span class="string">&#x27;block_device_info&#x27;</span>: block_device_info&#125;)</span><br><span class="line">    <span class="comment"># NOTE(mriedem): block_device_info can contain auth_password so we</span></span><br><span class="line">    <span class="comment"># need to sanitize the password in the message.</span></span><br><span class="line">    LOG.debug(strutils.mask_password(msg), instance=instance)</span><br><span class="line">    conf = self._get_guest_config(instance, network_info, image_meta,</span><br><span class="line">                                  disk_info, rescue, block_device_info,</span><br><span class="line">                                  context)</span><br><span class="line">    xml = conf.to_xml()</span><br><span class="line"></span><br><span class="line">    LOG.debug(<span class="string">&#x27;End _get_guest_xml xml=%(xml)s&#x27;</span>,</span><br><span class="line">              &#123;<span class="string">&#x27;xml&#x27;</span>: xml&#125;, instance=instance)</span><br><span class="line">    <span class="keyword">return</span> xml</span><br></pre></td></tr></table></figure>
+
+<p>我们可以在函数返回前对XML内容进行修改, 在<code>xml = conf.to_xml()</code>添加修改语句:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">rs = <span class="string">&quot;&lt;qemu:commandline&gt;&lt;qemu:arg value=&#x27;-device&#x27;/&gt;&lt;qemu:arg value=&#x27;ivshmem,shm=fg-%s,size=8,bus=pci.0,addr=0x1f&#x27;/&gt;&lt;/qemu:commandline&gt;&quot;</span> % (instance.uuid)</span><br><span class="line">xml = xml.replace(<span class="string">&#x27;&lt;/domain&gt;&#x27;</span>, rs + <span class="string">&#x27;&lt;/domain&gt;&#x27;</span>)</span><br><span class="line">rs1 = <span class="string">&quot;type=\\&quot;</span>kvm\\<span class="string">&quot;&quot;</span></span><br><span class="line">rs2 = <span class="string">&quot;type=\\&quot;</span>kvm\\<span class="string">&quot; xmlns:qemu=&#x27;http://libvirt.org/schemas/domain/qemu/1.0\&#x27;&quot;</span>;</span><br><span class="line">xml = xml.replace(rs1, rs2)</span><br></pre></td></tr></table></figure>
+
+<p>这样返回的XML内容中就含有了需要传给QEMU程序的参数。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/11/19/qemu-monitor/" rel="prev" title="QEMU monitor机制实例分析">
+      <i class="fa fa-chevron-left"></i> QEMU monitor机制实例分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/12/02/ovs-mirror/" rel="next" title="OpenvSwitch端口镜像">
+      OpenvSwitch端口镜像 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;nf_ct_deliver_cached_events崩溃分析&gt;&gt;分析了nf_conntrack内核模块中存在的一个BUG。由于CentOS7一直没有修复该问题，甚至到当前最新的CentOS8 stream的kernel-4.18.0-383.el8版本，这个问题依旧没有修复，这样就无法通过升级官方内核的方法来解决该问题了，只能我们自己来想办法进行修复或规避。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nf_ct_deliver_cached_events崩溃修复或规避方案">
+<meta property="og:url" content="http://just4coding.com/2023/02/15/ct-fix/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;nf_ct_deliver_cached_events崩溃分析&gt;&gt;分析了nf_conntrack内核模块中存在的一个BUG。由于CentOS7一直没有修复该问题，甚至到当前最新的CentOS8 stream的kernel-4.18.0-383.el8版本，这个问题依旧没有修复，这样就无法通过升级官方内核的方法来解决该问题了，只能我们自己来想办法进行修复或规避。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-02-15T10:38:59.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.507Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2023/02/15/ct-fix/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>nf_ct_deliver_cached_events崩溃修复或规避方案 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/02/15/ct-fix/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nf_ct_deliver_cached_events崩溃修复或规避方案
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-02-15 18:38:59" itemprop="dateCreated datePublished" datetime="2023-02-15T18:38:59+08:00">2023-02-15</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章<a href="/2022/06/25/nf-ct-deliver-cached-events/">&lt;&lt;nf_ct_deliver_cached_events崩溃分析&gt;&gt;</a>分析了<code>nf_conntrack</code>内核模块中存在的一个BUG。由于<code>CentOS7</code>一直没有修复该问题，甚至到当前最新的<code>CentOS8 stream</code>的<code>kernel-4.18.0-383.el8</code>版本，这个问题依旧没有修复，这样就无法通过升级官方内核的方法来解决该问题了，只能我们自己来想办法进行修复或规避。</p>
+<p>最直观的思路是修改代码后重新编译相关的内核模块进行替换。但在我们无法直接控制的环境中替换模块不是太理想，理想的方案还是能在我们的内核模块中进行修复或者规避。</p>
+<p>类似于<code>LivePatch</code>的思路，可以直接<code>HOOK</code>存在BUG的函数:<code>nf_conntrack_confirm</code>, 重新实现正确的逻辑。但该函数是<code>inline</code>函数, 在内核中没有符号：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@k8smaster ~]# cat /proc/kallsyms |grep nf_conntrack_confirm</span><br><span class="line">ffffffffc0664050 r __ksymtab___nf_conntrack_confirm	[nf_conntrack]</span><br><span class="line">ffffffffc0667b59 r __kstrtab___nf_conntrack_confirm	[nf_conntrack]</span><br><span class="line">ffffffffc06647b0 r __kcrctab___nf_conntrack_confirm	[nf_conntrack]</span><br><span class="line">ffffffffc06570e0 t __nf_conntrack_confirm	[nf_conntrack]</span><br><span class="line"></span><br><span class="line">[root@k8smaster ~]# cat /proc/kallsyms |grep ipv4_confirm</span><br><span class="line">ffffffffb5e9b470 t ipv4_confirm_neigh</span><br><span class="line">ffffffffc061c280 t ipv4_confirm	[nf_conntrack_ipv4]</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>通过<code>kprobe</code>的<code>pre_handler</code>来<code>HOOK</code>函数<code>ipv4_confirm</code>中调用<code>nf_conntrack_confirm</code>的具体指令跳过后续的<code>nf_conntrack_confirm</code>执行逻辑理论上是可行的，但毕竟要修改<code>IP</code>寄存器，有较大的稳定性风险。所以不考虑这种方法。</p>
+<p>退而求其次，既然<code>nf_conntrack_confirm</code>无法<code>HOOK</code>, 可以考虑<code>HOOK</code>更外层的<code>ipv4_confirm</code>函数。<code>nf_conntrack_confirm</code>调用之前的逻辑不变，将<code>nf_conntrack_confirm</code>调用改为调用正确的实现。这种方法看上去可接受。但存在一个比较大的问题，不同的版本内核如里<code>ipv4_confirm</code>的逻辑不同，我们的实现也要跟着进行调整。可以作为一种备选方案。而<code>HOOK</code>函数<code>ipv4_confirm</code>可以使用<code>ftrace</code>来进行。由于<code>ipv4_confirm</code>本身是注册的<code>netfilter</code>的回调函数, 因而也可以替换<code>netfilter</code>的<code>struct nf_hook_ops</code>结构中的相应的<code>ipv4_confirm</code>。</p>
+<p>因为<code>ipv4_confirm</code>的注册优先级是<code>NF_IP_PRI_CONNTRACK_CONFIRM</code>, 而<code>NF_IP_PRI_CONNTRACK_CONFIRM</code>是<code>INT_MAX</code>, 会在最后才调用，我们也可以在<code>INT_MAX-1</code>的位置注册我们修复后的<code>ipv4_confirm</code>, 在该函数中返回<code>NF_STOP</code>跳过最后的原来的<code>ipv4_confirm</code>。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">nf_ip_hook_priorities</span> &#123;</span></span><br><span class="line">        NF_IP_PRI_FIRST = INT_MIN,</span><br><span class="line">        NF_IP_PRI_CONNTRACK_DEFRAG = <span class="number">-400</span>,</span><br><span class="line">        NF_IP_PRI_RAW = <span class="number">-300</span>,</span><br><span class="line">        NF_IP_PRI_SELINUX_FIRST = <span class="number">-225</span>,</span><br><span class="line">        NF_IP_PRI_CONNTRACK = <span class="number">-200</span>,</span><br><span class="line">        NF_IP_PRI_MANGLE = <span class="number">-150</span>,</span><br><span class="line">        NF_IP_PRI_NAT_DST = <span class="number">-100</span>,</span><br><span class="line">        NF_IP_PRI_FILTER = <span class="number">0</span>,</span><br><span class="line">        NF_IP_PRI_SECURITY = <span class="number">50</span>,</span><br><span class="line">        NF_IP_PRI_NAT_SRC = <span class="number">100</span>,</span><br><span class="line">        NF_IP_PRI_SELINUX_LAST = <span class="number">225</span>,</span><br><span class="line">        NF_IP_PRI_CONNTRACK_HELPER = <span class="number">300</span>,</span><br><span class="line">        NF_IP_PRI_CONNTRACK_CONFIRM = INT_MAX,</span><br><span class="line">        NF_IP_PRI_LAST = INT_MAX,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>因为这个BUG的触发的一个先决条件就是<code>conntrack</code>冲突的大量发生，这是由于<code>NFQUEUE</code>导致的。因而我们可以考虑在<code>NFQUEUE</code>之前就确认该<code>conntrack entry</code>。因而我们可以在我们的内核模块中针对<code>UDP</code>流量在返回<code>NF_QUEUE_NR</code>之前，先调用内核的<code>ipv4_confirm</code>。之后再将数据包通过<code>NFQUEUE</code>机制送到用户态，减少<code>conntrack entry</code>冲突的可能性。</p>
+<p>由于在我们的内核模块中调用了一次<code>ipv4_confirm</code>, <code>ipv4_confirm</code>本身会被调用两次。从源码进行分析, 第二次执行<code>ipv4_confirm</code>时，<code>__nf_conntrack_confirm</code>不会再执行，而再次执行<code>nf_ct_deliver_cached_events</code>会再次调用一次通知链来通知连接跟踪状态的改变，看上去没有什么影响。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Confirm a connection: returns NF_DROP if packet must be dropped. */</span></span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">int</span> <span class="title function_">nf_conntrack_confirm</span><span class="params">(<span class="keyword">struct</span> sk_buff *skb)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn</span> *<span class="title">ct</span> =</span> (<span class="keyword">struct</span> nf_conn *)skb_nfct(skb);</span><br><span class="line">        <span class="type">int</span> ret = NF_ACCEPT;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ct &amp;&amp; !nf_ct_is_untracked(ct)) &#123;</span><br><span class="line">                <span class="keyword">if</span> (!nf_ct_is_confirmed(ct))</span><br><span class="line">                        ret = __nf_conntrack_confirm(skb);</span><br><span class="line">                <span class="keyword">if</span> (likely(ret == NF_ACCEPT))</span><br><span class="line">                        nf_ct_deliver_cached_events(ct);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因为这种方案不需要重新实现<code>ipv4_confirm</code>，直接调用原有的<code>ipv4_confirm</code>，可以以最小的代价兼容多种不同的内核版本，因而选择这种方案。</p>
+<p>修复的内核模块示意代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/skbuff.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/ip.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter_ipv4.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kallsyms.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;net/udp.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br><span class="line">MODULE_DESCRIPTION(<span class="string">&quot;nq&quot;</span>);</span><br><span class="line">MODULE_ALIAS(<span class="string">&quot;module nq netfiler&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> nfqueue_no = <span class="number">8</span>;</span><br><span class="line">MODULE_PARM_DESC(nfqueue_no, <span class="string">&quot;nfquene number&quot;</span>);</span><br><span class="line">module_param(nfqueue_no, <span class="type">int</span>, <span class="number">0600</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> confirm_in_advance = <span class="number">0</span>;</span><br><span class="line">MODULE_PARM_DESC(confirm_in_advance, <span class="string">&quot;Confirm conntrack entry in advacne&quot;</span>);</span><br><span class="line">module_param(confirm_in_advance, <span class="type">int</span>, <span class="number">0600</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="type">unsigned</span> <span class="title function_">int</span> <span class="params">(*<span class="type">orig_ipv4_confirm_t</span>)</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> nf_hook_ops *ops,</span></span><br><span class="line"><span class="params">                 <span class="keyword">struct</span> sk_buff *skb,</span></span><br><span class="line"><span class="params">                 <span class="type">const</span> <span class="keyword">struct</span> net_device *in,</span></span><br><span class="line"><span class="params">                 <span class="type">const</span> <span class="keyword">struct</span> net_device *out,</span></span><br><span class="line"><span class="params">                 <span class="type">const</span> <span class="keyword">struct</span> nf_hook_state *state)</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">orig_ipv4_confirm_t</span> orig_ipv4_confirm = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> <span class="title function_">nf_hook_out</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> nf_hook_ops *ops,</span></span><br><span class="line"><span class="params">                   <span class="keyword">struct</span> sk_buff *skb,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *in,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *out,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> nf_hook_state *state)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">iphdr</span> *<span class="title">iph</span> =</span> ip_hdr(skb);</span><br><span class="line"></span><br><span class="line">    u8 proto = iph-&gt;protocol;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (proto != IPPROTO_UDP) &#123;</span><br><span class="line">        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (orig_ipv4_confirm) &#123;</span><br><span class="line">	<span class="type">int</span> ret = (*orig_ipv4_confirm)(ops, skb, in, out, state);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//net_crit_ratelimited(&quot;original ipv4_confirm called&quot;); </span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ret != NF_ACCEPT) &#123;</span><br><span class="line">            <span class="keyword">return</span> ret;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NF_QUEUE_NR(jiffies % nfqueue_no);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">nf_hook_ops</span> <span class="title">nfhooks</span>[] =</span> &#123;</span><br><span class="line">    &#123;</span><br><span class="line">        .hook = nf_hook_out,</span><br><span class="line">        .owner = THIS_MODULE,</span><br><span class="line">        .pf = NFPROTO_IPV4,</span><br><span class="line">        .hooknum = NF_INET_POST_ROUTING,</span><br><span class="line">        .priority = NF_IP_PRI_FIRST,</span><br><span class="line">    &#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> __init <span class="title function_">nq_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (confirm_in_advance) &#123;</span><br><span class="line">        orig_ipv4_confirm = kallsyms_lookup_name(<span class="string">&quot;ipv4_confirm&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (orig_ipv4_confirm == <span class="literal">NULL</span>) &#123;</span><br><span class="line">            pr_crit(<span class="string">&quot;Cannot get ipv4_confirm address&quot;</span>);</span><br><span class="line">            <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        pr_info(<span class="string">&quot;Origianl ipv4_confirm: %p&quot;</span>, orig_ipv4_confirm);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    nf_register_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;module init\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> __exit <span class="title function_">nq_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    nf_unregister_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;module exit\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(nq_init);</span><br><span class="line">module_exit(nq_exit);</span><br></pre></td></tr></table></figure>
+
+
+<p>总结下来，修复或规避该BUG的方案可以有以下这几种:</p>
+<ol>
+<li>重新编译<code>nf_conntrack</code>模块进行替换</li>
+<li>通过<code>ftrace</code>替换为我们自己实现的<code>ipv4_confirm</code></li>
+<li>替换<code>netfilter</code>中<code>nf_hook_ops</code>结构中的<code>ipv4_confirm</code>为我们自己实现的<code>ipv4_confirm</code></li>
+<li>在倒数第二优先级的位置注册我们自己实现的<code>ipv4_confirm</code>,跳过最后的原始<code>ipv4_confirm</code></li>
+<li>在我们自己的内核模块中提前调用原始的<code>ipv4_confirm</code></li>
+</ol>
+<p>结合我们的主要场景，从兼容性和稳定性角度我们选择最后的方案。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/kprobes.txt">https://www.kernel.org/doc/Documentation/kprobes.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/wangquan1992/article/details/109438670">https://blog.csdn.net/wangquan1992/article/details/109438670</a></li>
+<li><a target="_blank" rel="noopener" href="https://cateee.net/lkddb/web-lkddb/NF_CONNTRACK_EVENTS.html">https://cateee.net/lkddb/web-lkddb/NF_CONNTRACK_EVENTS.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/conntrack-design-and-implementation/#38-nf_conntrack_confirm-confirm-a-new-connection">https://arthurchiao.art/blog/conntrack-design-and-implementation/#38-nf_conntrack_confirm-confirm-a-new-connection</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/30/udev/" rel="prev" title="udev机制简介">
+      <i class="fa fa-chevron-left"></i> udev机制简介
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/02/26/pv-queued-spin-lock-slowpath/" rel="next" title="__pv_queued_spin_lock_slowpath崩溃分析">
+      __pv_queued_spin_lock_slowpath崩溃分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

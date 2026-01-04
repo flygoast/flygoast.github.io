@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="VMware vSphere的很多高级特性都依赖于共享存储, 如vMotion, HA: High Availability, DRS: Distributed Resource Schedule等, 它们要生效都需要虚拟机的存储位于共享存储中. vSphere支持的共享存储除了自家的vSAN, 还包括: NFS, iSCSI, 光纤通道: Fibre Channel等.  iSCSI是一个标准协">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware vSphere环境iSCSI配置多路径">
+<meta property="og:url" content="http://just4coding.com/2022/11/20/vmware-iscsi-multipathing/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="VMware vSphere的很多高级特性都依赖于共享存储, 如vMotion, HA: High Availability, DRS: Distributed Resource Schedule等, 它们要生效都需要虚拟机的存储位于共享存储中. vSphere支持的共享存储除了自家的vSAN, 还包括: NFS, iSCSI, 光纤通道: Fibre Channel等.  iSCSI是一个标准协">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-20/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-20/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-20/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-20/4.png">
+<meta property="article:published_time" content="2022-11-20T10:02:45.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.505Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="VMware">
+<meta property="article:tag" content="iSCSI">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-11-20/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/11/20/vmware-iscsi-multipathing/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware vSphere环境iSCSI配置多路径 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/20/vmware-iscsi-multipathing/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware vSphere环境iSCSI配置多路径
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-11-20 18:02:45" itemprop="dateCreated datePublished" datetime="2022-11-20T18:02:45+08:00">2022-11-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>VMware vSphere</code>的很多高级特性都依赖于共享存储, 如<code>vMotion</code>, <code>HA: High Availability</code>, <code>DRS: Distributed Resource Schedule</code>等, 它们要生效都需要虚拟机的存储位于共享存储中. <code>vSphere</code>支持的共享存储除了自家的<code>vSAN</code>, 还包括: <code>NFS</code>, <code>iSCSI</code>, <code>光纤通道: Fibre Channel</code>等. </p>
+<p><code>iSCSI</code>是一个标准协议, 全称为:<code>Internet Small Computer System Interface</code>, 它在<code>以太网</code>上基于<code>TCP/IP</code>协议来传输<code>SCSI</code>协议. <code>SCSI</code>协议是计算机上的<code>I/O</code>传输协议, <code>SCSI</code>控制器通过<code>SCSI</code>总线与硬盘等设备以块为单位传输数据. <code>iSCSI</code>服务器称为<code>target</code>, 客户端称为<code>initiator</code>. <code>iSCSI initiator</code>能够以纯软件实现运行在标准网络适配器上, 也可以以硬件形式实现为专用的<code>HBA</code>卡:(<code>Host Bus Adaptor</code>), 也有带有<code>iSCSCI offload</code>硬件支持的网卡可以来加速<code>iSCSI</code>协议处理. </p>
+<p><code>iSCSI</code>协议层次如图(来自: <a target="_blank" rel="noopener" href="https://www.snia.org/education/what-is-iscsi">https://www.snia.org/education/what-is-iscsi</a>):</p>
+<img src="/images/2022-11-20/1.png" class="">
+
+<span id="more"></span>
+
+<p>几乎所有的企业级存储产品都支持<code>iSCSI</code>协议. 在<code>Windows</code>和<code>Linux</code>等操作系统上也都有成熟稳定的<code>iSCSI</code>实现. 在<code>CentOS</code>上配置<code>iSCSI</code>也非常简单, 有大量的文章介绍, 可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
+</ul>
+<p>由于<code>iSCSI</code>存储数据是基于网络传输, 为了提升性能, 可以采用<code>多路径: Multipathing</code>机制来传输数据, 其中的一种实现方式是一个<code>iSCSI session</code>使用多个连接, 叫做<code>MC/S: Multiple Connections per Session</code>. </p>
+<p><code>VMware vSphere</code>支持<code>iSCSI</code>协议. 介绍在<code>vSphere</code>上配置<code>iSCSI</code>的文章也非常多, 可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/">https://4sysops.com/archives/how-to-configure-esxi-6-5-for-iscsi-shared-storage/</a></li>
+<li><a target="_blank" rel="noopener" href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
+<li><a target="_blank" rel="noopener" href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.unixmen.com/how-to-create-an-iscsi-target/">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
+</ul>
+<p><code>VMware vSphere</code>的<code>iSCSI initiator</code>实现也支持<code>Multipathing</code>, 是基于<code>端口绑定: Port Binding</code>实现, 如图:</p>
+<img src="/images/2022-11-20/2.png" class="">
+
+<p>一般, 在<code>vSphere</code>上配置<code>iSCSI</code>时, 会建立专用的<code>VMkernel</code>接口和网络端口组. 但需要注意的是用于<code>multipathing</code>的端口组的<code>uplink</code>接口, 只能有一个<code>活动上行链路</code>, 并且没有<code>备用上行链路</code>. 如果虚拟交换机维度存在<code>备用上行链路</code>, 在<code>iSCSI</code>端口组上需要将该链路移动<code>未使用的上行链路</code>. 如图:</p>
+<img src="/images/2022-11-20/3.png" class="">
+
+<p>为了实现<code>multipathing</code>, 需要至少建立两个这样的<code>VMkernel</code>接口和网络端口组, 分别指定不同的上行链路, 然后全部添加到<code>iSCSI software adaptor</code>的<code>端口绑定</code>中, 如图:</p>
+<img src="/images/2022-11-20/4.png" class="">
+
+<p>可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2045040">https://kb.vmware.com/s/article/2045040</a></li>
+</ul>
+<p>但是, 实际使用<code>Port binding</code>时是有一些注意事项的, 请参考<a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2038869?lang=zh_cn"><code>VMware</code>官方KB</a></p>
+<p><code>Port binding</code>本质上是指定使用哪个<code>VMKernel</code>建立<code>iSCSI</code>网络连接. 当多个<code>VMKernel</code>接口位于相同广播域时, 默认<code>ESXi</code>只会使用第一个接口的路由表, 当需要使用多个连接时, 需要配置<code>Port binding</code>.</p>
+<p>参考链接里说, 当多个<code>VMKernel</code>位于不同子网时, 不需要配置<code>Port binding</code>, 但个人感觉, 如果想使用<code>load balance</code>模式去利用多条连接而不是<code>fail over</code>模式, 也是需要配置的. 后续有时间可以再实验一下.</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://www.open-iscsi.com/">http://www.open-iscsi.com/</a></li>
+<li><a target="_blank" rel="noopener" href="https://dusays.com/304/">https://dusays.com/304/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.snia.org/education/what-is-iscsi">https://www.snia.org/education/what-is-iscsi</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc3720">https://datatracker.ietf.org/doc/html/rfc3720</a></li>
+<li><a target="_blank" rel="noopener" href="https://datatracker.ietf.org/doc/html/rfc7143">https://datatracker.ietf.org/doc/html/rfc7143</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thomas-krenn.com/en/wiki/ISCSI_Basics">https://www.thomas-krenn.com/en/wiki/ISCSI_Basics</a></li>
+<li><a target="_blank" rel="noopener" href="https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi">https://infohub.delltechnologies.com/l/iscsi-implementation-guide-for-dell-emc-storage-arrays-running-powermaxos-1/introduction-to-iscsi</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/">https://www.enterprisestorageforum.com/hardware/what-is-iscsi-and-how-does-it-work/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/">https://www.thegeekdiary.com/complete-guide-to-configuring-iscsi-in-centos-rhel-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/">https://computingforgeeks.com/configure-iscsi-target-and-initiator-on-centos-rhel/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html">https://www.centlinux.com/2018/08/configure-iscsi-target-initiator-centos-7.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/">https://www.tecmint.com/create-centralized-secure-storage-using-iscsi-targetin-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/">https://xpertstec.com/how-to-connect-iscsi-storage-vcenter-7-openfiler/</a></li>
+<li><a target="_blank" rel="noopener" href="http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/">http://woshub.com/add-iscsi-datastore-lun-vmware-esxi/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.unixmen.com/how-to-create-an-iscsi-target/">https://www.unixmen.com/how-to-create-an-iscsi-target/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/">https://stonywall.com/2021/01/15/setting-up-iscsi-on-esxi-7-with-vcenter-7/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B">https://docs.vmware.com/en/VMware-vSphere/7.0/com.vmware.vsphere.storage.doc/GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B.html#GUID-DD2FFAA7-796E-414C-84CE-1FCC14474D5B</a></li>
+<li><a target="_blank" rel="noopener" href="https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding">https://subscription.packtpub.com/book/cloud-and-networking/9781789953008/5/ch05lvl1sec43/iscsi-multipathing-using-port-binding</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/">https://www.hiroom2.com/2017/08/04/centos-7-iscsi-initiator-utils-en/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support">https://kb.synology.com/en-nz/DSM/tutorial/How_to_Use_iSCSI_Targets_on_VMware_ESXi_Server_with_Multipath_Support</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2010877">https://kb.vmware.com/s/article/2010877</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2038869?lang=zh_cn">https://kb.vmware.com/s/article/2038869?lang=zh_cn</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/">https://www.stephenwagner.com/2014/06/07/vmware-vsphere-iscsi-port-binding/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/">https://www.stephenwagner.com/2014/06/07/vsphere-distributed-switch-configuration-for-iscsi-mpio-san-using-multiple-subnets/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/">https://www.codyhosterman.com/2015/03/esxi-iscsi-multipathing/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/VMware/" rel="tag"># VMware</a>
+              <a href="/tags/iSCSI/" rel="tag"># iSCSI</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/13/nsxt-vlan/" rel="prev" title="NSX-T逻辑交换机VLAN和Transport VLAN">
+      <i class="fa fa-chevron-left"></i> NSX-T逻辑交换机VLAN和Transport VLAN
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/11/22/linux-symbol/" rel="next" title="Linux动态链接库符号冲突解决">
+      Linux动态链接库符号冲突解决 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

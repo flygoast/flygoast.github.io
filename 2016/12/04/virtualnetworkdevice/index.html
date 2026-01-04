@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="更新(2020-05-06):Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:https:&#x2F;&#x2F;developers.redhat.com&#x2F;blog&#x2F;2018&#x2F;10&#x2F;22&#x2F;introduction-to-linux-interfaces-for-virtual-networking OpenStack虚拟化网络实现中大量应用了多种虚拟网络设备，了解">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux虚拟网络设备">
+<meta property="og:url" content="http://just4coding.com/2016/12/04/virtualnetworkdevice/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="更新(2020-05-06):Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:https:&#x2F;&#x2F;developers.redhat.com&#x2F;blog&#x2F;2018&#x2F;10&#x2F;22&#x2F;introduction-to-linux-interfaces-for-virtual-networking OpenStack虚拟化网络实现中大量应用了多种虚拟网络设备，了解">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2016-12-04T10:21:36.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.476Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Interface">
+<meta property="article:tag" content="Network">
+<meta property="article:tag" content="Tap">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2016/12/04/virtualnetworkdevice/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Linux虚拟网络设备 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/12/04/virtualnetworkdevice/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux虚拟网络设备
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-12-04 18:21:36" itemprop="dateCreated datePublished" datetime="2016-12-04T18:21:36+08:00">2016-12-04</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>更新(2020-05-06):<br>Redhat在2018年发表了一篇关于Linux虚拟网络设备的文章，内容比本文要更详细, 可以参考:<br><a target="_blank" rel="noopener" href="https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking">https://developers.redhat.com/blog/2018/10/22/introduction-to-linux-interfaces-for-virtual-networking</a></p>
+<p>OpenStack虚拟化网络实现中大量应用了多种虚拟网络设备，了解这些设备是理解OpenStack虚拟网络实现的基础，本文来简单介绍这些虚拟网络设备。</p>
+<h2 id="TUN-TAP设备"><a href="#TUN-TAP设备" class="headerlink" title="TUN&#x2F;TAP设备"></a>TUN&#x2F;TAP设备</h2><p>TUN&#x2F;TAP设备是Linux内核中实现的虚拟网卡。物理网卡是从物理线路上收发数据包，而TUN&#x2F;TAP设备是从用户态应用程序上收发以太网帧或IP包。用户态进程对<code>/dev/net/tun</code>文件调用<code>open()</code>获取一个文件描述符，并调用<code>ioctl()</code>挂接到该设备上，接着通过读写该文件描述符从TUN&#x2F;TAP设备的收发数据包。收发的数据包由用户态进程构造好。TUN和TAP设备的区别在于TUN设备收发的是IP包，而TAP设备收发的是以太网帧。</p>
+<p>在进程中创建及使用TUN&#x2F;TAP设备可以参考官方文档:<br><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/networking/tuntap.txt">https://www.kernel.org/doc/Documentation/networking/tuntap.txt</a></p>
+<p>可以使用iproute2工具包中的ip命令创建TUN&#x2F;TAP设备, 如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip tuntap add dev tap0 mode tap</span><br><span class="line">ip tuntap add dev tun0 mode tun</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>通过<code>ip link</code>命令可以看到设备已经创建:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ip link show tap0</span></span><br><span class="line">23: tap0: &lt;BROADCAST,MULTICAST&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT qlen 500</span><br><span class="line">    <span class="built_in">link</span>/ether a6:73:4e:90:f9:3e brd ff:ff:ff:ff:ff:ff</span><br><span class="line">[root@compute1 ~]<span class="comment"># ip link show tun0</span></span><br><span class="line">24: tun0: &lt;POINTOPOINT,MULTICAST,NOARP&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT qlen 500</span><br><span class="line">    <span class="built_in">link</span>/none</span><br></pre></td></tr></table></figure>
+
+<p>删除已创建的设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip tuntap del dev tap0 mode tap</span><br><span class="line">ip tuntap del dev tun0 mode tun</span><br></pre></td></tr></table></figure>
+
+<h2 id="Linux-bridge"><a href="#Linux-bridge" class="headerlink" title="Linux bridge"></a>Linux bridge</h2><p>Linux bridge是虚拟二层交换设备, 它基于MAC地址对数据包在bridge的port间进行转发。物理网卡和TAP等虚拟网络设备都可以连接到Linux bridge上。</p>
+<p>可以使用<code>brctl</code>工具或<code>iproute2</code>工具包中的ip命令操作Linux bridge</p>
+<p>创建bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brctl addbr br0</span><br></pre></td></tr></table></figure>
+
+<p>添加设备到bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brctl addif br0 eth0</span><br></pre></td></tr></table></figure>
+
+<p>显示bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brctl show</span><br></pre></td></tr></table></figure>
+
+<p>启动bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev br0 up</span><br></pre></td></tr></table></figure>
+
+<p>停止bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev br0 down</span><br></pre></td></tr></table></figure>
+
+<p>删除bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brctl delbr br0</span><br></pre></td></tr></table></figure>
+
+<p>使用IP命令操作bridge:</p>
+<p>创建bridge并启动</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add name br0 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev br0 up</span><br></pre></td></tr></table></figure>
+
+<p>先将该端口设置为混杂模式并启动该接口</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 promisc on</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 up</span><br></pre></td></tr></table></figure>
+
+<p>将接口添加到bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 master br0</span><br></pre></td></tr></table></figure>
+
+<p>若要删除网桥，应首先移除它所关联的所有接口，同时关闭接口的混杂模式并关闭接口以将其恢复至原始状态。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 promisc off</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 down</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev eth0 nomaster</span><br></pre></td></tr></table></figure>
+<p>删除bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> delete br0 <span class="built_in">type</span> bridge</span><br></pre></td></tr></table></figure>
+
+<h2 id="OVS-Open-vSwitch"><a href="#OVS-Open-vSwitch" class="headerlink" title="OVS: Open vSwitch"></a>OVS: Open vSwitch</h2><p>官网: <a target="_blank" rel="noopener" href="http://openvswitch.org/">http://openvswitch.org</a></p>
+<p>OVS是一个产品级别的开源虚拟交换机。相较于Linux bridge, 它提供了各多的功能特性和自动化的编程支持。OVS中涉及如下虚拟网络设备:</p>
+<ul>
+<li>bridge: 相较与Linux bridge，它基于OPENFLOW协议的流表来控制二层转发逻辑。</li>
+<li>port: 网络设备在OVS bridge上的挂接点。</li>
+<li>interface: 挂接到OVS端口的网络接口，可能是OVS创建的类型为internal的虚拟网卡,也可能是操作系统上的物理网卡或TUN&#x2F;TAP等虚拟网络设备</li>
+</ul>
+<p>其中, Port有几种类型:</p>
+<ul>
+<li>normal: 表示Port上挂接的是操作系统的网络接口(物理网卡或者TUN&#x2F;TAP设备)</li>
+<li>internal: Port被设置成internal类型时，OVS会自动创建一个虚拟网卡挂接到该Port</li>
+<li>patch: patch类型的Port用于连接两个OVS bridge, 从而在两个bridge之间转发数据, 它总是成对出现，可以理解为一根虚拟电缆</li>
+<li>tunnel: 支持使用GRE和VXLAN等隧道技术与远程端口通信</li>
+</ul>
+<p>简单的操作示例:</p>
+<p>创建bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br ovsbr0</span><br></pre></td></tr></table></figure>
+<p>查看bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl show</span><br></pre></td></tr></table></figure>
+<p>添加Port, 并设置VLAN ID为2:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port ovsbr0 tap1 tag=2</span><br></pre></td></tr></table></figure>
+<p>添加Port，并设置类型为internal</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port ovsbr0 p0 -- <span class="built_in">set</span> interface p0 <span class="built_in">type</span>=internal</span><br></pre></td></tr></table></figure>
+<p>创建patch类型的port:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port ovsbr0 p1 -- <span class="built_in">set</span> interface p1 <span class="built_in">type</span>=patch -- <span class="built_in">set</span> interface p1 options:peer=p2</span><br><span class="line">ovs-vsctl add-port ovsbr1 p2 -- <span class="built_in">set</span> interface p2 <span class="built_in">type</span>=patch -- <span class="built_in">set</span> interface p2 options:peer=p1</span><br></pre></td></tr></table></figure>
+<p>删除Port</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl del-port ovsbr0 tap1</span><br></pre></td></tr></table></figure>
+<p>删除bridge</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl del-br ovsbr0</span><br></pre></td></tr></table></figure>
+
+<h2 id="network-namespace"><a href="#network-namespace" class="headerlink" title="network namespace"></a>network namespace</h2><p>一般情况下，Linux的网络接口，路由表、协议栈、iptables规则等资源由操作系统的全部进程共享。通过使用netowrk namespace, 可以将这些网络资源隔离开，只由namespace内的进程共享。</p>
+<p>namespace示例:</p>
+<p>创建namespace</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns add ns1</span><br></pre></td></tr></table></figure>
+<p>查看namespace</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns list</span><br></pre></td></tr></table></figure>
+<p>将设备添加进namespace，这样在全局的环境下，该设备不再可见</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev tap1 netns ns1</span><br></pre></td></tr></table></figure>
+
+<p>查看namespace内设备</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> list</span><br></pre></td></tr></table></figure>
+
+<p>可以直接在namespace中执行bash, 再统一对namespace内的设备进行处理</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns <span class="built_in">exec</span> ns1 bash</span><br></pre></td></tr></table></figure>
+
+<p>删除namespace</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns del ns1</span><br></pre></td></tr></table></figure>
+
+<h2 id="veth-pair"><a href="#veth-pair" class="headerlink" title="veth pair"></a>veth pair</h2><p>Virtual Ethernet Pair简称veth pair, 是一对逻辑相连的端口或网络接口。从其中一个端口进入的数据包将从另一端口流出。可以使用veth pair设备来连接Linux bridge或者OVS的bridge，也可以通过veth pair将两个network namespace连接起来。</p>
+<p>创建veth pair:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add dev veth0 <span class="built_in">type</span> veth peer name veth1</span><br></pre></td></tr></table></figure>
+
+<p>查看创建的veth pair:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ip link list</span></span><br><span class="line">...</span><br><span class="line">29: veth1@veth0: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/ether f6:eb:23:3b:f1:5b brd ff:ff:ff:ff:ff:ff</span><br><span class="line">30: veth0@veth1: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/ether ba:8d:1c:cf:04:a0 brd ff:ff:ff:ff:ff:ff</span><br></pre></td></tr></table></figure>
+<p>从输出可以看到对应的接口设备的名称。</p>
+<p>以下示例将veth pair的两个接口分别添加到两个namespace中，从而将两个namespace连接起来。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ip netns add ns1</span><br><span class="line">ip netns add ns2</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> veth0 netns ns1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> veth1 netns ns2</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> dev veth0 up</span><br><span class="line">ip netns <span class="built_in">exec</span> ns2 ip likn <span class="built_in">set</span> dev veth1 up</span><br></pre></td></tr></table></figure>
+
+<h2 id="MACVLAN"><a href="#MACVLAN" class="headerlink" title="MACVLAN"></a>MACVLAN</h2><p>一般情况下，网卡只有一个MAC地址。然而，有些场景下需要给一个网卡设置多个MAC地址。Linux通过MACVLAN技术在一个物理网卡上创建多个MACVLAN虚拟设备，每个设备有着不同的MAC地址。当物理网卡收到数据包时，MACVLAN driver根据数据包MAC地址将数据包交由匹配的虚拟网卡处理。使用MACVLAN可以替代使用bridge来连接物理网卡和虚拟网络设备。</p>
+<p>创建MACVLAN设备并自动分配MAC地址:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens160 name mac0 <span class="built_in">type</span> macvlan</span><br></pre></td></tr></table></figure>
+<p>查看生成的设备信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># ip link show mac0</span></span><br><span class="line">60: mac0@ens160: &lt;BROADCAST,MULTICAST&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT</span><br><span class="line">    <span class="built_in">link</span>/ether 4e:d0:8f:d3:e1:1e brd ff:ff:ff:ff:ff:ff</span><br></pre></td></tr></table></figure>
+<p>也可以指定MAC地址创建设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens160 name mac1 address 52:22:33:44:55:66 <span class="built_in">type</span> macvlan</span><br></pre></td></tr></table></figure>
+<p>指定MAC地址需要注意:第一字节的第0位应为0，表示单播MAC地址，1表示多播MAC地址。第1位应为”1”, 这表示，这个MAC地址是本地地址。</p>
+<p>删除MACVLAN设备</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> del mac0</span><br></pre></td></tr></table></figure>
+
+<h2 id="MACVTAP"><a href="#MACVTAP" class="headerlink" title="MACVTAP"></a>MACVTAP</h2><p>虚拟化中一般使用TAP和bridge来组建虚拟网络，但这样组网结构会稍显复杂。Linux上的MACTAP设备可以简化这种结构。MACVTAP设备集成了MACVLAN和TAP设备二者的特性。它也可以基于一个物理网卡创建多个MAC地址不同的虚拟网卡，同时虚拟网卡收到的包不再交给内核协议栈，而是通过TAP设备的文件描述符传递到用户态进程。</p>
+<p>MACVTAP和MACVLAN类型的设备有4种工作模式:</p>
+<ul>
+<li>VEPA(Virtual Ethernet Port Aggregator): 同一物理网卡下的虚拟网卡之间的流量要先发送到外部交换机，再由交换机发送回物理网卡。但是外部交换机应支持并配置成hairpin模式</li>
+<li>Bridge: 与Linux bridge类似，同一物理网卡下的虚拟网卡之间可以直接交换数据包，无需外部交换机</li>
+<li>Private: 同一物理网卡下的虚拟网卡之间无法连通，无论外部交换机是否支持hairpin模式</li>
+<li>Passthru: MACVALN和MACVTAP的数据处理逻辑被跳过，相当于虚拟网卡直接连接物理网卡。这种模式的好处是虚拟网卡可以修改MAC地址或其他接口参数</li>
+</ul>
+<p>一个MACVTAP设备被创建后，会生成一个字符设备文件在&#x2F;dev&#x2F;下，一般为”&#x2F;dev&#x2F;tapNN”， NN是MACVTAP设备的接口索引值。<br>创建MACVTAP设备并设置mode为bridge:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens160 macvtap0 <span class="built_in">type</span> macvtap mode bridge</span><br></pre></td></tr></table></figure>
+<p>启动设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev macvtap0 up</span><br></pre></td></tr></table></figure>
+<p>查看MACVTAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># ip link show macvtap0</span></span><br><span class="line">61: macvtap0@ens160: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UNKNOWN mode DEFAULT qlen 500</span><br><span class="line">    <span class="built_in">link</span>/ether da:<span class="built_in">fc</span>:86:c8:b7:52 brd ff:ff:ff:ff:ff:ff</span><br></pre></td></tr></table></figure>
+<p>在&#x2F;dev下可以看到生成的字符设备文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># ls -l /dev/tap61</span></span><br><span class="line">crw-------. 1 root root 248, 1 Dec  8 10:57 /dev/tap61</span><br></pre></td></tr></table></figure>
+<p>删除设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> del macvtap0</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Interface/" rel="tag"># Interface</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+              <a href="/tags/Tap/" rel="tag"># Tap</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2016/11/15/luajit-encrypt/" rel="prev" title="Lua代码加密">
+      <i class="fa fa-chevron-left"></i> Lua代码加密
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2016/12/10/linux-route/" rel="next" title="Linux路由分析">
+      Linux路由分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#TUN-TAP%E8%AE%BE%E5%A4%87"><span class="nav-number">1.</span> <span class="nav-text">TUN&#x2F;TAP设备</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Linux-bridge"><span class="nav-number">2.</span> <span class="nav-text">Linux bridge</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#OVS-Open-vSwitch"><span class="nav-number">3.</span> <span class="nav-text">OVS: Open vSwitch</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#network-namespace"><span class="nav-number">4.</span> <span class="nav-text">network namespace</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#veth-pair"><span class="nav-number">5.</span> <span class="nav-text">veth pair</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#MACVLAN"><span class="nav-number">6.</span> <span class="nav-text">MACVLAN</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#MACVTAP"><span class="nav-number">7.</span> <span class="nav-text">MACVTAP</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

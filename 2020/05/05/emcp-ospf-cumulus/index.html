@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="互联网服务为了保证高可用和可扩展性，在流量入口一般都需要部署负载均衡设备。负载均衡设备可分为4层(传输层)和7层(应用层)。L4负载均衡设备之前较为流行的方案是LVS，后来各大厂商又基于DPDK或XDP&#x2F;eBPF等技术实现了性能更高的一些方案, 如:  Google: Maglev Github: GLB Facebook: Katran  无论以上哪种实现，流量分发的部署方案都类似,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="基于Cumulus VX实验ECMP+OSPF负载均衡">
+<meta property="og:url" content="http://just4coding.com/2020/05/05/emcp-ospf-cumulus/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="互联网服务为了保证高可用和可扩展性，在流量入口一般都需要部署负载均衡设备。负载均衡设备可分为4层(传输层)和7层(应用层)。L4负载均衡设备之前较为流行的方案是LVS，后来各大厂商又基于DPDK或XDP&#x2F;eBPF等技术实现了性能更高的一些方案, 如:  Google: Maglev Github: GLB Facebook: Katran  无论以上哪种实现，流量分发的部署方案都类似,">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-05-05/1.png">
+<meta property="article:published_time" content="2020-05-05T01:16:30.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.492Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="EMCP">
+<meta property="article:tag" content="OSPF">
+<meta property="article:tag" content="Cumulus VX">
+<meta property="article:tag" content="LoadBalance">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-05-05/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/05/05/emcp-ospf-cumulus/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>基于Cumulus VX实验ECMP+OSPF负载均衡 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/05/05/emcp-ospf-cumulus/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          基于Cumulus VX实验ECMP+OSPF负载均衡
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-05-05 09:16:30" itemprop="dateCreated datePublished" datetime="2020-05-05T09:16:30+08:00">2020-05-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>互联网服务为了保证高可用和可扩展性，在流量入口一般都需要部署负载均衡设备。负载均衡设备可分为4层(传输层)和7层(应用层)。L4负载均衡设备之前较为流行的方案是<code>LVS</code>，后来各大厂商又基于<code>DPDK</code>或<code>XDP</code>&#x2F;<code>eBPF</code>等技术实现了性能更高的一些方案, 如:</p>
+<ul>
+<li>Google: <a target="_blank" rel="noopener" href="https://research.google/pubs/pub44824.pdf">Maglev</a></li>
+<li>Github: <a target="_blank" rel="noopener" href="https://github.com/github/glb-director">GLB</a></li>
+<li>Facebook: <a target="_blank" rel="noopener" href="https://github.com/facebookincubator/katran">Katran</a></li>
+</ul>
+<p>无论以上哪种实现，流量分发的部署方案都类似, 都是由LB集群中多个服务器通过<code>BGP</code>或者<code>OSPF</code>协议向网络设备宣告相同的IP地址(VIP)，网络设备通过<code>ECMP</code>路由将流量分散到这些服务器中。当其中某些LB服务器异常宕机或者维护下线时，网络设备会通过<code>OSPF</code>或者<code>BGP</code>协议的路由收敛机制检测到LB服务器下线，迅速将流量切走, 实现服务高可用。</p>
+<p>本文来实验基于<code>ECMP</code>和<code>OSPF</code>的负载均衡。<a target="_blank" rel="noopener" href="https://cumulusnetworks.com/">Cumulus</a>是一个基于Linux的网络操作系统(NOS:Network Operation System), 运行于白牌交换机上。<a target="_blank" rel="noopener" href="https://cumulusnetworks.com/products/cumulus-vx/">Cumulus VX</a>是Cumulus的免费虚拟设备，可以以虚拟机形式运行。本文就使用Vagrant, VirtualBox, Ubuntu, Cumulus VX来构建我们的实验拓扑。结构如图:</p>
+<img src="/images/2020-05-05/1.png" class="">
+
+<span id="more"></span>
+
+<p>路由器<code>router</code>的接口<code>swp1</code>做为客户端网段的网关<code>172.16.100.1</code>, 接口<code>swp2</code>做为负载均衡器网段的网关<code>192.168.100.1</code>。在<code>router</code>上开启<code>OSPF</code>，<code>lb1</code>和<code>lb2</code>上分别运行<a target="_blank" rel="noopener" href="https://frrouting.org/">FRR</a>使用<code>OSPF</code>协议向<code>router</code>来宣告<code>VIP</code>。当请求到达<code>router</code>时，由<code>router</code>根据学习到的两条路由基于<code>ECMP</code>的内部HASH机制计算路径，将请求分散转发到<code>lb1</code>和<code>lb2</code>。</p>
+<p>基于<code>Cumulus VX</code>、<code>Vagrant</code>、<code>VirtualBox</code>来构建实验环境，可以参考:<br><a target="_blank" rel="noopener" href="https://www.actualtech.io/tutorial-deploying-a-cumulus-linux-demo-environment-with-vagrant/">https://www.actualtech.io/tutorial-deploying-a-cumulus-linux-demo-environment-with-vagrant/</a></p>
+<p>Cumulus官方还提供了一个程序<a target="_blank" rel="noopener" href="https://gitlab.com/cumulus-consulting/tools/topology_converter/">topology_convert</a>可以自动生成<code>Vagrantfile</code>文件。</p>
+<p>这里我们直接手动编写<code>Vagrantfile</code>:</p>
+<figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -*- mode: ruby -*-</span></span><br><span class="line"><span class="comment"># vi: set ft=ruby :</span></span><br><span class="line"></span><br><span class="line"><span class="title class_">Vagrant</span>.configure(<span class="string">&quot;2&quot;</span>) <span class="keyword">do</span> |<span class="params">config</span>|</span><br><span class="line">  <span class="comment"># router</span></span><br><span class="line">  config.vm.define <span class="string">&quot;router&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;router&quot;</span></span><br><span class="line">    device.vm.box = <span class="string">&quot;CumulusCommunity/cumulus-vx&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">768</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-rt-sw1&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-rt-sw2&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.provision <span class="symbol">:shell</span>, <span class="symbol">privileged:</span> <span class="literal">true</span>, <span class="symbol">:inline</span> =&gt; <span class="string">&#x27;ip route del default&#x27;</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># sw1</span></span><br><span class="line">  config.vm.define <span class="string">&quot;sw1&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;sw1&quot;</span></span><br><span class="line">    device.vm.box = <span class="string">&quot;CumulusCommunity/cumulus-vx&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">768</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-rt-sw1&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw1-cli&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.provision <span class="symbol">:shell</span>, <span class="symbol">privileged:</span> <span class="literal">true</span>, <span class="symbol">:inline</span> =&gt; <span class="string">&#x27;ip route del default&#x27;</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># sw1</span></span><br><span class="line">  config.vm.define <span class="string">&quot;sw2&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;sw2&quot;</span></span><br><span class="line">    device.vm.box = <span class="string">&quot;CumulusCommunity/cumulus-vx&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">768</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-rt-sw2&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw2-lb1&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw2-lb2&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">    device.vm.provision <span class="symbol">:shell</span>, <span class="symbol">privileged:</span> <span class="literal">true</span>, <span class="symbol">:inline</span> =&gt; <span class="string">&#x27;ip route del default&#x27;</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># lb1 </span></span><br><span class="line">  config.vm.define <span class="string">&quot;lb1&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;lb1&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">512</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    device.vm.box = <span class="string">&quot;ubuntu/bionic64&quot;</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw2-lb1&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># lb2 </span></span><br><span class="line">  config.vm.define <span class="string">&quot;lb2&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;lb2&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">512</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    device.vm.box = <span class="string">&quot;ubuntu/bionic64&quot;</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw2-lb2&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># cli </span></span><br><span class="line">  config.vm.define <span class="string">&quot;cli&quot;</span> <span class="keyword">do</span> |<span class="params">device</span>|</span><br><span class="line">    device.vm.hostname = <span class="string">&quot;cli&quot;</span></span><br><span class="line">    device.vm.provider <span class="string">&quot;virtualbox&quot;</span> <span class="keyword">do</span> |<span class="params">v</span>|</span><br><span class="line">      v.customize [<span class="string">&quot;modifyvm&quot;</span>, <span class="symbol">:id</span>, <span class="string">&#x27;--audiocontroller&#x27;</span>, <span class="string">&#x27;AC97&#x27;</span>, <span class="string">&#x27;--audio&#x27;</span>, <span class="string">&#x27;Null&#x27;</span>]</span><br><span class="line">      v.memory = <span class="number">512</span></span><br><span class="line">    <span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">    device.vm.box = <span class="string">&quot;ubuntu/bionic64&quot;</span></span><br><span class="line">    device.vm.network <span class="string">&quot;private_network&quot;</span>, <span class="symbol">virtualbox__intnet:</span> <span class="string">&quot;intnet-sw1-cli&quot;</span>, <span class="symbol">auto_config:</span> <span class="literal">false</span></span><br><span class="line">  <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<p>构建环境:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vagrant up</span><br></pre></td></tr></table></figure>
+
+<p>环境构建完成后，分别在<code>lb1</code>和<code>lb2</code>两台服务器上安装<code>FRR</code>和<code>nginx</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">curl -s https://deb.frrouting.org/frr/keys.asc | sudo apt-key add -</span><br><span class="line">FRRVER=<span class="string">&quot;frr-stable&quot;</span></span><br><span class="line"><span class="built_in">echo</span> deb https://deb.frrouting.org/frr $(lsb_release -s -c) <span class="variable">$FRRVER</span> | sudo <span class="built_in">tee</span> -a /etc/apt/sources.list.d/frr.list</span><br><span class="line">sudo apt update &amp;&amp; sudo apt install frr frr-pythontools</span><br><span class="line">sudo apt-get install nginx</span><br></pre></td></tr></table></figure>
+
+<p>我们最终使用HTTP请求来测试负载均衡效果，为了便于在客户端识别HTTP响应来自于哪台LB，修改NGINX的默认配置文件<code>/etc/nginx/sites-enabled/default</code>, 将<code>location /</code>的处理逻辑分别修改为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">return 200 &quot;lb1\n&quot;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">return 200 &quot;lb2\n&quot;;</span><br></pre></td></tr></table></figure>
+
+<p>配置<code>lb1</code>的IP:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 192.168.100.2/24 dev enp0s8</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up enp0s8</span><br><span class="line">ip route del default</span><br><span class="line">ip route add default via 192.168.100.1</span><br></pre></td></tr></table></figure>
+
+<p>配置<code>lb2</code>的IP:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 192.168.100.3/24 dev enp0s8</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up enp0s8</span><br><span class="line">ip route del default</span><br><span class="line">ip route add default via 192.168.100.1</span><br></pre></td></tr></table></figure>
+<p>在<code>lb2</code>上访问<code>lb1</code>, 此时访问不通，因为二层交换机<code>sw2</code>还没有配置。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@lb2:/home/vagrant# ping -c2 192.168.100.2</span><br><span class="line">PING 192.168.100.2 (192.168.100.2) 56(84) bytes of data.</span><br><span class="line"></span><br><span class="line">--- 192.168.100.2 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 received, 100% packet loss, time 1021ms</span><br></pre></td></tr></table></figure>
+
+<p>登录到<code>sw2</code>上配置二层转发交换机, 这里我们使用Cumulus提供的命令行工具<code>NCLU(Network Command Line Utility)</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">vagrant@sw2:~$ sudo su - cumulus</span><br><span class="line">cumulus@sw2:~$ net add bridge br1 ports swp1-3</span><br><span class="line">cumulus@sw2:~$ net commit</span><br></pre></td></tr></table></figure>
+
+<p>查看接口情况:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">root@sw2:~# net show interface</span><br><span class="line">State  Name  Spd  MTU    Mode       LLDP  Summary</span><br><span class="line">-----  ----  ---  -----  ---------  ----  ----------------------</span><br><span class="line">UP     lo    N/A  65536  Loopback         IP: 127.0.0.1/8</span><br><span class="line">       lo                                 IP: ::1/128</span><br><span class="line">UP     eth0  1G   1500   Mgmt             IP: 10.0.2.15/24(DHCP)</span><br><span class="line">UP     swp1  1G   1500   Access/L2        Master: br1(UP)</span><br><span class="line">UP     swp2  1G   1500   Access/L2        Master: br1(UP)</span><br><span class="line">UP     swp3  1G   1500   Access/L2        Master: br1(UP)</span><br><span class="line">UP     br1   N/A  1500   Bridge/L2</span><br></pre></td></tr></table></figure>
+
+<p>此时再次从<code>lb2</code>访问<code>lb1</code>, 访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@lb2:/home/vagrant# ping -c2 192.168.100.2</span><br><span class="line">PING 192.168.100.2 (192.168.100.2) 56(84) bytes of data.</span><br><span class="line">64 bytes from 192.168.100.2: icmp_seq=1 ttl=64 time=2.25 ms</span><br><span class="line">64 bytes from 192.168.100.2: icmp_seq=2 ttl=64 time=1.39 ms</span><br><span class="line"></span><br><span class="line">--- 192.168.100.2 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1002ms</span><br><span class="line">rtt min/avg/max/mdev = 1.398/1.825/2.253/0.429 ms</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们配置<code>router</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cumulus@router:~$ net add interface swp1 ip address 172.16.100.1/24</span><br><span class="line">cumulus@router:~$ net add interface swp2 ip address 192.168.100.1/24</span><br><span class="line">cumulus@router:~$ net commit</span><br></pre></td></tr></table></figure>
+
+<p>查看接口情况:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">cumulus@router:~$ net show interface</span><br><span class="line">State  Name  Spd  MTU    Mode          LLDP        Summary</span><br><span class="line">-----  ----  ---  -----  ------------  ----------  ----------------------</span><br><span class="line">UP     lo    N/A  65536  Loopback                  IP: 127.0.0.1/8</span><br><span class="line">       lo                                          IP: ::1/128</span><br><span class="line">UP     eth0  1G   1500   Mgmt                      IP: 10.0.2.15/24(DHCP)</span><br><span class="line">UP     swp1  1G   1500   Interface/L3              IP: 172.16.100.1/24</span><br><span class="line">UP     swp2  1G   1500   Interface/L3  sw2 (swp1)  IP: 192.168.100.1/24</span><br></pre></td></tr></table></figure>
+
+<p>配置二层交换机<code>sw1</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">root@sw1:~# net add bridge br1 ports swp1-2</span><br><span class="line">root@sw1:~# net commit</span><br></pre></td></tr></table></figure>
+
+<p>查看接口:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">root@sw1:~# net show interface</span><br><span class="line">State  Name  Spd  MTU    Mode       LLDP           Summary</span><br><span class="line">-----  ----  ---  -----  ---------  -------------  ----------------------</span><br><span class="line">UP     lo    N/A  65536  Loopback                  IP: 127.0.0.1/8</span><br><span class="line">       lo                                          IP: ::1/128</span><br><span class="line">UP     eth0  1G   1500   Mgmt                      IP: 10.0.2.15/24(DHCP)</span><br><span class="line">UP     swp1  1G   1500   Access/L2  router (swp1)  Master: br1(UP)</span><br><span class="line">UP     swp2  1G   1500   Access/L2                 Master: br1(UP)</span><br><span class="line">UP     br1   N/A  1500   Bridge/L2</span><br></pre></td></tr></table></figure>
+
+<p>配置客户端虚拟机<code>cli</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 172.16.100.2/24 dev enp0s8</span><br><span class="line">ip link set up enp0s8</span><br><span class="line">ip route del default</span><br><span class="line">ip route add default via 172.16.100.1</span><br></pre></td></tr></table></figure>
+
+<p>此时从客户端<code>cli</code>访问两个LB的自身IP地址，访问都可以成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@cli:/home/vagrant# ping -c2 192.168.100.2</span><br><span class="line">PING 192.168.100.2 (192.168.100.2) 56(84) bytes of data.</span><br><span class="line">64 bytes from 192.168.100.2: icmp_seq=1 ttl=63 time=2.85 ms</span><br><span class="line">64 bytes from 192.168.100.2: icmp_seq=2 ttl=63 time=3.17 ms</span><br><span class="line"></span><br><span class="line">--- 192.168.100.2 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1001ms</span><br><span class="line">rtt min/avg/max/mdev = 2.854/3.012/3.170/0.158 ms</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@cli:/home/vagrant# ping -c2 192.168.100.3</span><br><span class="line">PING 192.168.100.3 (192.168.100.3) 56(84) bytes of data.</span><br><span class="line">64 bytes from 192.168.100.3: icmp_seq=1 ttl=63 time=2.80 ms</span><br><span class="line">64 bytes from 192.168.100.3: icmp_seq=2 ttl=63 time=3.81 ms</span><br><span class="line"></span><br><span class="line">--- 192.168.100.3 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1002ms</span><br><span class="line">rtt min/avg/max/mdev = 2.806/3.308/3.811/0.505 ms</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们在<code>router</code>上配置<code>OSPF</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">net add ospf router-id 192.168.100.1</span><br><span class="line">net add ospf network 192.168.100.0/24 area 0.0.0.0</span><br><span class="line">net commit</span><br></pre></td></tr></table></figure>
+<p>此时<code>opsfd</code>进程已经启动。</p>
+<p>我们使用<code>10.10.10.0/24</code>做为<code>VIP</code>地址池, 接着在<code>lb1</code>和<code>lb2</code>两台LB机器上配置<code>OSPF</code>宣告VIP地址。</p>
+<p>在<code>lb1</code>上给<code>lo</code>添加VIP地址:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 10.10.10.10/32 dev lo</span><br><span class="line">ip addr add 10.10.10.11/32 dev lo</span><br><span class="line">ip addr add 10.10.10.12/32 dev lo</span><br></pre></td></tr></table></figure>
+
+<p>接着，修改<code>/etc/frr/daemons</code>文件, 确保<code>ospfd</code>配置开启:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ospfd=yes</span><br></pre></td></tr></table></figure>
+
+<p>创建<code>ospfd.conf</code>文件, 没有该文件<code>ospfd</code>进程不会启动:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">touch</span> /etc/frr/ospfd.conf</span><br></pre></td></tr></table></figure>
+
+<p>修改配置文件<code>/etc/frr/frr.conf</code>, 添加内容:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">router ospf</span><br><span class="line">  ospf router-id 192.168.100.2</span><br><span class="line">  network 192.168.100.0/24 area 0.0.0.0</span><br><span class="line">  network 10.10.10.0/24 area 0.0.0.0</span><br><span class="line">!</span><br><span class="line">interface enp0s8</span><br><span class="line">  ip ospf area 0.0.0.0</span><br><span class="line">!</span><br></pre></td></tr></table></figure>
+
+<p>启动<code>FRR</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl start frr</span><br></pre></td></tr></table></figure>
+
+<p>在<code>lb2</code>上也完成相应修改。</p>
+<p>此时我们在<code>router</code>上查看<code>OSPF</code>路由信息, 可以看到3个<code>VIP</code>的路由信息都已学习到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">root@router:~# net show route ospf</span><br><span class="line">RIB entry for ospf</span><br><span class="line">==================</span><br><span class="line">Codes: K - kernel route, C - connected, S - static, R - RIP,</span><br><span class="line">       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,</span><br><span class="line">       T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,</span><br><span class="line">       F - PBR,</span><br><span class="line">       &gt; - selected route, * - FIB route</span><br><span class="line"></span><br><span class="line">O&gt;* 10.10.10.10/32 [110/100] via 192.168.100.2, swp2, 00:24:08</span><br><span class="line">  *                          via 192.168.100.3, swp2, 00:24:08</span><br><span class="line">O&gt;* 10.10.10.11/32 [110/100] via 192.168.100.2, swp2, 00:24:08</span><br><span class="line">  *                          via 192.168.100.3, swp2, 00:24:08</span><br><span class="line">O&gt;* 10.10.10.12/32 [110/100] via 192.168.100.2, swp2, 00:24:08</span><br><span class="line">  *                          via 192.168.100.3, swp2, 00:24:08</span><br><span class="line">O   192.168.100.0/24 [110/100] is directly connected, swp2, 02:07:49</span><br></pre></td></tr></table></figure>
+
+<p>此时，我们在客户端<code>cli</code>上访问VIP:<code>10.10.10.10</code>, 发现访问并没有分布在两台LB机器上, 而是一直只访问一台LB机器。这是由于Linux内核的<code>ECMP</code>默认的HASH策略是使用<code>L3</code>信息，即源IP、目的IP。因为我们只在一台客户端上进行测试，因而HASH计算结果一直相同，只会一直落在一台LB机器上。</p>
+<p>根据内核参数信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">fib_multipath_hash_policy - INTEGER</span><br><span class="line">	Controls which hash policy to use for multipath routes. Only valid</span><br><span class="line">	for kernels built with CONFIG_IP_ROUTE_MULTIPATH enabled.</span><br><span class="line">	Default: 0 (Layer 3)</span><br><span class="line">	Possible values:</span><br><span class="line">	0 - Layer 3</span><br><span class="line">	1 - Layer 4</span><br><span class="line">	2 - Layer 3 or inner Layer 3 if present</span><br></pre></td></tr></table></figure>
+
+<p>我们修改<code>fib_multipath_hash_policy</code>, 使<code>ECMP</code>基于<code>L4</code>信息进行HASH计算：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.fib_multipath_hash_policy=1</span><br></pre></td></tr></table></figure>
+
+<p>这时，再次从<code>cli</code>进行测试, 访问VIP<code>10.10.10.10</code>, 请求已经到达两台LB机器上了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb1</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb1</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br></pre></td></tr></table></figure>
+
+<p>我们在<code>lb1</code>上关闭<code>FRR</code>来模拟LB机器下线或者宕机:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl stop frr</span><br></pre></td></tr></table></figure>
+
+<p>此时，再次从<code>cli</code>机器上访问<code>10.10.10.10</code>, 所有请求都成功转发给<code>lb2</code>了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br><span class="line">root@cli:/home/vagrant# curl 10.10.10.10</span><br><span class="line">lb2</span><br></pre></td></tr></table></figure>
+
+<p>在实际应用场景中，这种负载均衡方案不只可以应用在L4&#x2F;L7负载均衡设备，对于无状态或者独立的应用集群可以应用，比如，权威DNS服务器集群也可以以这种方式来构建。</p>
+<p>参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://codecave.cc/multipath-routing-in-linux-part-2.html">https://codecave.cc/multipath-routing-in-linux-part-2.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.theasciiconstruct.com/home/categories/cumulus">https://www.theasciiconstruct.com/home/categories/cumulus</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt">https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://cumulusnetworks.com/blog/celebrating-ecmp-part-two/">https://cumulusnetworks.com/blog/celebrating-ecmp-part-two/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/EMCP/" rel="tag"># EMCP</a>
+              <a href="/tags/OSPF/" rel="tag"># OSPF</a>
+              <a href="/tags/Cumulus-VX/" rel="tag"># Cumulus VX</a>
+              <a href="/tags/LoadBalance/" rel="tag"># LoadBalance</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/04/26/vxlan-evpn/" rel="prev" title="基于BGP EVPN的VXLAN通信实践">
+      <i class="fa fa-chevron-left"></i> 基于BGP EVPN的VXLAN通信实践
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/06/13/airflow/" rel="next" title="Apache Airflow介绍">
+      Apache Airflow介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

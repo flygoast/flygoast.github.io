@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;Kubernetes环境中NFQUEUE与MARK机制冲突&gt;&gt;介绍了我们使用NFQUEUE机制将数据包送往用户态进行安全检测。之前程序逻辑是将来自虚拟网络设备的数据包直接放行。而当把逻辑修改为对POD虚拟网卡的流量也进行检测时，POD网络就无法连通了。排查发现数据包送上用户态之后，并没有收到用户态程序的裁决信息。 在对NFQUEUE的源码实现了进行草略分析后,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes POD环境的NFQUEUE机制">
+<meta property="og:url" content="http://just4coding.com/2021/10/04/nfqueue-pod/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;Kubernetes环境中NFQUEUE与MARK机制冲突&gt;&gt;介绍了我们使用NFQUEUE机制将数据包送往用户态进行安全检测。之前程序逻辑是将来自虚拟网络设备的数据包直接放行。而当把逻辑修改为对POD虚拟网卡的流量也进行检测时，POD网络就无法连通了。排查发现数据包送上用户态之后，并没有收到用户态程序的裁决信息。 在对NFQUEUE的源码实现了进行草略分析后,">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-10-04T13:01:06.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.495Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="Nfqueue">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2021/10/04/nfqueue-pod/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes POD环境的NFQUEUE机制 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/04/nfqueue-pod/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes POD环境的NFQUEUE机制
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-10-04 21:01:06" itemprop="dateCreated datePublished" datetime="2021-10-04T21:01:06+08:00">2021-10-04</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/2021/09/05/nfqueue-mark/">Kubernetes环境中NFQUEUE与MARK机制冲突</a>&gt;&gt;介绍了我们使用<code>NFQUEUE</code>机制将数据包送往用户态进行安全检测。之前程序逻辑是将来自虚拟网络设备的数据包直接放行。而当把逻辑修改为对<code>POD</code>虚拟网卡的流量也进行检测时，<code>POD</code>网络就无法连通了。排查发现数据包送上用户态之后，并没有收到用户态程序的裁决信息。</p>
+<p>在对<code>NFQUEUE</code>的源码实现了进行草略分析后,发现<code>NFQUEUE</code>机制是支持<code>network namespace</code>的。<code>POD</code>虚拟网络设备的数据包送往用户态的队列是在<code>POD</code>独有的<code>network namespace</code>中创建的，和默认的<code>network namespace</code>:<code>init_net</code>中的队列是完全独立的。我们的用户态程序运行是在<code>init_net</code>中运行，而<code>POD</code>的<code>network namespace</code>中并没有用户态程序在读取队列获取数据包，因而数据包会被丢弃。</p>
+<p>和之前文章同样，通过简化程序来进行实验。实验的<code>Kubernetes</code>环境有3个<code>node</code>, 容器组网使用<code>flannel</code>。</p>
+<p>我们创建了两个<code>busybox</code>的<code>pod</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">kubectl run busybox1 --image=busybox --<span class="built_in">command</span> -- <span class="built_in">sleep</span> 3600</span><br><span class="line">kubectl run busybox2 --image=busybox --<span class="built_in">command</span> -- <span class="built_in">sleep</span> 3600</span><br></pre></td></tr></table></figure>
+
+<p>他们分别位于<code>node1</code>和<code>node2</code>上:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl get pods -o wide</span><br><span class="line">NAME                        READY   STATUS    RESTARTS   AGE   IP             NODE    NOMINATED NODE   READINESS GATES</span><br><span class="line">busybox1-77bb94599d-x89z4   1/1     Running   12         22h   10.230.96.4    node1   &lt;none&gt;           &lt;none&gt;</span><br><span class="line">busybox2-7d76b658b6-h5r2k   1/1     Running   10         22h   10.230.12.2    node2   &lt;none&gt;           &lt;none&gt;</span><br></pre></td></tr></table></figure>
+
+<p>我们从<code>busybox2</code>中访问<code>busybox1</code>，网络连通正常:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl exec -ti busybox2-7d76b658b6-h5r2k -- ping -c2 10.230.96.4</span><br><span class="line">PING 10.230.96.4 (10.230.96.4): 56 data bytes</span><br><span class="line">64 bytes from 10.230.96.4: seq=0 ttl=62 time=1.076 ms</span><br><span class="line">64 bytes from 10.230.96.4: seq=1 ttl=62 time=0.770 ms</span><br><span class="line"></span><br><span class="line">--- 10.230.96.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 packets received, 0% packet loss</span><br><span class="line">round-trip min/avg/max = 0.770/0.923/1.076 ms</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>编写一个内核模块将数据包通过<code>NFQUEUE</code>队列送往用户态:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/skbuff.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/ip.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter_ipv4.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/if_ether.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/if_packet.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/inet.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> queue_bypass = <span class="number">0</span>;</span><br><span class="line">MODULE_PARM_DESC(clear_mark, <span class="string">&quot;queue bypass on/off switch&quot;</span>);</span><br><span class="line">module_param(queue_bypass, <span class="type">int</span>, <span class="number">0600</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> <span class="title function_">nf_hook_in1</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> nf_hook_ops *ops,</span></span><br><span class="line"><span class="params">                   <span class="keyword">struct</span> sk_buff *skb,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *in,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *out,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> nf_hook_state *state)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">int</span> ret;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">iphdr</span> *<span class="title">iph</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (skb-&gt;protocol != __constant_htons(ETH_P_IP)) &#123;</span><br><span class="line">        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    iph = ip_hdr(skb);</span><br><span class="line">    <span class="keyword">if</span> (iph &amp;&amp; iph-&gt;protocol != IPPROTO_ICMP) &#123;</span><br><span class="line">        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;NSQUEUE: ICMP packet: %u.%u.%u.%u-&gt;%u.%u.%u.%u, &quot;</span> \</span><br><span class="line">            <span class="string">&quot;init_net: %p, net: %p, devname: %s\n&quot;</span>,</span><br><span class="line">            (ntohl(iph-&gt;saddr) &gt;&gt; <span class="number">24</span>) &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;saddr) &gt;&gt; <span class="number">16</span>) &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;saddr) &gt;&gt; <span class="number">8</span>)  &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;saddr))       &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;daddr) &gt;&gt; <span class="number">24</span>) &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;daddr) &gt;&gt; <span class="number">16</span>) &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;daddr) &gt;&gt; <span class="number">8</span>)  &amp; <span class="number">0xFF</span>,</span><br><span class="line">            (ntohl(iph-&gt;daddr))       &amp; <span class="number">0xFF</span>,</span><br><span class="line">            &amp;init_net,</span><br><span class="line">            dev_net(skb-&gt;dev),</span><br><span class="line">            skb-&gt;dev-&gt;name</span><br><span class="line">            );</span><br><span class="line"></span><br><span class="line">    ret = NF_QUEUE_NR(<span class="number">80</span>);</span><br><span class="line">    <span class="keyword">if</span> (queue_bypass) &#123;</span><br><span class="line">        ret |= NF_VERDICT_FLAG_QUEUE_BYPASS;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">nf_hook_ops</span> <span class="title">nfhooks</span>[] =</span> &#123;</span><br><span class="line">&#123;</span><br><span class="line">    .hook = nf_hook_in1,</span><br><span class="line">    .owner = THIS_MODULE,</span><br><span class="line">    .pf = NFPROTO_IPV4,</span><br><span class="line">    .hooknum = NF_INET_LOCAL_IN,</span><br><span class="line">    .priority = NF_IP_PRI_FIRST,</span><br><span class="line">&#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> __init <span class="title function_">nsqueue_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    nf_register_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;NSQUEUE: module init\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> __exit <span class="title function_">nsqueue_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    nf_unregister_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;NSQUEUE: module exit\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(nsqueue_init);</span><br><span class="line">module_exit(nsqueue_exit);</span><br></pre></td></tr></table></figure>
+
+<p>我们将<code>ICMP</code>的数据包通过<code>NFQUEUE</code>机制送往<code>80</code>号队列。</p>
+<p><code>Makefile</code>:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">obj-m += nsqueue.o</span><br><span class="line"><span class="section">all:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> modules</span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> clean</span><br></pre></td></tr></table></figure>
+
+<p>在<code>busybox1</code>所在的<code>node1</code>上编译并装载<code>nsqueue.ko</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">insmod nsqueue.ko</span><br></pre></td></tr></table></figure>
+
+<p>然后我们再次尝试从<code>busybox2</code>访问<code>busybox1</code>, 访问超时, 网络确实断了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl exec -ti busybox2-7d76b658b6-h5r2k -- ping -c2 10.230.96.4</span><br><span class="line">PING 10.230.96.4 (10.230.96.4): 56 data bytes</span><br><span class="line"></span><br><span class="line">--- 10.230.96.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 packets received, 100% packet loss</span><br><span class="line">command terminated with exit code 1</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>node1</code>的<code>dmesg</code>信息, 可以看到<code>nsqueue.ko</code>处理了两个数据包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[32555.762163] NSQUEUE: module init</span><br><span class="line">[32634.888279] NSQUEUE: ICMP packet: 10.230.12.0-&gt;10.230.96.4, init_net: ffffffff85315bc0, net: ffff8ac077451480, devname: eth0</span><br><span class="line">[32635.888896] NSQUEUE: ICMP packet: 10.230.12.0-&gt;10.230.96.4, init_net: ffffffff85315bc0, net: ffff8ac077451480, devname: eth0</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们来在<code>busybox1</code>的<code>network namespace</code>中运行用户态程序。</p>
+<p>首先，通过<code>kubectl</code>获取<code>container id</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl describe pod busybox1-77bb94599d-x89z4 |grep &#x27;Container ID&#x27;</span><br><span class="line">    Container ID:  containerd://4872c95767c2504f6d646b54e6843a30905d0dec27b9d5934d01f3301ac220e1</span><br></pre></td></tr></table></figure>
+
+<p>接着在<code>node1</code>上通过<code>container id</code>找到<code>pod</code>的<code>pid</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 vagrant]# crictl inspect 4872c95767c2504f6d646b54e6843a30905d0dec27b9d5934d01f3301ac220e1 |grep pid</span><br><span class="line">    &quot;pid&quot;: 25207,</span><br><span class="line">            &quot;pid&quot;: 1</span><br><span class="line">            &quot;type&quot;: &quot;pid&quot;</span><br></pre></td></tr></table></figure>
+
+<p>然后在<code>node1</code>上通过<code>nsenter</code>进入<code>busybox1</code>的<code>network namespace</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 vagrant]# nsenter -n -t 25207</span><br><span class="line">[root@node1 vagrant]# ip a</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">3: eth0@if7: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UP group default</span><br><span class="line">    link/ether c2:1a:09:a7:69:78 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br><span class="line">    inet 10.230.96.4/24 brd 10.230.96.255 scope global eth0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::c01a:9ff:fea7:6978/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>我们的用户态程序还是使用<a href="/2021/09/05/nfqueue-mark/">之前文章</a>中的代码。在<code>busybox1</code>的<code>network namespace</code>运行用户态程序<code>a.out</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 vagrant]# ./a.out</span><br></pre></td></tr></table></figure>
+
+<p>再次尝试<code>pod</code>间的访问, 可以看到又可以连通了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl exec -ti busybox2-7d76b658b6-h5r2k -- ping -c2 10.230.96.4</span><br><span class="line">PING 10.230.96.4 (10.230.96.4): 56 data bytes</span><br><span class="line">64 bytes from 10.230.96.4: seq=0 ttl=62 time=8.954 ms</span><br><span class="line">64 bytes from 10.230.96.4: seq=1 ttl=62 time=2.059 ms</span><br><span class="line"></span><br><span class="line">--- 10.230.96.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 packets received, 0% packet loss</span><br><span class="line">round-trip min/avg/max = 2.059/5.506/8.954 ms</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>a.out</code>的输出，可以看到两个数据包被用户态程序处理:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 vagrant]# ./a.out</span><br><span class="line">packet: <span class="number">1</span>, origin mark: <span class="number">0x00000000</span>, <span class="built_in">set</span> mark: <span class="number">0x00000000</span></span><br><span class="line">packet: <span class="number">2</span>, origin mark: <span class="number">0x00000000</span>, <span class="built_in">set</span> mark: <span class="number">0x00000000</span></span><br></pre></td></tr></table></figure>
+
+<p>我们的内核模块代码中带有一个<code>queue_bypass</code>参数，当参数被设置时，<code>netfilter</code>的<code>hook</code>函数返回值会附带<code>NF_VERDICT_FLAG_QUEUE_BYPASS</code>标志。在附带这个标志时，内核协议栈会在队列不存在时跳到下一个<code>hook</code>函数而不是丢弃该数据包。</p>
+<p>我们将<code>queue_bypass</code>参数修改为<code>1</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> 1 &gt; /sys/module/nsqueue/parameters/queue_bypass</span><br></pre></td></tr></table></figure>
+
+<p>在不运行用户态程序的情况下再次尝试<code>POD</code>间访问，成功连通:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 scripts]# kubectl exec -ti busybox2-7d76b658b6-h5r2k -- ping -c2 10.230.96.4</span><br><span class="line">PING 10.230.96.4 (10.230.96.4): 56 data bytes</span><br><span class="line">64 bytes from 10.230.96.4: seq=0 ttl=62 time=5.606 ms</span><br><span class="line">64 bytes from 10.230.96.4: seq=1 ttl=62 time=3.708 ms</span><br><span class="line"></span><br><span class="line">--- 10.230.96.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 packets received, 0% packet loss</span><br><span class="line">round-trip min/avg/max = 3.708/4.657/5.606 ms</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/Nfqueue/" rel="tag"># Nfqueue</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/09/25/ivshmem-pci/" rel="prev" title="ivshmem PCI设备中断机制驱动示例">
+      <i class="fa fa-chevron-left"></i> ivshmem PCI设备中断机制驱动示例
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/10/17/security-boot/" rel="next" title="Security Boot开启下CentOS8内核模块签名及加载">
+      Security Boot开启下CentOS8内核模块签名及加载 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;Ansible入门&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库Fabric。 Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Pyt">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Python远程执行库Fabric简要介绍">
+<meta property="og:url" content="http://just4coding.com/2018/11/23/fabric/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;Ansible入门&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库Fabric。 Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Pyt">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-11-23T08:06:09.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.490Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2018/11/23/fabric/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Python远程执行库Fabric简要介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/11/23/fabric/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Python远程执行库Fabric简要介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-23 16:06:09" itemprop="dateCreated datePublished" datetime="2018-11-23T16:06:09+08:00">2018-11-23</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/blog/2017/09/14/ansible/">Ansible入门</a>&gt;&gt;介绍了做为自动化配置管理的Ansible，这篇文章简要来介绍Python远程执行库<a target="_blank" rel="noopener" href="http://www.fabfile.org/">Fabric</a>。</p>
+<p>Fabric是一个通过SSH远程执行SHELL命令的库，主要用于自动化的安装部署及远程管理任务。Ansible也能够实现Fabric的这些能力，但Fabric更为轻量，只是单纯地用于远程执行。它本身是一个Python库，可以在我们自己的Python程序中直接<code>import</code>，并基于它实现远程命令执行。此外，它还提供了一个<code>fab</code>命令行工具，使用它可以更简单地编写我们需要执行的任务。这种模式被使用的更为普遍，我们主要来介绍以<code>fab</code>命令来使用fabric。</p>
+<p>需要注意的是，Fabric的2.x版本并不兼容1.x版本，而且2.x版本很大程度上边缘化了fab命令行工具，因而我们还是来介绍1.x版本。当前最新1.x版本为1.14, 文档地址为:<a target="_blank" rel="noopener" href="http://docs.fabfile.org/en/1.14/%E3%80%82">http://docs.fabfile.org/en/1.14/。</a></p>
+<span id="more"></span>
+
+<p>首先我们使用<code>pip</code>安装fabric:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install <span class="string">&#x27;fabric&lt;2.0&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>安装完可以执行<code>fab</code>命令查看版本:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab --version</span><br><span class="line">Fabric 1.14.0</span><br><span class="line">Paramiko 2.4.2</span><br></pre></td></tr></table></figure>
+
+<p><code>fab</code>命令行工具默认从当前目录下的文件<code>fabfile.py</code>中加载Python代码，其中的每个python函数定义了一个<code>task</code>, 可以直接以fab命令行直接执行。</p>
+<p>如，<code>fabfile.py</code>内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">helloworld</span>():</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;Hello world!&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hello</span>(<span class="params">name=<span class="string">&quot;world&quot;</span></span>):</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;Hello %s!&quot;</span> % name)</span><br></pre></td></tr></table></figure>
+<p>可以通过执行如下命令查看当前<code>fabfile.py</code>中定义的task:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab -l</span><br><span class="line">Available commands:</span><br><span class="line"></span><br><span class="line">    hello</span><br><span class="line">    helloworld</span><br><span class="line">[root@centos1 fabv1]#</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>hello</code>和<code>helloworld</code>两个<code>task</code>被定义。</p>
+<p>其中，<code>hello</code>函数中定义了参数，在调用时可以如下形式调用<code>fab</code>命令:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;task name&gt;:&lt;arg&gt;,&lt;kwarg&gt;=&lt;value&gt;,...</span><br></pre></td></tr></table></figure>
+
+<p>比如，我们使用两种参数传入方式都可以:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab hello:name=flygoast</span><br><span class="line">Hello flygoast!</span><br><span class="line"></span><br><span class="line">Done.</span><br><span class="line">[root@centos1 fabv1]# fab hello:flygoast</span><br><span class="line">Hello flygoast!</span><br><span class="line"></span><br><span class="line">Done.</span><br><span class="line">[root@centos1 fabv1]#</span><br></pre></td></tr></table></figure>
+
+<p>Fabric提供了若干操作函数，主要有:</p>
+<ul>
+<li>local(): 在本地主机执行命令</li>
+<li>run(): 在远程主机执行命令</li>
+<li>sudo(): 类似于run(), 区别在于在SHELL命令前加上”sudo”</li>
+<li>get(remote, local): 从远程主机下载文件到本地</li>
+<li>put(local, remote): 将本地文件上传到远程主机</li>
+<li>prompt(): 提示用户输入，并返回其输入内容</li>
+<li>reboot(): 重启服务器</li>
+</ul>
+<p>在远程主机上需要执行的操作，我们直接定义在Python函数中, 如:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> fabric.api <span class="keyword">import</span> run</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_remote</span>():</span><br><span class="line">    run(<span class="string">&quot;hostname&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>不过，在哪些主机上执行如何指定呢？Fabric提供了许多方式，我们简要介绍几种。</p>
+<p>一种是直接由fab命令的选项来指定如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab -H dev01 test_remote</span><br><span class="line">[dev01] Executing task &#x27;test_remote&#x27;</span><br><span class="line">[dev01] run: hostname</span><br><span class="line">[dev01] Login password for &#x27;root&#x27;:</span><br><span class="line">[dev01] out: dev01</span><br><span class="line">[dev01] out:</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Done.</span><br><span class="line">Disconnecting from dev01... done.</span><br><span class="line">[root@centos1 fabv1]#</span><br></pre></td></tr></table></figure>
+
+<p>支持的主机格式为SSH风格:<code>user@host:port</code>。值得一提的是，当执行上述命令时，会提示用户需要手动输入密码。</p>
+<p>也可以在fabric的全局变量<code>env.hosts</code>中指定远程主机，我们将代码修改为:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> fabric.api <span class="keyword">import</span> run, env</span><br><span class="line"></span><br><span class="line">env.hosts=[<span class="string">&#x27;dev01&#x27;</span>, <span class="string">&#x27;dev02&#x27;</span>]</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_remote</span>():</span><br><span class="line">    run(<span class="string">&quot;hostname&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>执行结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab test_remote</span><br><span class="line">[dev01] Executing task &#x27;test_remote&#x27;</span><br><span class="line">[dev01] run: hostname</span><br><span class="line">[dev01] Login password for &#x27;root&#x27;:</span><br><span class="line">[dev01] out: dev01</span><br><span class="line">[dev01] out:</span><br><span class="line"></span><br><span class="line">[dev02] Executing task &#x27;test_remote&#x27;</span><br><span class="line">[dev02] run: hostname</span><br><span class="line">[dev02] out: bogon</span><br><span class="line">[dev02] out:</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Done.</span><br><span class="line">Disconnecting from dev01... done.</span><br><span class="line">Disconnecting from dev02... done.</span><br><span class="line">[root@centos1 fabv1]#</span><br></pre></td></tr></table></figure>
+
+<p>通过<code>env.hosts</code>设置远程主机，对于所有的<code>task</code>全局有效。如果每个<code>task</code>有不同的执行主机，可以给<code>task</code>使用<code>hosts</code>修饰器单独指定， 如</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">my_hosts=(<span class="string">&#x27;dev01&#x27;</span>, <span class="string">&#x27;dev03&#x27;</span>)</span><br><span class="line"><span class="meta">@hosts(<span class="params">my_hosts</span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_remote2</span>():</span><br><span class="line">    run(<span class="string">&#x27;hostname&#x27;</span>)</span><br></pre></td></tr></table></figure>
+<p>执行结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 fabv1]# fab test_remote2</span><br><span class="line">[dev01] Executing task &#x27;test_env&#x27;</span><br><span class="line">[dev01] run: hostname</span><br><span class="line">[dev01] Login password for &#x27;root&#x27;:</span><br><span class="line">[dev01] out: dev01</span><br><span class="line">[dev01] out:</span><br><span class="line"></span><br><span class="line">[dev03] Executing task &#x27;test_env&#x27;</span><br><span class="line">[dev03] run: hostname</span><br><span class="line">[dev03] out: bogon</span><br><span class="line">[dev03] out:</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Done.</span><br><span class="line">Disconnecting from dev01... done.</span><br><span class="line">Disconnecting from dev03... done.</span><br><span class="line">[root@centos1 fabv1]#</span><br></pre></td></tr></table></figure>
+
+<p>此外，还可以给不同的远程主机定义<code>Roles</code>, 再将不同角色分配到不同的<code>task</code>。 具体细节可参考:<a target="_blank" rel="noopener" href="http://docs.fabfile.org/en/1.14/usage/execution.html#roles">http://docs.fabfile.org/en/1.14/usage/execution.html#roles</a></p>
+<p>在上面的示例中，在执行前都需要输入主机密码。也可以将密码提前在代码中写好，则不再需要输入。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">env.password = <span class="string">&#x27;123456&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>若主机密码不一致，可以通过<code>env.passwords</code>中按每台主机来指定密码。该变量是<code>dict</code>类型, 它的<code>key</code>必须必须是用户名、主机、端口的组合，这三个元素必须全部提供，如:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">env.passwords = &#123;<span class="string">&#x27;root@dev01:22&#x27;</span>:<span class="string">&#x27;123456&#x27;</span>, <span class="string">&#x27;root@dev03:22’:’456789&#x27;</span>&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这种方法需要将密码编写在文件中，存在安全风险，官方还是推荐使用SSH KEY登录。</p>
+<p>本文只简要介绍fabric的用法，其他如并行执行，与远程程序的交互等可以参考官方文档:<br><a target="_blank" rel="noopener" href="http://docs.fabfile.org/en/1.14/">http://docs.fabfile.org/en/1.14/</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/11/19/npyscreen/" rel="prev" title="Python TUI库npyscreen简要介绍">
+      <i class="fa fa-chevron-left"></i> Python TUI库npyscreen简要介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/08/10/service-catalog/" rel="next" title="Kubernetes服务目录简要介绍">
+      Kubernetes服务目录简要介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

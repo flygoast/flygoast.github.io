@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在VMware NSX-T网络构建中，有两个地方需要配置VLAN, 分别是:  逻辑交换机&#x2F;分段中的VLAN, 如图:   Uplink Profile中的传输VLAN(Transport VLAN), 如图:   逻辑交换机的VLAN决定了逻辑交换机上的端口类型，表示access或者trunk类型的端口。逻辑交换机又分为基于VLAN类型和Overlay类型两种。对于VLAN类型的逻辑交换机, 如">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NSX-T逻辑交换机VLAN和Transport VLAN">
+<meta property="og:url" content="http://just4coding.com/2022/11/13/nsxt-vlan/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在VMware NSX-T网络构建中，有两个地方需要配置VLAN, 分别是:  逻辑交换机&#x2F;分段中的VLAN, 如图:   Uplink Profile中的传输VLAN(Transport VLAN), 如图:   逻辑交换机的VLAN决定了逻辑交换机上的端口类型，表示access或者trunk类型的端口。逻辑交换机又分为基于VLAN类型和Overlay类型两种。对于VLAN类型的逻辑交换机, 如">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/7.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/8.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/9.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-11-13/10.png">
+<meta property="article:published_time" content="2022-11-12T16:31:20.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.505Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="NSX-T">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-11-13/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/11/13/nsxt-vlan/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NSX-T逻辑交换机VLAN和Transport VLAN | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/13/nsxt-vlan/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NSX-T逻辑交换机VLAN和Transport VLAN
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-11-13 00:31:20" itemprop="dateCreated datePublished" datetime="2022-11-13T00:31:20+08:00">2022-11-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在<code>VMware NSX-T</code>网络构建中，有两个地方需要配置<code>VLAN</code>, 分别是:</p>
+<ul>
+<li><p><code>逻辑交换机/分段</code>中的<code>VLAN</code>, 如图:</p>
+<img src="/images/2022-11-13/1.png" class="">
+</li>
+<li><p><code>Uplink Profile</code>中的<code>传输VLAN(Transport VLAN</code>), 如图:</p>
+<img src="/images/2022-11-13/2.png" class=""></li>
+</ul>
+<p><code>逻辑交换机</code>的<code>VLAN</code>决定了逻辑交换机上的端口类型，表示<code>access</code>或者<code>trunk</code>类型的端口。<code>逻辑交换机</code>又分为基于<code>VLAN</code>类型和<code>Overlay</code>类型两种。<br>对于<code>VLAN</code>类型的<code>逻辑交换机</code>, 如果配置的<code>VLAN</code>为单一<code>VLAN</code>时，表示端口为<code>access</code>类型。这时<code>逻辑交换机</code>与所连接的虚拟接口间的数据是不携带<code>VLAN tag</code>的，但发送到ESXi主机外部的物理网络的报文会携带有所配置的<code>VLAN tag</code>。<code>VLAN 0</code>则比较特殊，在<code>NSX-T</code>以及<code>vSphere</code>体系里都表示不携带<code>VLAN tag</code>。而如果配置多个<code>VLAN</code>后，表示端口为<code>trunk</code>类型。这种情况下，发送到<code>逻辑交换机</code>的报文则必须携带有配置范围内的<code>VLAN tag</code>。而该<code>tag</code>也会透传到外部物理网络。因而使用<code>VLAN</code>类型的逻辑交换机需要底层物理网络做相应的配置允许相应的<code>VLAN</code>通行。<br>而对于<code>Overlay</code>类型的<code>逻辑交换机</code>, 可以不配置<code>VLAN</code>, 这种情况下，<code>逻辑交换机</code>的端口为<code>access</code>类型。当设置<code>VLAN</code>时，即使设置的是单一<code>VLAN</code>，也会自动修改为<code>trunk</code>类型。这种情况下，<code>逻辑交换机</code>与虚拟接口间的报文则必须携带配置范围内的<code>VLAN tag</code>。</p>
+<p>整体逻辑可以梳理为:</p>
+<img src="/images/2022-11-13/3.png" class="">
+
+<span id="more"></span>
+<p>上边说到，在<code>Overlay</code>类型的<code>逻辑交换机</code>的报文发送到<code>ESXi</code>外部的物理网络的报文与<code>逻辑交换机VLAN</code>选项无关。而影响这<code>underlay</code>报文<code>VLAN tag</code>的是上文提到的另一个<code>VLAN</code>调置: <code>传输VLAN(Transport VLAN)</code>。该选项只能设置单一<code>VLAN</code>。当<code>Uplink Profile</code>的<code>Transport VLAN</code>未设置时，默认值为<code>0</code>, 这种情况下，<code>underlay</code>报文不携带<code>VLAN tag</code>。如果设置为其他的<code>VLAN tag</code>, 则<code>underlay</code>报文则会携带该<code>VLAN tag</code>。</p>
+<p>如果<code>NSX</code>虚拟交换机的承载为<code>vCenter</code>的<code>VDS</code>, 则在<code>vCenter</code>的<code>Network</code>标签中看到<code>逻辑交换机/分段</code>的<code>VLAN</code>信息，如图:</p>
+<img src="/images/2022-11-13/4.png" class="">
+
+<p>需要注意的，这里显示的<code>access</code>类型的<code>逻辑交换机/分段</code>的<code>VLAN</code>信息是正确的，而<code>trunk</code>类型的<code>逻辑交换机/分段</code>的信息则没有正确显示。</p>
+<p>下面对上述情况进行实验。</p>
+<p>我的实验环境为嵌套部署的<code>ESXi</code>主机，<code>ESXi</code>主机的网络接到底层<code>ESXi</code>上用来模拟物理网络的<code>VSS</code>上，并将<code>混杂模式</code>,<code>MAC地址更改</code>, <code>伪传输</code>三个选项都设置为<code>接受</code>, <code>VLAN</code>设置为<code>4095</code>, 表示允许所有<code>VLAN</code>。在底层<code>ESXi</code>环境上再启动一台<code>CentOS</code>虚拟机接入该<code>VSS</code>。由于<code>VSS</code>的<code>混杂模式</code>开启，因而<code>CentOS</code>虚拟机上可以抓到所有流出嵌套<code>ESXi</code>主机而到达<code>VSS</code>的流量，拓扑如图:</p>
+<img src="/images/2022-11-13/5.png" class="">
+
+<p>在<code>NSX-T</code>环境中创建<code>VLAN</code>类型<code>逻辑交换机</code>, 并将<code>VLAN</code>设置为<code>200</code>.在两台<code>ESXi</code>主机上各创建一台虚拟机, <code>IP</code>分别配置为<code>6.6.6.11/24</code>和<code>6.6.6.12/24</code>, 并将虚拟机网卡接入创建的<code>逻辑交换机</code>.从<code>6.6.6.11</code>通过<code>ping</code>访问<code>6.6.6.12</code>.</p>
+<p>从观察机<code>CentOS</code>上抓包可以看到物理网络报文的<code>VLAN tag</code>为<code>200</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">10:49:04.187978 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype 802.1Q (0x8100), length 102: vlan 200, p 0, ethertype IPv4, 6.6.6.11 &gt; 6.6.6.12: ICMP echo request, id 4244, seq 7, length 64</span><br><span class="line">10:49:04.188456 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype 802.1Q (0x8100), length 102: vlan 200, p 0, ethertype IPv4, 6.6.6.12 &gt; 6.6.6.11: ICMP echo reply, id 4244, seq 7, length 64</span><br></pre></td></tr></table></figure>
+
+<p>将<code>逻辑交换机VLAN</code>修改为<code>0</code>之后再次测试, 从抓包数据可以看到物理网络报文不再携带<code>VLAN tag</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">10:52:09.802257 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype IPv4 (0x0800), length 98: 6.6.6.11 &gt; 6.6.6.12: ICMP echo request, id 4245, seq 10, length 64</span><br><span class="line">10:52:09.802735 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype IPv4 (0x0800), length 98: 6.6.6.12 &gt; 6.6.6.11: ICMP echo reply, id 4245, seq 10, length 64</span><br></pre></td></tr></table></figure>
+
+<p>再将<code>逻辑交换机VLAN</code>修改为<code>1600-1700</code>, 此时无法<code>ping</code>通了.</p>
+<img src="/images/2022-11-13/6.png" class="">
+
+
+<p>接着,在两台虚拟机上分别配置<code>VLAN</code>子接口,<code>VLAN tag</code>设置为<code>1601</code>, <code>IP</code>分别设置为<code>1.1.1.1/24</code>和<code>1.1.1.2/24</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add <span class="built_in">link</span> ens192 ens192.1601 <span class="built_in">type</span> vlan <span class="built_in">id</span> 1601</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up ens192.1601</span><br><span class="line">ip addr add 1.1.1.1/24 dev ens192.1601</span><br></pre></td></tr></table></figure>
+
+<p>此时, 从<code>1.1.1.1</code>访问<code>1.1.1.2</code>, 抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">10:58:42.206065 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.1 &gt; 1.1.1.2: ICMP echo request, id 4246, seq 9, length 64</span><br><span class="line">10:58:42.206575 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.2 &gt; 1.1.1.1: ICMP echo reply, id 4246, seq 9, length 64</span><br></pre></td></tr></table></figure>
+<p>可以看到物理网络报文的<code>VLAN tag</code>为<code>1601</code>.</p>
+<p>再创建<code>overlay</code>类型的<code>逻辑交换机</code>, 不设置<code>VLAN</code>, 此时<code>VLAN</code>显示为<code>N/A</code>:</p>
+<img src="/images/2022-11-13/7.png" class="">
+
+<p>将两台测试机迁移到<code>overlay</code>类型<code>逻辑交换机</code>,再次从<code>6.6.6.11</code>访问<code>6.6.6.12</code>, 访问能够成功.</p>
+<p>此时, <code>Uplink Profile</code>的<code>Transport VLAN</code>为<code>0</code>:</p>
+<img src="/images/2022-11-13/8.png" class="">
+
+<p>从抓包可以看到内层报文和外层报文都没有<code>VLAN tag</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">11:10:30.479318 00:50:56:69:15:41 &gt; 00:50:56:65:8c:86, ethertype IPv4 (0x0800), length 156: 10.10.10.101.63181 &gt; 10.10.10.100.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype IPv4 (0x0800), length 98: 6.6.6.11 &gt; 6.6.6.12: ICMP echo request, id 4266, seq 9, length 64</span><br><span class="line">11:10:30.479848 00:50:56:65:8c:86 &gt; 00:50:56:69:15:41, ethertype IPv4 (0x0800), length 156: 10.10.10.100.57901 &gt; 10.10.10.101.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype IPv4 (0x0800), length 98: 6.6.6.12 &gt; 6.6.6.11: ICMP echo reply, id 4266, seq 9, length 64</span><br></pre></td></tr></table></figure>
+
+<p>修改<code>overlay逻辑交换机</code>配置<code>VLAN</code>为<code>1600-1700</code>, 从<code>6.6.6.11</code>访问<code>6.6.6.12</code>失败. 这时使用<code>VLAN</code>子接口<code>ens192.1601</code>从<code>1.1.1.1</code>访问<code>1.1.1.2</code>, 访问成功.</p>
+<p>从抓包结果看, 内部报文已携带<code>VLAN tag</code>: <code>1601</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">11:17:55.136613 00:50:56:69:15:41 &gt; 00:50:56:65:8c:86, ethertype IPv4 (0x0800), length 160: 10.10.10.101.54392 &gt; 10.10.10.100.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.1 &gt; 1.1.1.2: ICMP echo request, id 4269, seq 8, length 64</span><br><span class="line">11:17:55.137196 00:50:56:65:8c:86 &gt; 00:50:56:69:15:41, ethertype IPv4 (0x0800), length 160: 10.10.10.100.57683 &gt; 10.10.10.101.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.2 &gt; 1.1.1.1: ICMP echo reply, id 4269, seq 8, length 64</span><br></pre></td></tr></table></figure>
+<p>现在修改所使用的<code>Uplink Profile</code>, 将<code>Transport VLAN</code>修改为<code>300</code>:</p>
+<img src="/images/2022-11-13/9.png" class="">
+
+<p>此时,再次抓包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">11:22:19.472658 00:50:56:69:15:41 &gt; 00:50:56:65:8c:86, ethertype 802.1Q (0x8100), length 164: vlan 300, p 0, ethertype IPv4, 10.10.10.101.54392 &gt; 10.10.10.100.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:70:f0 &gt; 00:50:56:82:a6:ae, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.1 &gt; 1.1.1.2: ICMP echo request, id 4269, seq 272, length 64</span><br><span class="line">11:22:19.473096 00:50:56:65:8c:86 &gt; 00:50:56:69:15:41, ethertype 802.1Q (0x8100), length 164: vlan 300, p 0, ethertype IPv4, 10.10.10.100.57683 &gt; 10.10.10.101.6081: Geneve, Flags [C], vni 0x10000, proto TEB (0x6558), options [8 bytes]: 00:50:56:82:a6:ae &gt; 00:50:56:82:70:f0, ethertype 802.1Q (0x8100), length 102: vlan 1601, p 0, ethertype IPv4, 1.1.1.2 &gt; 1.1.1.1: ICMP echo reply, id 4269, seq 272, length 64</span><br></pre></td></tr></table></figure>
+
+<p>可以看到,外层报文的<code>VLAN tag</code>为<code>300</code>, 内层<code>VLAN tag</code>为<code>1601</code>.</p>
+<p>因为实验环境是采用的嵌套虚拟化环境, 可以在旁路抓包分析. 如果是在物理环境中, 可能只能在<code>ESXi</code>主机上进行抓包.<br>可以使用<code>pktcap-uw</code>和<code>tcpdump-uw</code>来抓取<code>uplink</code>数据包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pktcap-uw --uplink vmnic1 --<span class="built_in">dir</span> 2 -o - |tcpdump-uw -ner -</span><br></pre></td></tr></table></figure>
+<p>但是<code>pktcap-uw</code>产生的<code>pcap</code>数据包中不包括报文<code>VLAN tag</code>. 直接使用<code>pktcap-uw</code>可以从<code>元信息</code>中看到<code>VLAN tag</code>, 也支持<code>--vlan</code>选项只抓取指定的<code>VLAN</code>.</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">05:52:33.944512[9] Captured at UplinkSndKernel point, TSO not enabled, Checksum not offloaded and not verified, SourcePort 67108877, VLAN tag 300, length 60.</span><br><span class="line">	Segment[0] ---- 54 bytes:</span><br><span class="line">	0x0000:  ffff ffff ffff 0050 5669 1541 0806 0001</span><br><span class="line">	0x0010:  0800 0604 0001 0050 5669 1541 0a0a 0a65</span><br><span class="line">	0x0020:  0000 0000 0000 0a0a 0a01 0000 0000 0000</span><br><span class="line">	0x0030:  0000 0000 0000</span><br><span class="line">	Segment[1] ---- 6 bytes:</span><br><span class="line">	0x0030:                 0000 0000 0000</span><br><span class="line">05:52:34.282899[10] Captured at UplinkRcvKernel point, TSO not enabled, Checksum not offloaded and verified, VLAN tag 300, length 116.</span><br><span class="line">	Segment[0] ---- 1622 bytes:</span><br><span class="line">	0x0000:  0050 5669 1541 0050 5665 8c86 0800 4500</span><br><span class="line">	0x0010:  0066 0000 4000 4011 11ab 0a0a 0a64 0a0a</span><br><span class="line">	0x0020:  0a65 f9e1 17c1 0052 c407 0080 6558 0000</span><br><span class="line">	0x0030:  0000 0050 5669 1541 0050 5665 8c86 0800</span><br><span class="line">	0x0040:  4500 0034 0000 0000 ff11 92dc 0a0a 0a64</span><br><span class="line">	0x0050:  0a0a 0a65 c000 0ec8 0020 0000 20c0 0318</span><br><span class="line">	0x0060:  dd75 e441 036f c2db 0001 86a0 000f 4240</span><br><span class="line">	0x0070:  0000 0000</span><br></pre></td></tr></table></figure>
+
+<p>在通过<code>-o</code>选项生成<code>pcap</code>文件时,可以使用<code>--ng</code>选项写入注释信息, 其中会包含<code>VLAN tag</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-P, --ng   (only working with &#x27;-o&#x27;)</span><br><span class="line">	Using the pcapng format to dump into the file.</span><br></pre></td></tr></table></figure>
+
+<p>这样生成的<code>pcap</code>文件使用<code>wireshark</code>打开时,可以看到<code>Packet comments</code>部分:</p>
+<img src="/images/2022-11-13/10.png" class="">
+
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/35616289">https://zhuanlan.zhihu.com/p/35616289</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huawei.com/enterprise/zh/doc/EDOC1100086528">https://support.huawei.com/enterprise/zh/doc/EDOC1100086528</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huawei.com/enterprise/zh/doc/EDOC1000178049/834147df">https://support.huawei.com/enterprise/zh/doc/EDOC1000178049/834147df</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.h3c.com/cn/d_201909/1231231_30005_0.htm">https://www.h3c.com/cn/d_201909/1231231_30005_0.htm</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.p2vlab.com/lets-make-a-vlan-backed-nsx-t-logical-segment/">http://www.p2vlab.com/lets-make-a-vlan-backed-nsx-t-logical-segment/</a></li>
+<li><a target="_blank" rel="noopener" href="https://nuwan.vip/nsx-t-logical-switching/">https://nuwan.vip/nsx-t-logical-switching/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html">https://www.lab2prod.com.au/2022/05/nsx-t-deterministic-traffic-on-vlan-backed-segments.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.lab2prod.com.au/2020/11/nsx-t-inter-tep.html">https://www.lab2prod.com.au/2020/11/nsx-t-inter-tep.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.reddit.com/r/vmware/comments/t29mqx/capturing_vlan_tags_with_wireshark_in_esxi/">https://www.reddit.com/r/vmware/comments/t29mqx/capturing_vlan_tags_with_wireshark_in_esxi/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.virten.net/2015/10/esxi-network-troubleshooting-with-tcpdump-uw-and-pktcap-uw/">https://www.virten.net/2015/10/esxi-network-troubleshooting-with-tcpdump-uw-and-pktcap-uw/</a></li>
+<li><a target="_blank" rel="noopener" href="https://blogs.vmware.com/vsphere/2018/12/esxi-network-troubleshooting-tools.html">https://blogs.vmware.com/vsphere/2018/12/esxi-network-troubleshooting-tools.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://rutgerblom.com/2019/07/06/nsx-t-data-path-visibility-part-1/">https://rutgerblom.com/2019/07/06/nsx-t-data-path-visibility-part-1/</a></li>
+<li><a target="_blank" rel="noopener" href="https://rutgerblom.com/2019/07/14/nsx-t-data-path-visibility-part-2/">https://rutgerblom.com/2019/07/14/nsx-t-data-path-visibility-part-2/</a></li>
+<li><a target="_blank" rel="noopener" href="https://rutgerblom.com/2019/07/19/nsx-t-data-path-visibility-part-3/">https://rutgerblom.com/2019/07/19/nsx-t-data-path-visibility-part-3/</a></li>
+<li><a target="_blank" rel="noopener" href="https://virtualork.wordpress.com/2021/05/03/nsx-t-east-west-data-path-part-i/">https://virtualork.wordpress.com/2021/05/03/nsx-t-east-west-data-path-part-i/</a></li>
+<li><a target="_blank" rel="noopener" href="https://itdeepdive.com/2020/11/nsx-t-packet-capture-east-west-traffic-on-overlay-segment/">https://itdeepdive.com/2020/11/nsx-t-packet-capture-east-west-traffic-on-overlay-segment/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/NSX-T/" rel="tag"># NSX-T</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/07/nsxt-named-teaming-policies/" rel="prev" title="NSX-T逻辑交换机配置上行链路绑定策略">
+      <i class="fa fa-chevron-left"></i> NSX-T逻辑交换机配置上行链路绑定策略
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/11/20/vmware-iscsi-multipathing/" rel="next" title="VMware vSphere环境iSCSI配置多路径">
+      VMware vSphere环境iSCSI配置多路径 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

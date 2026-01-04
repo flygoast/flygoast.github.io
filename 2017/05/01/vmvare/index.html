@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="随着数据中心虚拟化和云计算发展，虚拟网络的安全防护需求越来越多。本文通过实例介绍VMware vSphere虚拟网络的安全防护。 首先介绍VMware vSphere虚拟网络的基础知识。 ESXi主机使用虚拟交换机来路由虚拟网络内部流量以及虚拟网络和物理网络之间的网络流量。vSphere有三种虚拟交换机:  vSS: vNetwork Standard Switch vDS: vNetwork D">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware vSphere虚拟网络防护">
+<meta property="og:url" content="http://just4coding.com/2017/05/01/vmvare/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="随着数据中心虚拟化和云计算发展，虚拟网络的安全防护需求越来越多。本文通过实例介绍VMware vSphere虚拟网络的安全防护。 首先介绍VMware vSphere虚拟网络的基础知识。 ESXi主机使用虚拟交换机来路由虚拟网络内部流量以及虚拟网络和物理网络之间的网络流量。vSphere有三种虚拟交换机:  vSS: vNetwork Standard Switch vDS: vNetwork D">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-05-01/7.png">
+<meta property="article:published_time" content="2017-05-01T14:38:03.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.481Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-05-01/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/05/01/vmvare/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware vSphere虚拟网络防护 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/05/01/vmvare/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware vSphere虚拟网络防护
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-05-01 22:38:03" itemprop="dateCreated datePublished" datetime="2017-05-01T22:38:03+08:00">2017-05-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>随着数据中心虚拟化和云计算发展，虚拟网络的安全防护需求越来越多。本文通过实例介绍VMware vSphere虚拟网络的安全防护。</p>
+<p>首先介绍VMware vSphere虚拟网络的基础知识。</p>
+<p>ESXi主机使用虚拟交换机来路由虚拟网络内部流量以及虚拟网络和物理网络之间的网络流量。vSphere有三种虚拟交换机:</p>
+<ul>
+<li>vSS: vNetwork Standard Switch</li>
+<li>vDS: vNetwork Distributed Switch</li>
+<li>Cisco Nexus 1000v</li>
+</ul>
+<p>vSS工作在单一ESXi主机中，适用于小规模环境，需要在每个ESXi主机上单独配置。vDS和Nexus 1000v具备更多高级网络特性, 但需要额外License。本文介绍在vSS环境下的虚拟网络防护。</p>
+<p>vSS有三种类型的端口:</p>
+<ul>
+<li>vNIC: 虚拟机的网络接口</li>
+<li>VMKernel: 用于ESXi主机与外界物理网络或者VMware其他基础设施交互，如vMotion, vSAN等</li>
+<li>uplink: 连接虚拟交换机与主机物理网卡，将虚拟网络和物理网络联通</li>
+</ul>
+<p>vSS通过端口组(Port Group)将vNIC端口分组，针对端口组，可以设置不同的VLAN ID，安全参数、流量整形参数等。在创建虚拟机时需要指定虚拟网络接口属的端口组。</p>
+<p>vSphere虚拟网络的架构示意图如下:</p>
+<img src="/images/2017-05-01/1.png" class="">
+
+<span id="more"></span>
+
+<p>vSphere虚拟网络支持802.1Q VLAN。根据VLAN标签在哪里添加和移除，有三种模式:</p>
+<ul>
+<li>EST(External Switch Tagging): 由ESXi主机外部的物理交换机负责添加和移除VLAN标签。虚拟交换机上的数据包不具备VLAN标签。这种模式下，虚拟交换机上的PortGroup的VLAN ID需设置为0，uplink连接的物理交换机端口需设置为Access Port。</li>
+<li>VST(Virtual Switch Tagging): 由虚拟交换机负责添加和移除VLAN标签。虚拟交换机上的端口组可设置为不同的VLAN ID。不同VLAN的端口组是二层隔离的。这种模式下，uplink连接的物理交换机端口需配置为TRUNK Port。VLAN ID可设置为1-4094。</li>
+<li>VGT(Virtual Guest Tagging): 由虚拟机负责添加和移除VLAN标签。网络数据在虚拟网络内流转时，进入虚拟机的数据包上可带有VLAN标签。这种模式下，所有其他VLAN的流量都可流经该端口组，uplink连接的物理交换机端口也需要设置为TRUNK Port。端口组的VLAN ID需要设置为4095.</li>
+</ul>
+<p>vSS可以设置3个安全选项，如图:</p>
+<img src="/images/2017-05-01/2.png" class="">
+
+<ul>
+<li>混杂模式: vSS不像传统交换机，它不具备MAC学习功能。因为vSphere知道所有接入vSS的接口MAC地址，不需要根据数据包的源MAC来更新MAC与PORT的映射。在混杂模式未开启情况下，如果目标MAC不属于该vSS，那么vSS将丢弃该数据包。vSS或端口组开启混杂模式后，所属的PORT将收到vSS上VLAN策略所允许的所有流量。这种特性可用来监控虚拟网络流量。</li>
+<li>MAC地址更改: 设置为拒绝时，若VM的接口MAC地址被更改了，与VM的.vmx配置文件中的地址不一致时，所有进入该接口的数据帧都会被丢弃。</li>
+<li>伪传输: 设置为拒绝时，若VM发送的数据包的源MAC地址与当前适配器的地址不一致，该数据包会被丢弃。</li>
+</ul>
+<p>ESXi主机上可以创建多个vSS。不过，vSphere没有提供方法直接级联两个vSS。若需要级联两个vSS，可行的方法有两个:</p>
+<ul>
+<li>每个vSS各连接一个uplink, 通过物理交换机将两个uplink连接。</li>
+<li>创建具备两个vNIC的虚拟机，两个vNIC各自连接不同的vSS, 在VM内部完成网络桥接</li>
+</ul>
+<p>我们可以利用第二种方式对虚拟网络进行安全防护。部署结构如图:</p>
+<img src="/images/2017-05-01/3.png" class="">
+
+<p>将需要防护的业务虚拟机连接到一个没有uplink的vSS上，并通过一个安全设备虚拟机级联该虚拟交换机和连接外网的虚拟交换机。业务虚拟机的进出流量都需要流经虚拟安全设备。这种部署结构下，可以按多种方法进行配置。</p>
+<p>首先，介绍透明桥接方式。这种方式下，安全设备虚拟机做为二层网桥，将数据帧在设备的两个接口间转发。安全设备虚拟机对数据帧进行完安全检测，根据结果放行数据包或者直接丢弃，并不对数据帧进行修改。</p>
+<p>我们基于实例说明这种方式:</p>
+<p>ESXi主机安装后默认创建虚拟交换机<code>vSwitch0</code>, 我们创建一个虚拟机连接到<code>vSwitch0</code>的默认端口组:<code>vSwitch0</code>。接着创建一个没有uplink端口的虚拟交换机<code>vSwitch1</code>。分别在<code>vSwitch0</code>和<code>vSwitch1</code>上创建端口组: <code>TrunkPG0</code>和<code>TrunkPG1</code>，VLAN ID都设置为4095，保证虚拟交换机上其他VLAN的流量都可以从该端口组的Port通过。将两个端口组的『混杂模式』和『伪传输』选项都设置为接受。安全设备虚拟机的接口<code>eth0</code>和<code>eth1</code>分别接入端口组<code>TrunkPG0</code>和<code>TrunkPG1</code>。接下来，创建一个虚拟机<code>t2</code>，接口接入<code>vSwitch1</code>的默认端口组: <code>vSwitch1</code>。</p>
+<p>ESXi主机网络配置结果如图:</p>
+<img src="/images/2017-05-01/4.png" class="">
+
+<p>整体结构示意图如下:</p>
+<img src="/images/2017-05-01/5.png" class="">
+
+<p>下面具体分析一下从虚拟机<code>t2</code>通过PING访问<code>t1</code>的过程。其中涉及ARP和ICMP两种协议数据包交互，流程都如下图:</p>
+<img src="/images/2017-05-01/6.png" class="">
+
+<p>ARP请求过程:</p>
+<ol>
+<li>由于<code>t1</code>和<code>t2</code>在同一子网，<code>t2</code>发送ARP广播包查询<code>t1</code>的MAC地址。</li>
+<li>ARP广播包被<code>vSwitch1</code>发送到<code>vRouter</code>的<code>eth1</code>。</li>
+<li><code>vRouter</code>将数据包从另一接口<code>eth0</code>发送到<code>vSwitch0</code>，此时数据帧的源MAC为<code>t2</code>的MAC地址，与<code>eth0</code>的MAC地址不一致，若不开启<code>TrunkPG0</code>的”伪传输”选项，数据包会被丢弃。</li>
+<li><code>vSwitch0</code>收到ARP广播包，将广播数据包发送给<code>t1</code>。</li>
+<li><code>t1</code>收到ARP请求，发出ARP响应，数据帧目的MAC为<code>t2</code>的MAC地址。</li>
+<li><code>vSwitch0</code>收到ARP响应包。由于数据帧目的MAC为<code>t2</code>的MAC地址，<code>t2</code>接入的是<code>vSwitch1</code>, <code>vSwitch0</code>并不认识这个MAC地址，并没有接口需要转发该数据帧。由于<code>TrunkPG0</code>的”混杂模式”开启，<code>vSwitch0</code>将数据帧发送到<code>vRouter</code>接入端口组<code>TrunkPG0</code>的<code>eth0</code>。</li>
+<li><code>vRouter</code>将数据帧由另一接口<code>eth1</code>发送到<code>vSwitch1</code>, 此时数据包的源MAC为<code>t1</code>的MAC地址。<code>vSwitch1</code>不认识这个MAC，若不开启<code>TrunkPG1</code>的”伪传输”选项，数据包会被丢弃。</li>
+<li><code>vSwitch1</code>收到数据帧，将数据帧转发至<code>t2</code>的接口，完成ARP请求与响应过程。</li>
+</ol>
+<p>接下来，<code>t2</code>开启发送ICMP请求，交互过程如下:</p>
+<ol>
+<li><code>t2</code>获得了<code>t1</code>的MAC地址，发送ICMP请求数据帧至<code>vSwitch1</code>。</li>
+<li><code>vSwitch1</code>收到数据帧，数据帧目的MAC为<code>t2</code>的MAC地址，<code>vSwitch1</code>并不认识。但由于<code>TrunkPG1</code>开启了”混杂模式”，<code>vSwitch1</code>将数据帧发送至<code>vRouter</code>接入<code>TrunkPG1</code>的接口<code>eth1</code>。</li>
+<li><code>vRouter</code>将数据帧从<code>eth0</code>发送至<code>vSwitch0</code>。数据帧源MAC为<code>t1</code>的MAC地址，<code>vSwitch0</code>不认识。若不开启<code>TrunkPG0</code>的”伪传输”选项，该数据帧会被丢弃。</li>
+<li><code>vSwitch0</code>收到数据帧，将其转发至<code>t1</code>。</li>
+<li><code>t2</code>发送ICMP响应至<code>vSwitch0</code>。</li>
+<li><code>vSwitch0</code>收到响应包，数据帧目的MAC为<code>t2</code>的MAC地址,<code>vSwitch0</code>不认识。但由于<code>TrunkPG0</code>开启了”混杂模式”, <code>vSwitch0</code>将数据帧发送给<code>vRouter</code>接入<code>TrunkPG0</code>的<code>eth0</code>.</li>
+<li><code>vRouter</code>将数据帧由<code>eth1</code>发送至<code>vSwitch1</code>，数据帧源MAC为<code>t1</code>的MAC地址，与<code>eth1</code>的MAC地址不一致，若不开启<code>TrunkPG1</code>的”伪传输”选项，数据包会被丢弃。</li>
+<li><code>vSwitch1</code>收到数据包，将数据包发至<code>t2</code>的接口。</li>
+</ol>
+<p>这种方式虚拟安全设备做为虚拟网桥在两个交换机之间转发数据包，并根据安全检测结果对数据包进行处置。</p>
+<p>另外一种配置方式是将被保护的业务虚拟机划分到私有的独立网段，虚拟安全设备的一个接口作为该网段的默认网关。在虚拟安全设备通过SNAT方式实现私有网段访问业务网段的需求。若私有网段内的机器需要直接对业务网段提供服务，则可以分配一个业务IP，在虚拟安全设备上完成DNAT，将业务IP转换为私有IP。而且这种方式下，可以配置多个私有网段。虚拟安全设备配置多个接口，每个接口做为一个独立网段的网关。架构如图:</p>
+<img src="/images/2017-05-01/7.png" class="">
+
+<p>我们用实例来说明:</p>
+<p>业务网段为<code>10.74.129.0/24</code>, 我们将私有网段设置为<code>10.0.0.0/24</code>。我们将<code>vRouter</code>的<code>eth0</code>设置为<code>10.74.129.99</code>，<code>eth1</code>设置为<code>10.0.0.1</code>，作为<code>10.0.0.0/24</code>网段的网关，将<code>t2</code>接口IP设置为<code>10.0.0.100</code>。</p>
+<p>查看t2虚拟机的IP设置:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ip a</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000</span><br><span class="line">    link/ether 00:0c:29:13:58:8a brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.0.0.100/24 scope global eth0</span><br><span class="line">    inet6 fe80::20c:29ff:fe13:588a/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p>查看路由，确认默认网关为<code>10.0.0.1</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ip route</span><br><span class="line">10.0.0.0/24 dev eth0  proto kernel  scope link  src 10.0.0.100</span><br><span class="line">default via 10.0.0.1 dev eth0</span><br></pre></td></tr></table></figure>
+<p>查看<code>vRouter</code>的IP配置:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ip a</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000</span><br><span class="line">    link/ether 00:0c:29:14:38:c5 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.74.129.99/24 scope global eth0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">3: eth1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000</span><br><span class="line">    link/ether 00:0c:29:14:38:cf brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.0.0.1/24 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p>查看路由, 确保默认路由为连接业务网的<code>eth0</code>设备:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ip route</span><br><span class="line">default via 10.74.129.1 dev eth0</span><br><span class="line">10.0.0.0/24 dev eth1  proto kernel  scope link  src 10.0.0.1</span><br><span class="line">10.74.129.0/24 dev eth0  proto kernel  scope link  src 10.74.129.99</span><br></pre></td></tr></table></figure>
+<p>现在我们从<code>t2</code>上访问<code>t1</code>, 访问失败:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ping 10.74.129.108</span><br><span class="line">PING 10.74.129.108 (10.74.129.108) 56(84) bytes of data.</span><br><span class="line">^C</span><br><span class="line">--- 10.74.129.108 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 received, 100% packet loss, time 1481ms</span><br></pre></td></tr></table></figure>
+<p>下面我们在<code>vRouter</code>上添加SNAT功能，对从网段<code>10.0.0.0/24</code>进入的流量进行SNAT操作:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -A POSTROUTING -s 10.0.0.0/24 -o eth0 -j MASQUERADE</span><br></pre></td></tr></table></figure>
+<p>此时，我们再次从<code>t2</code>访问<code>t1</code>，访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# ping 10.74.129.108</span><br><span class="line">PING 10.74.129.108 (10.74.129.108) 56(84) bytes of data.</span><br><span class="line">64 bytes from 10.74.129.108: icmp_seq=1 ttl=63 time=0.199 ms</span><br><span class="line">64 bytes from 10.74.129.108: icmp_seq=2 ttl=63 time=0.209 ms</span><br><span class="line">64 bytes from 10.74.129.108: icmp_seq=3 ttl=63 time=0.256 ms</span><br><span class="line">^C</span><br><span class="line">--- 10.74.129.108 ping statistics ---</span><br><span class="line">3 packets transmitted, 3 received, 0% packet loss, time 2137ms</span><br><span class="line">rtt min/avg/max/mdev = 0.199/0.221/0.256/0.027 ms</span><br></pre></td></tr></table></figure>
+<p>此时业务网络不能直接访问我们的私有网络。我们需要<code>t2</code>对外提供HTTP服务，需要在安全虚拟设备上配置DNAT来实现。我们分配<code>10.74.129.100</code>作为外部访问<code>t2</code>的业务IP。</p>
+<p>首先将<code>10.74.129.100</code>配置在<code>vRouter</code>的<code>eth0</code>上:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip addr add 10.74.129.100/24 dev eth0</span><br></pre></td></tr></table></figure>
+<p>配置DNAT:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -A PREROUTING -d 10.74.129.100 -j DNAT --to-destination 10.0.0.100</span><br></pre></td></tr></table></figure>
+<p>我们在<code>t2</code>上开启HTTP服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">yum install -y httpd</span><br><span class="line"><span class="built_in">echo</span> “hello from 10.0.0.100” &gt; /var/www/html/t.html</span><br><span class="line">service httpd start</span><br></pre></td></tr></table></figure>
+<p>从<code>t1</code>访问<code>t2</code>的HTTP服务, 访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# curl http://10.74.129.100/t.html</span><br><span class="line">hello from 10.0.0.100!</span><br></pre></td></tr></table></figure>
+<p>除了上述两种方式，还可以配置ARP代理，具体参考之前的文章&lt;&lt;ARP代理实例研究&gt;&gt;。</p>
+<p>上文提到，vSS需要每台ESXi主机单独配置。若虚拟化规模较大，手工配置比较繁琐。我们可以基于vSphere的SDK实现自动化。若使用Python开发，可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/vmware/pyvmomi-community-samples">https://github.com/vmware/pyvmomi-community-samples</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vmware/pyvmomi">https://github.com/vmware/pyvmomi</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/04/17/chracter-device/" rel="prev" title="Linux字符设备驱动开发">
+      <i class="fa fa-chevron-left"></i> Linux字符设备驱动开发
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/05/21/vxlan/" rel="next" title="VXLAN原理介绍与实例分析">
+      VXLAN原理介绍与实例分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

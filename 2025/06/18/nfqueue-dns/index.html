@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;NFQUEUE机制导致DNS请求5秒超时分析&gt;&gt;分析过在3.10.0-1015.el7版本之前的内核上，conntrack模块在插入条目时存在竞争条件，使用NFQUEUE机制导致AAAA请求包被丢弃，从而导致DNS请求出现5秒超时的现象。当时给的解决方案是可以在&#x2F;etc&#x2F;resolv.conf中添加options single-request-reopen来规">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NFQUEUE机制导致DNS请求超时">
+<meta property="og:url" content="http://just4coding.com/2025/06/18/nfqueue-dns/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;NFQUEUE机制导致DNS请求5秒超时分析&gt;&gt;分析过在3.10.0-1015.el7版本之前的内核上，conntrack模块在插入条目时存在竞争条件，使用NFQUEUE机制导致AAAA请求包被丢弃，从而导致DNS请求出现5秒超时的现象。当时给的解决方案是可以在&#x2F;etc&#x2F;resolv.conf中添加options single-request-reopen来规">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-06-18T09:18:56.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.512Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Nfqueue">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2025/06/18/nfqueue-dns/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NFQUEUE机制导致DNS请求超时 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2025/06/18/nfqueue-dns/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NFQUEUE机制导致DNS请求超时
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2025-06-18 17:18:56" itemprop="dateCreated datePublished" datetime="2025-06-18T17:18:56+08:00">2025-06-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章<a href="/2021/12/29/nfqueue-dns/">&lt;&lt;NFQUEUE机制导致DNS请求5秒超时分析&gt;&gt;</a>分析过在<code>3.10.0-1015.el7</code>版本之前的内核上，<code>conntrack</code>模块在插入条目时存在竞争条件，使用<code>NFQUEUE</code>机制导致<code>AAAA</code>请求包被丢弃，从而导致<code>DNS</code>请求出现<code>5</code>秒超时的现象。当时给的解决方案是可以在<code>/etc/resolv.conf</code>中添加<code>options single-request-reopen</code>来规避。</p>
+<p>最近又遇到这个问题，但该规避方案并没有生效，因而做了进一步分析，发现<code>glibc</code>的<code>DNS</code>行为在不同响应上有所不同。</p>
+<p>在没有<code>NFQUEUE</code>机制也没有开启<code>single-request-reopen</code>的环境中，访问正常解析的域名, 如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s www.baidu.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m1.009s</span><br><span class="line">user	0m0.003s</span><br><span class="line">sys	0m0.003s</span><br></pre></td></tr></table></figure>
+
+<p>抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">16:29:40.344792 IP 10.10.0.7.34972 &gt; 10.10.0.2.53: 20510+ A? www.baidu.com. (31)</span><br><span class="line">16:29:40.344832 IP 10.10.0.7.34972 &gt; 10.10.0.2.53: 42033+ AAAA? www.baidu.com. (31)</span><br><span class="line">16:29:40.345097 IP 10.10.0.2.53 &gt; 10.10.0.7.34972: 20510 3/0/0 CNAME www.a.shifen.com., A 110.242.70.57, A 110.242.69.21 (90)</span><br><span class="line">16:29:40.345308 IP 10.10.0.2.53 &gt; 10.10.0.7.34972: 42033 3/0/0 CNAME www.a.shifen.com., AAAA 2408:871a:2100:1b23:0:ff:b07a:7ebc, AAAA 2408:871a:2100:186c:0:ff:b07e:3fbc (114)</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>resolver</code>同时发出<code>A</code>和<code>AAAA</code>两个请求。</p>
+<span id="more"></span>
+
+<p>开启<code>NFQUEUE</code>机制后，再次尝试，<code>DNS</code>延时<code>5</code>秒:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s www.baidu.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m5.556s</span><br><span class="line">user	0m0.003s</span><br><span class="line">sys	0m0.004s</span><br></pre></td></tr></table></figure>
+
+<p>抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">16:31:05.061444 IP 10.10.0.7.41882 &gt; 10.10.0.2.53: 35871+ A? www.baidu.com. (31)</span><br><span class="line">16:31:05.061710 IP 10.10.0.2.53 &gt; 10.10.0.7.41882: 35871 3/0/0 CNAME www.a.shifen.com., A 110.242.70.57, A 110.242.69.21 (90)</span><br><span class="line">16:31:10.065884 IP 10.10.0.7.41882 &gt; 10.10.0.2.53: 35871+ A? www.baidu.com. (31)</span><br><span class="line">16:31:10.066183 IP 10.10.0.2.53 &gt; 10.10.0.7.41882: 35871 3/0/0 CNAME www.a.shifen.com., A 110.242.70.57, A 110.242.69.21 (90)</span><br><span class="line">16:31:10.066253 IP 10.10.0.7.41882 &gt; 10.10.0.2.53: 61492+ AAAA? www.baidu.com. (31)</span><br><span class="line">16:31:10.066398 IP 10.10.0.2.53 &gt; 10.10.0.7.41882: 61492 3/0/0 CNAME www.a.shifen.com., AAAA 2408:871a:2100:1b23:0:ff:b07a:7ebc, AAAA 2408:871a:2100:186c:0:ff:b07e:3fbc (114)</span><br></pre></td></tr></table></figure>
+
+<p>抓包中未见<code>AAAA</code>请求，它是由于<code>conntrack</code>条目的冲突被内核丢弃，因而只收到了<code>A</code>请求的响应包，在<code>5</code>秒超时后，<code>resolver</code>开启单独发送<code>A</code>请求，获得响应包后，再次发送<code>AAAA</code>请求。</p>
+<p>这种场景下，在<code>/etc/resolv.conf</code>中添加上<code>options single-request-reopen</code>，再次尝试, 问题得到解决:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s www.baidu.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m1.061s</span><br><span class="line">user	0m0.001s</span><br><span class="line">sys	0m0.005s</span><br></pre></td></tr></table></figure>
+
+<p>从抓包结果看，<code>resolver</code>不再同时发送<code>A</code>和<code>AAAA</code>请求而是单独发送，不会再触发<code>conntrack</code>条目冲突的BUG，因而可以正常解析。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">16:36:41.257280 IP 10.10.0.7.34654 &gt; 10.10.0.2.53: 38521+ A? www.baidu.com. (31)</span><br><span class="line">16:36:41.257561 IP 10.10.0.2.53 &gt; 10.10.0.7.34654: 38521 3/0/0 CNAME www.a.shifen.com., A 110.242.69.21, A 110.242.70.57 (90)</span><br><span class="line">16:36:41.257694 IP 10.10.0.7.35329 &gt; 10.10.0.2.53: 54925+ AAAA? www.baidu.com. (31)</span><br><span class="line">16:36:41.257870 IP 10.10.0.2.53 &gt; 10.10.0.7.35329: 54925 3/0/0 CNAME www.a.shifen.com., AAAA 2408:871a:2100:1b23:0:ff:b07a:7ebc, AAAA 2408:871a:2100:186c:0:ff:b07e:3fbc (114)</span><br></pre></td></tr></table></figure>
+
+<p>但是当<code>DNS</code>服务器响应<code>ServFail</code>时，<code>resolver</code>的行为和上述并不一致。我们使用<code>unbound</code>构造一个响应<code>ServFail</code>的环境。</p>
+<p>在没有<code>NFQUEUE</code>机制也没有开启<code>single-request-reopen</code>的环境中，访问返回<code>ServFail</code>的域名, 很快就返回失败:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s xxx.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m0.009s</span><br><span class="line">user	0m0.004s</span><br><span class="line">sys	0m0.003s</span><br></pre></td></tr></table></figure>
+
+<p>抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">16:47:26.232456 IP 10.10.0.7.39800 &gt; 10.10.0.2.53: 50390+ A? xxx.com. (25)</span><br><span class="line">16:47:26.232473 IP 10.10.0.7.39800 &gt; 10.10.0.2.53: 18664+ AAAA? xxx.com. (25)</span><br><span class="line">16:47:26.232719 IP 10.10.0.2.53 &gt; 10.10.0.7.39800: 50390 ServFail 0/0/0 (25)</span><br><span class="line">16:47:26.233144 IP 10.10.0.2.53 &gt; 10.10.0.7.39800: 18664 ServFail 0/0/0 (25)</span><br><span class="line">16:47:26.233193 IP 10.10.0.7.39800 &gt; 10.10.0.2.53: 50390+ A? xxx.com. (25)</span><br><span class="line">16:47:26.233202 IP 10.10.0.7.39800 &gt; 10.10.0.2.53: 18664+ AAAA? xxx.com. (25)</span><br><span class="line">16:47:26.233984 IP 10.10.0.2.53 &gt; 10.10.0.7.39800: 50390 ServFail 0/0/0 (25)</span><br><span class="line">16:47:26.234001 IP 10.10.0.2.53 &gt; 10.10.0.7.39800: 18664 ServFail 0/0/0 (25)</span><br></pre></td></tr></table></figure>
+
+<p><code>resolver</code>同时发送<code>A</code>和<code>AAAA</code>请求，然后收到两个<code>ServFail</code>的响应，然后立即重试，再次同时发送<code>A</code>和<code>AAAA</code>请求，收到两个<code>ServFail</code>响应后结束。</p>
+<p>此时，开启<code>NFQUEUE</code>机制，再次尝试，出现<code>5</code>秒超时的现象:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s xxx.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m6.520s</span><br><span class="line">user	0m0.002s</span><br><span class="line">sys	0m0.004s</span><br></pre></td></tr></table></figure>
+
+<p>抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">16:50:31.065725 IP 10.10.0.7.43428 &gt; 10.10.0.2.53: 7203+ A? xxx.com. (25)</span><br><span class="line">16:50:31.066012 IP 10.10.0.2.53 &gt; 10.10.0.7.43428: 7203 ServFail 0/0/0 (25)</span><br><span class="line">16:50:36.070160 IP 10.10.0.7.43428 &gt; 10.10.0.2.53: 7203+ A? xxx.com. (25)</span><br><span class="line">16:50:36.070186 IP 10.10.0.7.43428 &gt; 10.10.0.2.53: 4659+ AAAA? xxx.com. (25)</span><br><span class="line">16:50:36.073295 IP 10.10.0.2.53 &gt; 10.10.0.7.43428: 4659 ServFail 0/0/0 (25)</span><br><span class="line">16:50:37.165437 IP 10.10.0.2.53 &gt; 10.10.0.7.43428: 7203 ServFail 0/0/0 (25)</span><br></pre></td></tr></table></figure>
+
+<p>同样，抓包未见<code>AAAA</code>请求，因为同时发出的<code>AAAA</code>请求由于<code>conntrack</code>条目冲突被内核丢弃。<code>resolver</code>只收到<code>A</code>请求的<code>ServFail</code>响应，没有收到<code>AAAA</code>请求的响应。在等待<code>5</code>秒后，再次同时发送<code>A</code>和<code>AAAA</code>请求，此时因为<code>conntrack</code>条目已经<code>confirmed</code>，因而不会再出现插入冲突，因而都能发送出去，收到两个<code>ServFail</code>后<code>DNS</code>请求结束。</p>
+<p>此时，在<code>/etc/resolv.conf</code>中添加上<code>options single-request-reopen</code>，再次尝试, 问题并没有得到解决:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@dev07 ~]# time curl -s xxx.com -o /dev/null</span><br><span class="line"></span><br><span class="line">real	0m10.524s</span><br><span class="line">user	0m0.002s</span><br><span class="line">sys	0m0.004s</span><br></pre></td></tr></table></figure>
+
+<p>抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">16:56:44.096299 IP 10.10.0.7.35608 &gt; 10.10.0.2.53: 7186+ A? xxx.com. (25)</span><br><span class="line">16:56:44.096581 IP 10.10.0.2.53 &gt; 10.10.0.7.35608: 7186 ServFail 0/0/0 (25)</span><br><span class="line">16:56:49.100731 IP 10.10.0.7.35608 &gt; 10.10.0.2.53: 7186+ A? xxx.com. (25)</span><br><span class="line">16:56:49.100951 IP 10.10.0.2.53 &gt; 10.10.0.7.35608: 7186 ServFail 0/0/0 (25)</span><br></pre></td></tr></table></figure>
+
+<p><code>resolver</code>单独发送<code>A</code>请求，得到<code>ServFail</code>请求，这种情况下，并没有像同时发送<code>A</code>和<code>AAAA</code>得到两个<code>ServFail</code>响应的场景下立即重试，而是等待<code>5</code>秒后，再次重新发送<code>A</code>请求。</p>
+<p>因而这种场景下，添加<code>single-request-reopen</code>并没能规避<code>NFQUEUE</code>机制引发的<code>DNS</code>超时现象。</p>
+<p>在这种场景下的，简单的规避方案，是可以在<code>/etc/hosts</code>中添加上对应的域名信息，避免发送DNS请求。</p>
+<p>如果要在不升级内核的场景下解决，可以尝试在通过<code>NFQUEUE</code>上送到用户态前，提前<code>confirm</code>该<code>conntrack</code>条目，这样可以规避掉<code>NFQUEUE</code>引发的<code>conntrack</code>冲突。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Nfqueue/" rel="tag"># Nfqueue</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2025/06/18/limit-conn/" rel="prev" title="关于nginx中的limit_conn指令">
+      <i class="fa fa-chevron-left"></i> 关于nginx中的limit_conn指令
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2025/07/03/crash-lua/" rel="next" title="crash脚本工具crash-lua">
+      crash脚本工具crash-lua <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

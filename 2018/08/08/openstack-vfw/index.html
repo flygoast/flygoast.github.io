@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;OpenStack私有网络安全防护&gt;&gt;介绍了在私有网络中将虚拟防火墙(以下称为VFW)串联接入的方法。本文来介绍旁路部署VFW, 通过策略路由实现防火墙接入的方法。 逻辑网络拓扑如下:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="OpenStack私有网络旁路部署虚拟防火墙">
+<meta property="og:url" content="http://just4coding.com/2018/08/08/openstack-vfw/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;OpenStack私有网络安全防护&gt;&gt;介绍了在私有网络中将虚拟防火墙(以下称为VFW)串联接入的方法。本文来介绍旁路部署VFW, 通过策略路由实现防火墙接入的方法。 逻辑网络拓扑如下:">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2018-08-08/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-08-08/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2018-08-08/3.png">
+<meta property="article:published_time" content="2018-08-08T02:10:18.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.488Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2018-08-08/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2018/08/08/openstack-vfw/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>OpenStack私有网络旁路部署虚拟防火墙 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2018/08/08/openstack-vfw/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          OpenStack私有网络旁路部署虚拟防火墙
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-08-08 10:10:18" itemprop="dateCreated datePublished" datetime="2018-08-08T10:10:18+08:00">2018-08-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/blog/2017/08/19/traffic-broker/">OpenStack私有网络安全防护</a>&gt;&gt;介绍了在私有网络中将虚拟防火墙(以下称为<code>VFW</code>)串联接入的方法。本文来介绍旁路部署<code>VFW</code>, 通过策略路由实现防火墙接入的方法。</p>
+<p>逻辑网络拓扑如下:</p>
+<img src="/images/2018-08-08/1.png" class="">
+
+<span id="more"></span>
+
+<p>我们在OpenStack环境中创建一个CentOS7的实例来模拟<code>VFW</code>, 部署完网络拓扑如下:</p>
+<img src="/images/2018-08-08/2.png" class="">
+
+<p>我们需要将CentOS7的路由转发功能开启:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.ip_forward=1</span><br></pre></td></tr></table></figure>
+
+<p>此外，OpenStack网络上有<code>Anti Mac-Spoofing</code>的机制，默认情况下，只有数据包的<code>MAC</code>、<code>IP</code>与虚拟机网络接口的<code>MAC</code>、<code>IP</code>相匹配时才允许通过。因而我们需要配置<code>VFW</code>网络接口的<code>可用地址对</code>。将其IP设置为<code>0.0.0.0/0</code>, <code>MAC</code>为接口本身<code>MAC</code>，这样将允许所有数据包通过，如下图所示:</p>
+<img src="/images/2018-08-08/3.png" class="">
+
+<p>为了将<code>VFW</code>串入网络路径中，我们需要在拓扑图中私有网络<code>demo</code>的<code>vRouter</code>上配置策略路由。OpenStack不支持配置策略路由, 我们只能手动在<code>vRouter</code>的<code>net namespace</code>中配置。</p>
+<p>我们登录进<code>vRouter</code>的<code>namespace</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip netns <span class="built_in">exec</span> qrouter-b2f289b6-5e7b-4f56-bf5d-ac01629eb333 bash</span><br></pre></td></tr></table></figure>
+
+<p>查看网络接口:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">[root@aio ~]# ip a</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">11: qr-a74cdf71-65: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/ether fa:16:3e:26:80:22 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.10.10.1/24 brd 10.10.10.255 scope global qr-a74cdf71-65</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fe26:8022/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">13: qg-c0eea9fd-62: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/ether fa:16:3e:d1:1f:45 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 172.24.4.5/24 brd 172.24.4.255 scope global qg-c0eea9fd-62</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fed1:1f45/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">21: qr-16448d15-00: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/ether fa:16:3e:84:42:72 brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 192.168.100.1/24 brd 192.168.100.255 scope global qr-16448d15-00</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::f816:3eff:fe84:4272/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>添加一个专用路由表，将默认路由指向<code>VFW</code>所连接的<code>vRouter</code>接口:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@aio ~]# ip route add default via 192.168.100.6 dev qr-16448d15-00 table 100</span><br><span class="line">[root@aio ~]# ip route show table 100</span><br><span class="line">default via 192.168.100.6 dev qr-16448d15-00</span><br></pre></td></tr></table></figure>
+
+<p>添加入方向策略路由:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip rule add iif qg-c0eea9fd-62 to 10.10.10.0/24 lookup 100</span><br></pre></td></tr></table></figure>
+
+<p>添加出方向策略路由:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip rule add iif qr-a74cdf71-65 lookup 100</span><br></pre></td></tr></table></figure>
+
+<p>此时路由规则如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@aio ~]# ip rule</span><br><span class="line">0:    from all lookup local</span><br><span class="line">32764:    from all iif qr-a74cdf71-65 lookup 100</span><br><span class="line">32765:    from all to 10.10.10.0/24 iif qg-c0eea9fd-62 lookup 100</span><br><span class="line">32766:    from all lookup main</span><br><span class="line">32767:    from all lookup default</span><br></pre></td></tr></table></figure>
+
+<p>我们给虚拟机实例绑定一个浮动IP:<code>172.24.4.4</code>, 然后从外部访问浮动IP，访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@aio ~]# ping 172.24.4.4 -c 2</span><br><span class="line">PING 172.24.4.4 (172.24.4.4) 56(84) bytes of data.</span><br><span class="line">64 bytes from 172.24.4.4: icmp_seq=1 ttl=61 time=9.94 ms</span><br><span class="line">64 bytes from 172.24.4.4: icmp_seq=2 ttl=61 time=3.72 ms</span><br><span class="line"></span><br><span class="line">--- 172.24.4.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1000ms</span><br><span class="line">rtt min/avg/max/mdev = 3.725/6.837/9.949/3.112 ms</span><br></pre></td></tr></table></figure>
+
+<p>在<code>VFW</code>上的抓包结果也符合预期:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[root@vfw ~]# tcpdump -ieth0 -nn icmp -e</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line"></span><br><span class="line">12:52:22.138927 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 172.24.4.1 &gt; 10.10.10.9: ICMP echo request, id 18352, seq 1, length 64</span><br><span class="line">12:52:22.139199 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 172.24.4.1 &gt; 10.10.10.9: ICMP echo request, id 18352, seq 1, length 64</span><br><span class="line">12:52:22.142383 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 172.24.4.1: ICMP echo reply, id 18352, seq 1, length 64</span><br><span class="line">12:52:22.143685 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 172.24.4.1: ICMP echo reply, id 18352, seq 1, length 64</span><br><span class="line">12:52:23.138975 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 172.24.4.1 &gt; 10.10.10.9: ICMP echo request, id 18352, seq 2, length 64</span><br><span class="line">12:52:23.139423 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 172.24.4.1 &gt; 10.10.10.9: ICMP echo request, id 18352, seq 2, length 64</span><br><span class="line">12:52:23.141067 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 172.24.4.1: ICMP echo reply, id 18352, seq 2, length 64</span><br><span class="line">12:52:23.141665 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 172.24.4.1: ICMP echo reply, id 18352, seq 2, length 64</span><br><span class="line">^C</span><br><span class="line">8 packets captured</span><br><span class="line">8 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+
+<p>我们再从业务虚拟机向外访问, 访问却是失败的:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ping -c 2 114.114.114.114</span><br><span class="line">PING 114.114.114.114 (114.114.114.114): 56 data bytes</span><br><span class="line"></span><br><span class="line">--- 114.114.114.114 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 packets received, 100% packet loss</span><br></pre></td></tr></table></figure>
+
+<p>我的实验环境为All in One环境，在<code>br-ex</code>上抓包发现, 数据包的源IP没有被SNAT策略替换为正确的IP:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@aio ~]# tcpdump -i br-ex -nn -e icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on br-ex, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line"></span><br><span class="line">08:57:43.965997 fa:16:3e:d1:1f:45 &gt; f2:3e:7c:35:ae:4e, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 33537, seq 0, length 64</span><br><span class="line">08:57:44.965966 fa:16:3e:d1:1f:45 &gt; f2:3e:7c:35:ae:4e, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 33537, seq 1, length 64</span><br><span class="line">^C</span><br><span class="line">2 packets captured</span><br><span class="line">2 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+
+<p>这是由于OpenStack的虚拟网络实现上使用<code>IPTABLES</code>规则并依赖<code>CONNTRACK</code>机制实现<code>NAT</code>。SNAT实现上只在<code>CONNTRACK</code>状态为<code>NEW</code>时才会生成NAT所需的状态信息，后续被跳踪的该连接的数据包直接使用生成的NAT状态信息。我们从业务虚拟机向外访问，数据包到达<code>vRouter</code>上的接口时，<code>CONNTRACK</code>模块生成<code>CONNTRACK</code>表项，而此时出口接口为<code>VFW</code>路由接口，并不需要做<code>SNAT</code>，因而不会生成NAT状态信息。而从<code>VFW</code>路由接口再次到达vrouter时，<code>CONNTRACK</code>表项已经生成，不再处理NAT信息，而是直接将数据包发送出去。出入路由外网接口的数据包依赖<code>CONNTRACK</code>机制完成<code>NAT</code>，因而我们不能完全禁用<code>CONNTRACK</code>, 我们只能在业务子网接口和<code>VFW</code>子网接口之间的数据包取消<code>CONNTRACK</code>。</p>
+<p>在<code>vRouter</code>中添加如下两条<code>iptables</code>规则来禁用<code>conntrack</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">iptables -t raw -A PREROUTING -i qr-a74cdf71-65 -j NOTRACK</span><br><span class="line">iptables -t raw -A PREROUTING -i qr-16448d15-00 -d 10.10.10.0/24 -j NOTRACK</span><br></pre></td></tr></table></figure>
+
+<p>此时，我们再来测试, 访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ ping -c 2 114.114.114.114</span><br><span class="line">PING 114.114.114.114 (114.114.114.114): 56 data bytes</span><br><span class="line">64 bytes from 114.114.114.114: seq=0 ttl=53 time=30.849 ms</span><br><span class="line">64 bytes from 114.114.114.114: seq=1 ttl=73 time=29.529 ms</span><br><span class="line"></span><br><span class="line">--- 114.114.114.114 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 packets received, 0% packet loss</span><br><span class="line">round-trip min/avg/max = 29.529/30.189/30.849 ms</span><br></pre></td></tr></table></figure>
+
+<p>从<code>VFW</code>上的抓包结果可以看出符合预期:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[root@vfw ~]# tcpdump -ieth0 -nn  icmp -e</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line"></span><br><span class="line">09:00:07.099242 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 23809, seq 0, length 64</span><br><span class="line">09:00:07.099515 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 23809, seq 0, length 64</span><br><span class="line">09:00:07.127682 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 114.114.114.114 &gt; 10.10.10.9: ICMP echo reply, id 23809, seq 0, length 64</span><br><span class="line">09:00:07.128011 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 114.114.114.114 &gt; 10.10.10.9: ICMP echo reply, id 23809, seq 0, length 64</span><br><span class="line">09:00:08.100084 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 23809, seq 1, length 64</span><br><span class="line">09:00:08.100456 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 10.10.10.9 &gt; 114.114.114.114: ICMP echo request, id 23809, seq 1, length 64</span><br><span class="line">09:00:08.127817 fa:16:3e:84:42:72 &gt; fa:16:3e:73:c1:de, ethertype IPv4 (0x0800), length 98: 114.114.114.114 &gt; 10.10.10.9: ICMP echo reply, id 23809, seq 1, length 64</span><br><span class="line">09:00:08.128046 fa:16:3e:73:c1:de &gt; fa:16:3e:84:42:72, ethertype IPv4 (0x0800), length 98: 114.114.114.114 &gt; 10.10.10.9: ICMP echo reply, id 23809, seq 1, length 64</span><br><span class="line">^C</span><br><span class="line">8 packets captured</span><br><span class="line">8 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+
+<p>本文中的<code>VFW</code>接入方式为3层转发模式，而有些厂商的<code>VFW</code>只支持二层透明接入，这种情况下如何在OpenStack环境中应用呢？我后续再来写文章来说明。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/08/01/dbus-api/" rel="prev" title="D-BUS API查找与调用">
+      <i class="fa fa-chevron-left"></i> D-BUS API查找与调用
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/08/08/openstack-l2-vfw/" rel="next" title="OpenStack私有网络二层接入虚拟防火墙">
+      OpenStack私有网络二层接入虚拟防火墙 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

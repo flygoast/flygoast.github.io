@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在Kubernetes节点上安装我们的流量检测模块之后所有的Pod会断网。经分析是由于流量检测模块的NFQUEUE机制与kube-proxy使用的iptables的mark机制冲突的原因。 在Linux内核中，网络数据包是由sk_buff结构来表示的，一般数据包简写作SKB。mark是sk_buff结构的一个字段, 如(include&#x2F;linux&#x2F;skbuff.h): 12345678struct">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes环境中NFQUEUE与MARK机制冲突">
+<meta property="og:url" content="http://just4coding.com/2021/09/05/nfqueue-mark/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在Kubernetes节点上安装我们的流量检测模块之后所有的Pod会断网。经分析是由于流量检测模块的NFQUEUE机制与kube-proxy使用的iptables的mark机制冲突的原因。 在Linux内核中，网络数据包是由sk_buff结构来表示的，一般数据包简写作SKB。mark是sk_buff结构的一个字段, 如(include&#x2F;linux&#x2F;skbuff.h): 12345678struct">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-09-05T14:03:23.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.494Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta property="article:tag" content="Kubernetes">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2021/09/05/nfqueue-mark/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes环境中NFQUEUE与MARK机制冲突 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/09/05/nfqueue-mark/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes环境中NFQUEUE与MARK机制冲突
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-09-05 22:03:23" itemprop="dateCreated datePublished" datetime="2021-09-05T22:03:23+08:00">2021-09-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在Kubernetes节点上安装我们的流量检测模块之后所有的<code>Pod</code>会断网。经分析是由于流量检测模块的<code>NFQUEUE</code>机制与<code>kube-proxy</code>使用的<code>iptables</code>的<code>mark</code>机制冲突的原因。</p>
+<p>在Linux内核中，网络数据包是由<code>sk_buff</code>结构来表示的，一般数据包简写作<code>SKB</code>。<code>mark</code>是<code>sk_buff</code>结构的一个字段, 如(<code>include/linux/skbuff.h</code>):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sk_buff</span> &#123;</span></span><br><span class="line">    ...</span><br><span class="line">	<span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">		__u32		mark;</span><br><span class="line">		__u32		reserved_tailroom;</span><br><span class="line">	&#125;;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>mark</code>并不是网络协议结构的部分，不会存在于任一层协议头中，而是Linux网络子系统用于在主机内部传递状态信息的标记机制。各种网络应用可以根据自身需要使用该字段来实现自身的状态传递。</p>
+<p>这个<code>mark</code>机制主要用在<code>netfilter</code>框架中，所以也叫<code>nfmark</code>。除了它之外，内核中还有<code>conntrack</code>模块也有自己的<code>mark</code>机制，一般叫做<code>ctmark</code>。</p>
+<p>之前的文章<a href="/2016/12/23/iptables-mark-and-polices-based-route/">&lt;&lt;基于IPTABLES MARK机制实现策略路由&gt;&gt;</a>也介绍过<code>iptables</code>的<code>MARK</code>模块，可以用于修改和匹配数据包的<code>mark</code>值。</p>
+<p><code>NFQUEUE</code>机制可以在内核中将数据通过<code>NFQUEUE</code>通道将数据包送往用户态，在用户态进行安全检测，再将裁决(<code>verdict</code>)结果送回内核。之前的文章<a href="/2017/03/27/nfqueue/">&lt;&lt;NFQUEUE和libnetfilter_queue实例分析&gt;&gt;</a>介绍了<code>libnetfilter_queue</code>库的简单用法。我们的流量检测程序会使用<code>libnetfilter_queue</code>库中的<code>nfq_set_verdict2</code>在返回<code>verdict</code>的同时，设置数据包的<code>mark</code>值,以传递更多的信息给内核模块，函数原型如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">nfq_set_verdict2</span><span class="params">(<span class="keyword">struct</span> nfq_q_handle *  qh,</span></span><br><span class="line"><span class="params">                     <span class="type">uint32_t</span>               id,</span></span><br><span class="line"><span class="params">                     <span class="type">uint32_t</span>               verdict,</span></span><br><span class="line"><span class="params">                     <span class="type">uint32_t</span>               mark,</span></span><br><span class="line"><span class="params">                     <span class="type">uint32_t</span>               data_len,</span></span><br><span class="line"><span class="params">                     <span class="type">const</span> <span class="type">unsigned</span> <span class="type">char</span>*   buf</span></span><br><span class="line"><span class="params">)</span></span><br></pre></td></tr></table></figure>
+<p>这就会导致数据包<code>sk_buff</code>结构的<code>mark</code>值被设置。而<code>kube-proxy</code>实现也依赖<code>iptables</code>的<code>mark</code>机制, 会在主机上添加如下<code>iptables</code>规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-MARK-DROP -j MARK --set-xmark 0x8000/0x8000</span><br><span class="line">...</span><br><span class="line">-A KUBE-FIREWALL -m comment --comment &quot;kubernetes firewall for dropping marked packets&quot; -m mark --mark 0x8000/0x8000 -j DROP</span><br></pre></td></tr></table></figure>
+<p>对于不合法的报文，<code>kube-proxy</code>会给相应报文标记<code>0x8000/0x8000</code>, 之后通过<code>KUBE-FIREWALL</code>规则链将数据包丢弃。</p>
+<p>如果我们的流量检测程序所设置的<code>mark</code>值设置为<code>kube-proxy</code>所依赖的<code>0x8000</code>位，就会导致数据包被丢弃。</p>
+<span id="more"></span>
+
+<p>下面通过简化后的程序来验证。</p>
+<p>首先，编写一个内核模块将数据包通过<code>NFQUEUE</code>队列送往用户态:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;linux/module.h&gt;</span><br><span class="line">#include &lt;linux/kernel.h&gt;</span><br><span class="line">#include &lt;linux/init.h&gt;</span><br><span class="line">#include &lt;linux/skbuff.h&gt;</span><br><span class="line">#include &lt;linux/ip.h&gt;</span><br><span class="line">#include &lt;linux/netfilter.h&gt;</span><br><span class="line">#include &lt;linux/netfilter_ipv4.h&gt;</span><br><span class="line">#include &lt;net/tcp.h&gt;</span><br><span class="line">#include &lt;linux/if_ether.h&gt;</span><br><span class="line">#include &lt;linux/if_packet.h&gt;</span><br><span class="line">#include &lt;linux/inet.h&gt;</span><br><span class="line">#include &lt;net/checksum.h&gt;</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(&quot;GPL&quot;);</span><br><span class="line">MODULE_DESCRIPTION(&quot;skpid&quot;);</span><br><span class="line">MODULE_ALIAS(&quot;module skpid netfiler&quot;);</span><br><span class="line"></span><br><span class="line">static int clear_mark = 0;</span><br><span class="line">MODULE_PARM_DESC(clear_mark, &quot;clear sk_buff mark on/off switch&quot;);</span><br><span class="line">module_param(clear_mark, int, 0600);</span><br><span class="line"></span><br><span class="line">static unsigned int nf_hook_in1(unsigned int hooknum,</span><br><span class="line">                                struct sk_buff *sk,</span><br><span class="line">                                const struct net_device *in,</span><br><span class="line">                                const struct net_device *out,</span><br><span class="line">                                int (*okfn)(struct sk_buff *))</span><br><span class="line">&#123;</span><br><span class="line">    struct tcphdr *tcph = NULL;</span><br><span class="line">    struct iphdr *iph = ip_hdr(sk);</span><br><span class="line">    unsigned long flags;</span><br><span class="line"></span><br><span class="line">    u8 proto = iph-&gt;protocol;</span><br><span class="line"></span><br><span class="line">    if (proto != IPPROTO_TCP) &#123;</span><br><span class="line">        return NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    tcph = (struct tcphdr *) skb_transport_header(sk);</span><br><span class="line"></span><br><span class="line">    if (htons(tcph-&gt;dest) == 80) &#123;</span><br><span class="line">        printk(KERN_INFO &quot;[1]: %d-&gt;%d mark: 0x%08x queued in [80]\n&quot;, htons(tcph-&gt;source), htons(tcph-&gt;dest), sk-&gt;mark);</span><br><span class="line">        return NF_QUEUE_NR(80);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return NF_ACCEPT;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">static unsigned int nf_hook_in2(unsigned int hooknum,</span><br><span class="line">                                struct sk_buff *sk,</span><br><span class="line">                                const struct net_device *in,</span><br><span class="line">                                const struct net_device *out,</span><br><span class="line">                                int (*okfn)(struct sk_buff *))</span><br><span class="line">&#123;</span><br><span class="line">    struct tcphdr *tcph = NULL;</span><br><span class="line">    struct iphdr *iph = ip_hdr(sk);</span><br><span class="line">    unsigned long flags;</span><br><span class="line"></span><br><span class="line">    u8 proto = iph-&gt;protocol;</span><br><span class="line"></span><br><span class="line">    if (proto != IPPROTO_TCP) &#123;</span><br><span class="line">        return NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    tcph = (struct tcphdr *) skb_transport_header(sk);</span><br><span class="line"></span><br><span class="line">    if (htons(tcph-&gt;dest) == 80) &#123;</span><br><span class="line">        printk(KERN_INFO &quot;[2]: %d-&gt;%d mark: 0x%08x\n&quot;, htons(tcph-&gt;source), htons(tcph-&gt;dest), sk-&gt;mark);</span><br><span class="line"></span><br><span class="line">        /*************************************************</span><br><span class="line">         * clear the mark value</span><br><span class="line">         *************************************************/</span><br><span class="line">        if (clear_mark) &#123;</span><br><span class="line">            printk(KERN_INFO &quot;[2]: %d-&gt;%d mark cleared\n&quot;, htons(tcph-&gt;source), htons(tcph-&gt;dest), sk-&gt;mark);</span><br><span class="line">            sk-&gt;mark = 0;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        return NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return NF_ACCEPT;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">static struct nf_hook_ops nfhooks[] = &#123;</span><br><span class="line">&#123;</span><br><span class="line">    .hook = nf_hook_in1,</span><br><span class="line">    .owner = THIS_MODULE,</span><br><span class="line">    .pf = NFPROTO_IPV4,</span><br><span class="line">    .hooknum = NF_INET_LOCAL_IN,</span><br><span class="line">    .priority = NF_IP_PRI_FIRST,</span><br><span class="line">&#125;,</span><br><span class="line">&#123;</span><br><span class="line">    .hook = nf_hook_in2,</span><br><span class="line">    .owner = THIS_MODULE,</span><br><span class="line">    .pf = NFPROTO_IPV4,</span><br><span class="line">    .hooknum = NF_INET_LOCAL_IN,</span><br><span class="line">    .priority = NF_IP_PRI_FIRST + 1,</span><br><span class="line">&#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">int __init skpid_init(void)</span><br><span class="line">&#123;</span><br><span class="line">    nf_register_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(&quot;skpid module init\n&quot;);</span><br><span class="line"></span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void __exit skpid_exit(void)</span><br><span class="line">&#123;</span><br><span class="line">    nf_unregister_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(&quot;skpid module exit\n&quot;);</span><br><span class="line"></span><br><span class="line">    return;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(skpid_init);</span><br><span class="line">module_exit(skpid_exit);</span><br></pre></td></tr></table></figure>
+
+<p><code>Makefile</code>内容如下:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">obj-m += skpid.o</span><br><span class="line"><span class="section">all:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> modules</span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> clean</span><br></pre></td></tr></table></figure>
+
+<p>我们在<code>netfilter</code>框架的<code>LOCAL_IN</code>位置注册了两个函数，第一个函数优先级为: <code>NF_IP_PRI_FIRST</code>, 第二个函数优先级为<code>NF_IP_PRI_FIRST+1</code>。<code>netfilter</code>的<code>hook</code>函数的调用顺序为升序。而<code>iptables</code>各表的调用优先级如下(<code>include/uapi/linux/netfilter_ipv4.h</code>):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">nf_ip_hook_priorities</span> &#123;</span></span><br><span class="line">    NF_IP_PRI_FIRST = INT_MIN,</span><br><span class="line">    NF_IP_PRI_CONNTRACK_DEFRAG = <span class="number">-400</span>,</span><br><span class="line">    NF_IP_PRI_RAW = <span class="number">-300</span>,</span><br><span class="line">    NF_IP_PRI_SELINUX_FIRST = <span class="number">-225</span>,</span><br><span class="line">    NF_IP_PRI_CONNTRACK = <span class="number">-200</span>,</span><br><span class="line">    NF_IP_PRI_MANGLE = <span class="number">-150</span>,</span><br><span class="line">    NF_IP_PRI_NAT_DST = <span class="number">-100</span>,</span><br><span class="line">    NF_IP_PRI_FILTER = <span class="number">0</span>,</span><br><span class="line">    NF_IP_PRI_SECURITY = <span class="number">50</span>,</span><br><span class="line">    NF_IP_PRI_NAT_SRC = <span class="number">100</span>,</span><br><span class="line">    NF_IP_PRI_SELINUX_LAST = <span class="number">225</span>,</span><br><span class="line">    NF_IP_PRI_CONNTRACK_HELPER = <span class="number">300</span>,</span><br><span class="line">    NF_IP_PRI_CONNTRACK_CONFIRM = INT_MAX,</span><br><span class="line">    NF_IP_PRI_LAST = INT_MAX,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>因而我们的两个函数将先于<code>iptables</code>被执行。<code>nf_hook_in1</code>将访问本机<code>TCP</code>的<code>80</code>端口的数据包通过队列<code>80</code>送往用户态。<code>nf_hook_in2</code>会在用户态返回裁决结果后被执行，在这里展示用户态所设置的<code>mark</code>值。</p>
+<p>接着编写用户态程序, 从之前的文章<a href="/2017/03/27/nfqueue/">&lt;&lt;NFQUEUE和libnetfilter_queue实例分析&gt;&gt;</a>简单修改而来，<code>t.c</code>代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;netinet/in.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;libnetfilter_queue/libnetfilter_queue.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">uint32_t</span> mark;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">cb</span><span class="params">(<span class="keyword">struct</span> nfq_q_handle *qh, <span class="keyword">struct</span> nfgenmsg *nfmsg,</span></span><br><span class="line"><span class="params">        <span class="keyword">struct</span> nfq_data *nfa, <span class="type">void</span> *data)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">u_int32_t</span> id = <span class="number">0</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfqnl_msg_packet_hdr</span> *<span class="title">ph</span>;</span></span><br><span class="line">    <span class="type">uint32_t</span>  m = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    ph = nfq_get_msg_packet_hdr(nfa);</span><br><span class="line">    <span class="keyword">if</span> (ph) &#123;</span><br><span class="line">        id = ntohl(ph-&gt;packet_id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    m = nfq_get_nfmark(nfa);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;packet: %u, origin mark: 0x%08x, set mark: 0x%08x\n&quot;</span>, id, m, mark);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> nfq_set_verdict2(qh, id, NF_ACCEPT, mark, <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfq_handle</span> *<span class="title">h</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfq_q_handle</span> *<span class="title">qh</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfnl_handle</span> *<span class="title">nh</span>;</span></span><br><span class="line">    <span class="type">int</span>    fd;</span><br><span class="line">    <span class="type">int</span> rv;</span><br><span class="line">    <span class="type">char</span> buf[<span class="number">4096</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (argc &gt; <span class="number">1</span> &amp;&amp; <span class="built_in">strcmp</span>(argv[<span class="number">1</span>], <span class="string">&quot;block&quot;</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">        mark = <span class="number">0x8000</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mark = <span class="number">0x0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    assert((h = nfq_open()) != <span class="literal">NULL</span>);</span><br><span class="line">    assert(nfq_unbind_pf(h, AF_INET) == <span class="number">0</span>);</span><br><span class="line">    assert(nfq_bind_pf(h, AF_INET) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    assert((qh = nfq_create_queue(h, <span class="number">80</span>, &amp;cb, <span class="literal">NULL</span>)) != <span class="literal">NULL</span>);</span><br><span class="line">    assert(nfq_set_mode(qh, NFQNL_COPY_PACKET, <span class="number">0xffff</span>) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    fd = nfq_fd(h);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> ((rv = recv(fd, buf, <span class="keyword">sizeof</span>(buf), <span class="number">0</span>)) &amp;&amp; rv &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        nfq_handle_packet(h, buf, rv);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    nfq_destroy_queue(qh);</span><br><span class="line"></span><br><span class="line">    nfq_close(h);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>程序从<code>NFQUEUE</code>队列<code>80</code>中读取数据包，然后返回裁决结果。如果程序执行时带有<code>block</code>参数，则设置<code>mark</code>值为<code>0x8000</code>, 否则设置为<code>0x0</code>。</p>
+<p>编译用户态程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc t.c  -l netfilter_queue</span><br></pre></td></tr></table></figure>
+
+
+<p>程序编译完成后，准备实验环境。首先清空<code>INPUT</code>链:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -F INPUT</span><br></pre></td></tr></table></figure>
+
+<p>然后手动模拟<code>kube-proxy</code>所需要的<code>KUBE-FIREWALL</code>规则:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">iptables -t filter -N KUBE-FIREWALL</span><br><span class="line">iptables -A KUBE-FIREWALL -m comment --comment <span class="string">&quot;kubernetes firewall for droping marked packets&quot;</span> -m mark --mark 0x8000/0x8000 -j DROP</span><br><span class="line">iptables -A INPUT -p tcp --dport 80 -j KUBE-FIREWALL</span><br></pre></td></tr></table></figure>
+<p>访问本机<code>TCP</code>的<code>80</code>端口的数据包，如果<code>mark</code>值匹配<code>0x8000/0x8000</code>将被丢弃。</p>
+<p>添加完成后，<code>iptables</code>规则如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# iptables -nL</span><br><span class="line">Chain INPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line">KUBE-FIREWALL  tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:80</span><br><span class="line"></span><br><span class="line">Chain FORWARD (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line">REJECT     all  --  0.0.0.0/0            0.0.0.0/0            reject-with icmp-host-prohibited</span><br><span class="line"></span><br><span class="line">Chain OUTPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line"></span><br><span class="line">Chain KUBE-FIREWALL (1 references)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line">DROP       all  --  0.0.0.0/0            0.0.0.0/0            /* kubernetes firewall for droping marked packets */ mark match 0x8000/0x8000</span><br></pre></td></tr></table></figure>
+
+<p>实验环境在<code>80</code>端口运行<code>nginx</code>, 此时能够正常访问<code>80</code>端口:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# curl -Iv http://127.0.0.1</span><br><span class="line">* About to connect() to 127.0.0.1 port 80 (#0)</span><br><span class="line">*   Trying 127.0.0.1...</span><br><span class="line">* Connected to 127.0.0.1 (127.0.0.1) port 80 (#0)</span><br><span class="line">&gt; HEAD / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.29.0</span><br><span class="line">&gt; Host: 127.0.0.1</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: nginx/1.19.8</span><br><span class="line">Server: nginx/1.19.8</span><br><span class="line">&lt; Date: Sun, 05 Sep 2021 12:43:15 GMT</span><br><span class="line">Date: Sun, 05 Sep 2021 12:43:15 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 612</span><br><span class="line">Content-Length: 612</span><br><span class="line">&lt; Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">&lt; Connection: keep-alive</span><br><span class="line">Connection: keep-alive</span><br><span class="line">&lt; ETag: &quot;6086abf3-264&quot;</span><br><span class="line">ETag: &quot;6086abf3-264&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">Accept-Ranges: bytes</span><br><span class="line"></span><br><span class="line">&lt;</span><br><span class="line">* Connection #0 to host 127.0.0.1 left intact</span><br></pre></td></tr></table></figure>
+
+<p>加载内核模块:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">insmod ./skpid.ko</span><br></pre></td></tr></table></figure>
+
+<p>这时再次去访问<code>80</code>端口, 无法连接成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# curl -Iv http://127.0.0.1</span><br><span class="line">* About to connect() to 127.0.0.1 port 80 (#0)</span><br><span class="line">*   Trying 127.0.0.1...</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>/var/log/messages</code>文件, 可以看到从用户态程序返回后，数据包<code>mark</code>值被修改为’0x8000&#96;:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Sep  5 12:49:58 centos3 kernel: [1]: 40240-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 12:49:58 centos3 kernel: [2]: 40240-&gt;80 mark: 0x00008000</span><br><span class="line">Sep  5 12:49:59 centos3 kernel: [1]: 40240-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 12:49:59 centos3 kernel: [2]: 40240-&gt;80 mark: 0x00008000</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>此时用户态程序输出:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 c]# ./a.out block</span><br><span class="line">packet: 1, origin mark: 0x00000000, set mark: 0x00008000</span><br><span class="line">packet: 2, origin mark: 0x00000000, set mark: 0x00008000</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>我们重新运行用户态程序, 不再设置<code>mark</code>为<code>0x8000</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./a.out</span><br></pre></td></tr></table></figure>
+
+<p>再次访问<code>80</code>端口, 可以访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# curl -Iv http://127.0.0.1</span><br><span class="line">* About to connect() to 127.0.0.1 port 80 (#0)</span><br><span class="line">*   Trying 127.0.0.1...</span><br><span class="line">* Connected to 127.0.0.1 (127.0.0.1) port 80 (#0)</span><br><span class="line">&gt; HEAD / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.29.0</span><br><span class="line">&gt; Host: 127.0.0.1</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: nginx/1.19.8</span><br><span class="line">Server: nginx/1.19.8</span><br><span class="line">&lt; Date: Sun, 05 Sep 2021 12:57:25 GMT</span><br><span class="line">Date: Sun, 05 Sep 2021 12:57:25 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 612</span><br><span class="line">Content-Length: 612</span><br><span class="line">&lt; Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">&lt; Connection: keep-alive</span><br><span class="line">Connection: keep-alive</span><br><span class="line">&lt; ETag: &quot;6086abf3-264&quot;</span><br><span class="line">ETag: &quot;6086abf3-264&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">Accept-Ranges: bytes</span><br><span class="line"></span><br><span class="line">&lt;</span><br><span class="line">* Connection #0 to host 127.0.0.1 left intact</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>/var/log/messages</code>可以看到, 用户态程序设置的数据包<code>mark</code>为<code>0x0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Sep  5 12:57:25 centos3 kernel: [1]: 40244-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 12:57:25 centos3 kernel: [2]: 40244-&gt;80 mark: 0x00000000</span><br><span class="line">Sep  5 12:57:25 centos3 kernel: [1]: 40244-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 12:57:25 centos3 kernel: [2]: 40244-&gt;80 mark: 0x00000000</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+
+<p>前边提到，我们的两个<code>hook</code>函数会先于<code>iptables</code>执行。因此，只要我们的第二个<code>hook</code>函数将<code>sk_buff</code>的<code>mark</code>清零，就不会再与<code>iptables</code>规则冲突。</p>
+<p>下面来尝试。我们再把用户态程序带<code>block</code>参数执行:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./a.out block</span><br></pre></td></tr></table></figure>
+
+<p>再次访问<code>80</code>端口，会再次访问超时。</p>
+<p>我们通过修改内核模块的参数<code>clear_mark</code>为<code>1</code>, 这会让<code>nf_hook_in2</code>执行时清零<code>mark</code>值:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> 1 &gt; /sys/module/skpid/parameters/clear_mark</span><br></pre></td></tr></table></figure>
+
+<p>再次访问<code>80</code>端口，连接成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# curl -Iv http://127.0.0.1</span><br><span class="line">* About to connect() to 127.0.0.1 port 80 (#0)</span><br><span class="line">*   Trying 127.0.0.1...</span><br><span class="line">* Connected to 127.0.0.1 (127.0.0.1) port 80 (#0)</span><br><span class="line">&gt; HEAD / HTTP/1.1</span><br><span class="line">&gt; User-Agent: curl/7.29.0</span><br><span class="line">&gt; Host: 127.0.0.1</span><br><span class="line">&gt; Accept: */*</span><br><span class="line">&gt;</span><br><span class="line">&lt; HTTP/1.1 200 OK</span><br><span class="line">HTTP/1.1 200 OK</span><br><span class="line">&lt; Server: nginx/1.19.8</span><br><span class="line">Server: nginx/1.19.8</span><br><span class="line">&lt; Date: Sun, 05 Sep 2021 13:07:11 GMT</span><br><span class="line">Date: Sun, 05 Sep 2021 13:07:11 GMT</span><br><span class="line">&lt; Content-Type: text/html</span><br><span class="line">Content-Type: text/html</span><br><span class="line">&lt; Content-Length: 612</span><br><span class="line">Content-Length: 612</span><br><span class="line">&lt; Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">Last-Modified: Mon, 26 Apr 2021 12:02:59 GMT</span><br><span class="line">&lt; Connection: keep-alive</span><br><span class="line">Connection: keep-alive</span><br><span class="line">&lt; ETag: &quot;6086abf3-264&quot;</span><br><span class="line">ETag: &quot;6086abf3-264&quot;</span><br><span class="line">&lt; Accept-Ranges: bytes</span><br><span class="line">Accept-Ranges: bytes</span><br><span class="line"></span><br><span class="line">&lt;</span><br><span class="line">* Connection #0 to host 127.0.0.1 left intact</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>/var/log/messages</code>可以看到, 数据包的<code>mark</code>被清零:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Sep  5 13:07:11 centos3 kernel: [1]: 40248-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 13:07:11 centos3 kernel: [2]: 40248-&gt;80 mark: 0x00008000</span><br><span class="line">Sep  5 13:07:11 centos3 kernel: [2]: 40248-&gt;80 mark cleared</span><br><span class="line">Sep  5 13:07:11 centos3 kernel: [1]: 40248-&gt;80 mark: 0x00000000 queued in [80]</span><br><span class="line">Sep  5 13:07:11 centos3 kernel: [2]: 40248-&gt;80 mark: 0x00008000</span><br><span class="line">Sep  5 13:07:11 centos3 kernel: [2]: 40248-&gt;80 mark cleared</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>如果只是验证<code>NFQUEUE</code>机制用户态设置的<code>mark</code>与<code>kube-proxy</code>的<code>mark</code>冲突，可以不自己编写内核模块，直接使用<code>iptables</code>的<code>NFQUEUE</code>目标传递数据包。只是需要注意，<code>iptables</code>规则链的匹配逻辑是:</p>
+<ul>
+<li>按顺序进行检查，匹配到规则就停止，不再匹配后续规则(LOG目标除外)</li>
+<li>若找不到匹配的规则，按该链的默认策略处理</li>
+</ul>
+<p>因而不能在<code>filter</code>表的<code>INPUT</code>规则链中添加<code>NFQUEUE</code>规则，那样将只有一条规则被匹配执行。我们可以在<code>mangle</code>的<code>INPUT</code>链来添加，这样就两条规则都会执行:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t mangle -A INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 80</span><br></pre></td></tr></table></figure>
+
+<p>本文简单的说明了<code>NFQUEUE</code>的用户态程序设置<code>mark</code>可能与<code>kube-proxy</code>自身的<code>mark</code>机制冲突。后续再详细分析<code>NFQUEUE</code>具体实现中如何修改相应数据包的<code>mark</code>。</p>
+<p>参考文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.kancloud.cn/pshizhsysu/linux/2084993">https://www.kancloud.cn/pshizhsysu/linux/2084993</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.netfilter.org/projects/libnetfilter_queue/doxygen/html/group__Queue.html#gab47f0abc93e8294a0cd758b86c36f90b">https://www.netfilter.org/projects/libnetfilter_queue/doxygen/html/group__Queue.html#gab47f0abc93e8294a0cd758b86c36f90b</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.gushiciku.cn/pl/ggkS">https://www.gushiciku.cn/pl/ggkS</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.linuxplumbersconf.org/event/7/contributions/683/attachments/554/979/lpc20-pkt-mark-slides.pdf">https://www.linuxplumbersconf.org/event/7/contributions/683/attachments/554/979/lpc20-pkt-mark-slides.pdf</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/07/21/socket-to-pid/" rel="prev" title="Linux内核TCP网络连接关联进程">
+      <i class="fa fa-chevron-left"></i> Linux内核TCP网络连接关联进程
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/09/12/qemu-ivshmem/" rel="next" title="QEMU虚拟机内识别ivshmem设备">
+      QEMU虚拟机内识别ivshmem设备 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

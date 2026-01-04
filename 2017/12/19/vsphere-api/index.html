@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VMware vSphere东西向网络防护&gt;&gt;介绍了在VMware vSphere平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。 我们使用VMware官方的Python SDK来实现，SDK地址如下:  https:&#x2F;&#x2F;github.com&#x2F;vmware&#x2F;pyvmomi  首先使用pip安">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware vSphere平台下API操作虚拟交换机及虚拟接口">
+<meta property="og:url" content="http://just4coding.com/2017/12/19/vsphere-api/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VMware vSphere东西向网络防护&gt;&gt;介绍了在VMware vSphere平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。 我们使用VMware官方的Python SDK来实现，SDK地址如下:  https:&#x2F;&#x2F;github.com&#x2F;vmware&#x2F;pyvmomi  首先使用pip安">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-12-19/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-12-19/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-12-19/3.png">
+<meta property="article:published_time" content="2017-12-19T02:59:25.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.487Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-12-19/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/12/19/vsphere-api/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware vSphere平台下API操作虚拟交换机及虚拟接口 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/12/19/vsphere-api/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware vSphere平台下API操作虚拟交换机及虚拟接口
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-12-19 10:59:25" itemprop="dateCreated datePublished" datetime="2017-12-19T10:59:25+08:00">2017-12-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/06/10/vmware-westeast/">VMware vSphere东西向网络防护</a>&gt;&gt;介绍了在<code>VMware vSphere</code>平台上如何通过操作虚拟交换机及虚拟接口来实现二层网络的微隔离。本文通过代码实例来说明调用API实现其中涉及的相关操作。</p>
+<p>我们使用<code>VMware</code>官方的Python SDK来实现，SDK地址如下:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/vmware/pyvmomi">https://github.com/vmware/pyvmomi</a></li>
+</ul>
+<p>首先使用<code>pip</code>安装<code>pyvmomi</code>, 这里我们使用支持<code>vSphere6.5</code>的版本:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install pyvmomi==6.5.0.2017.5-1</span><br></pre></td></tr></table></figure>
+
+<p>下面介绍使用Python SDK的基本流程。</p>
+<span id="more"></span>
+
+<p>使用该SDK，需要在Python中<code>import</code>该库:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> pyVim</span><br></pre></td></tr></table></figure>
+
+<p>第一步，你需要连接到<code>ESXi</code>主机或者<code>vCenter</code>, 通常情况下，<code>vSphere</code>环境下使用<code>443</code>端口，如:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pyVim <span class="keyword">import</span> connect</span><br><span class="line">my_cluster = connect.Connect(“<span class="number">10.0</span><span class="number">.0</span><span class="number">.99</span>”, <span class="number">443</span>, “username”, “password”)</span><br></pre></td></tr></table></figure>
+
+<p>处理完逻辑后需要关闭连接:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">connect.Disconnect(my_cluster)</span><br></pre></td></tr></table></figure>
+
+<p>连接建立后，可以查询虚拟机、获取虚拟机信息，发送命令等等。为了获取一个虚拟机对象，可以使用<code>searchIndex</code>类，该类可以通过<code>UUID</code>, <code>DNS名</code>，<code>IP地址</code>或者<code>datastore</code>的路径来查找虚拟机， 比如，下面示例会输出IP为<code>10.0.0.240</code>的虚拟机的名称及<code>UUID</code>:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pyVim <span class="keyword">import</span> connect</span><br><span class="line"></span><br><span class="line">my_cluster = connect.Connect(“<span class="number">10.0</span><span class="number">.0</span><span class="number">.99</span><span class="string">&quot;, 443, “username&quot;</span>, “password<span class="string">&quot;)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">searcher = my_cluster.content.searchIndex</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">vm = searcher.FindByIp(ip=&quot;</span><span class="number">10.0</span><span class="number">.0</span><span class="number">.240</span><span class="string">&quot;, vmSearch=True)</span></span><br><span class="line"><span class="string">print vm.config.name</span></span><br><span class="line"><span class="string">print vm.config.uuid</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">connect.Disconnect(my_cluster)</span></span><br></pre></td></tr></table></figure>
+
+<p>执行后结果如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(pyvmomi)[root@centos1 fg]<span class="comment"># python t.py</span></span><br><span class="line">VC6<span class="number">.5</span></span><br><span class="line">564d71d4-709c-f475-d255-0b695d071bd3</span><br></pre></td></tr></table></figure>
+
+<p>下面直接以代码示例来说明对于虚拟交换机及虚拟接口的操作。</p>
+<p>创建虚拟交换机:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pyVim <span class="keyword">import</span> connect</span><br><span class="line"><span class="keyword">from</span> pyVmomi <span class="keyword">import</span> vim</span><br><span class="line"></span><br><span class="line">my_cluster = connect.Connect(<span class="string">&quot;10.0.0.99&quot;</span>, <span class="number">443</span>, <span class="string">&quot;username&quot;</span>, <span class="string">&quot;password&quot;</span>)</span><br><span class="line"></span><br><span class="line">searcher = my_cluster.content.searchIndex</span><br><span class="line"></span><br><span class="line">host = searcher.FindByIp(ip=<span class="string">&quot;10.0.0.41&quot;</span>, vmSearch=<span class="literal">False</span>)</span><br><span class="line"><span class="keyword">if</span> <span class="keyword">not</span> host:</span><br><span class="line">    <span class="built_in">print</span> <span class="string">&quot;Host Not Found&quot;</span></span><br><span class="line">    exit(-<span class="number">1</span>)</span><br><span class="line"></span><br><span class="line">vswitch_spec = vim.host.VirtualSwitch.Specification()</span><br><span class="line">vswitch_spec.numPorts = <span class="number">1024</span></span><br><span class="line">vswitch_spec.mtu = <span class="number">1450</span></span><br><span class="line">host.configManager.networkSystem.AddVirtualSwitch(<span class="string">&quot;vswitch_internal&quot;</span>, vswitch_spec)</span><br><span class="line"></span><br><span class="line">connect.Disconnect(my_cluster)</span><br></pre></td></tr></table></figure>
+
+<p>示例中，首先建立到<code>vCenter</code>的连接，接着查询到IP为<code>10.0.0.41</code>的宿主机, 在宿主机上创建一个名为<code>vswitch_internal</code>的标准虚拟交换机，最后关闭连接, 结果如图:</p>
+<img src="/images/2017-12-19/1.png" class="">
+
+<p>添加端口组：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pyVim <span class="keyword">import</span> connect</span><br><span class="line"><span class="keyword">from</span> pyVmomi <span class="keyword">import</span> vim</span><br><span class="line"></span><br><span class="line">my_cluster = connect.Connect(<span class="string">&quot;10.0.0.99&quot;</span>, <span class="number">443</span>, <span class="string">&quot;username&quot;</span>, <span class="string">&quot;password&quot;</span>)</span><br><span class="line"></span><br><span class="line">searcher = my_cluster.content.searchIndex</span><br><span class="line"></span><br><span class="line">host = searcher.FindByIp(ip=<span class="string">&quot;10.0.0.41&quot;</span>, vmSearch=<span class="literal">False</span>)</span><br><span class="line"><span class="keyword">if</span> <span class="keyword">not</span> host:</span><br><span class="line">    <span class="built_in">print</span> <span class="string">&quot;Host Not Found&quot;</span></span><br><span class="line">    exit(-<span class="number">1</span>)</span><br><span class="line"></span><br><span class="line">portgroup_spec = vim.host.PortGroup.Specification()</span><br><span class="line">portgroup_spec.vswitchName = <span class="string">&quot;vswitch_internal&quot;</span></span><br><span class="line">portgroup_spec.name = <span class="string">&quot;vlan1000&quot;</span></span><br><span class="line">portgroup_spec.vlanId = <span class="number">1000</span></span><br><span class="line">network_policy = vim.host.NetworkPolicy()</span><br><span class="line">network_policy.security = vim.host.NetworkPolicy.SecurityPolicy()</span><br><span class="line">network_policy.security.allowPromiscuous = <span class="literal">True</span></span><br><span class="line">network_policy.security.macChanges = <span class="literal">True</span></span><br><span class="line">network_policy.security.forgedTransmits = <span class="literal">True</span></span><br><span class="line">portgroup_spec.policy = network_policy</span><br><span class="line"></span><br><span class="line">host.configManager.networkSystem.AddPortGroup(portgroup_spec)</span><br><span class="line"></span><br><span class="line">connect.Disconnect(my_cluster)</span><br></pre></td></tr></table></figure>
+
+<p>在以上示例中，首先建立到<code>vCenter</code>的连接，接着查询到IP为<code>10.0.0.41</code>的宿主机，在该宿主机上名为<code>vswitch_internal</code>的虚拟交换机上添加了一个<code>VLAN TAG</code>为<code>1000</code>，名称为<code>vlan1000</code>的端口组，并将三个安全选项都设置为接受，最后关闭连接，结果如图:</p>
+<img src="/images/2017-12-19/2.png" class="">
+
+<p>修改虚拟机网卡所连接的端口组:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pyVim <span class="keyword">import</span> connect</span><br><span class="line"><span class="keyword">from</span> pyVmomi <span class="keyword">import</span> vim</span><br><span class="line"></span><br><span class="line">my_cluster = connect.Connect(<span class="string">&quot;10.0.0.99&quot;</span>, <span class="number">443</span>, <span class="string">&quot;username&quot;</span>, “password<span class="string">&quot;)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">searcher = my_cluster.content.searchIndex</span></span><br><span class="line"><span class="string">host = searcher.FindByIp(ip=&quot;</span><span class="number">10.0</span><span class="number">.0</span><span class="number">.41</span><span class="string">&quot;, vmSearch=False)</span></span><br><span class="line"><span class="string">if not host:</span></span><br><span class="line"><span class="string">    print(&quot;</span>Host Not Found<span class="string">&quot;)</span></span><br><span class="line"><span class="string">    exit(-1)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">vm = searcher.FindByIp(ip=&quot;</span><span class="number">10.0</span><span class="number">.0</span><span class="number">.240</span><span class="string">&quot;, vmSearch=True)</span></span><br><span class="line"><span class="string">if not vm:</span></span><br><span class="line"><span class="string">    print(&quot;</span>VM Not Found<span class="string">&quot;)</span></span><br><span class="line"><span class="string">    exit(-1)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">network = None</span></span><br><span class="line"><span class="string">for n in host.network:</span></span><br><span class="line"><span class="string">    if n.name == &quot;</span>vlan1000<span class="string">&quot;:</span></span><br><span class="line"><span class="string">        network = n</span></span><br><span class="line"><span class="string">        break</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">if not network:</span></span><br><span class="line"><span class="string">    print(&quot;</span>Network Not Found<span class="string">&quot;)</span></span><br><span class="line"><span class="string">    exit(-1)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">device_change = []</span></span><br><span class="line"><span class="string">for device in vm.config.hardware.device:</span></span><br><span class="line"><span class="string">    if isinstance(device, vim.vm.device.VirtualEthernetCard):</span></span><br><span class="line"><span class="string">        nicspec = vim.vm.device.VirtualDeviceSpec()</span></span><br><span class="line"><span class="string">        nicspec.operation = \</span></span><br><span class="line"><span class="string">            vim.vm.device.VirtualDeviceSpec.Operation.edit</span></span><br><span class="line"><span class="string">        nicspec.device = device</span></span><br><span class="line"><span class="string">        nicspec.device.wakeOnLanEnabled = True</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">        nicspec.device.backing = \</span></span><br><span class="line"><span class="string">vim.vm.device.VirtualEthernetCard.NetworkBackingInfo()</span></span><br><span class="line"><span class="string">nicspec.device.backing.network = network</span></span><br><span class="line"><span class="string">        nicspec.device.backing.deviceName = &quot;</span>vlan1000<span class="string">&quot;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">        nicspec.device.connectable = \</span></span><br><span class="line"><span class="string">            vim.vm.device.VirtualDevice.ConnectInfo()</span></span><br><span class="line"><span class="string">        nicspec.device.connectable.startConnected = True</span></span><br><span class="line"><span class="string">        nicspec.device.connectable.allowGuestControl = True</span></span><br><span class="line"><span class="string">        device_change.append(nicspec)</span></span><br><span class="line"><span class="string">        break</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">config_spec = vim.vm.ConfigSpec(deviceChange=device_change)</span></span><br><span class="line"><span class="string">try:</span></span><br><span class="line"><span class="string">    vm.ReconfigVM_Task(config_spec)</span></span><br><span class="line"><span class="string">except Exception, e:</span></span><br><span class="line"><span class="string">    print(str(e))</span></span><br><span class="line"><span class="string">    exit(-1)</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">connect.Disconnect(my_cluster)</span></span><br></pre></td></tr></table></figure>
+
+<p>本示例将IP为<code>10.0.0.240</code>的虚拟机的虚拟网卡修改到上面创建的<code>vlan1000</code>端口组，结果如图:</p>
+<img src="/images/2017-12-19/3.png" class="">
+
+<p>上述示例尽量做了简化，若需要在生产环境使用时，可以参考官方示例库及相应文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://vmware.github.io/pyvmomi-community-samples/">http://vmware.github.io/pyvmomi-community-samples/</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/vmware/pyvmomi/tree/master/docs">https://github.com/vmware/pyvmomi/tree/master/docs</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/12/02/ovs-mirror/" rel="prev" title="OpenvSwitch端口镜像">
+      <i class="fa fa-chevron-left"></i> OpenvSwitch端口镜像
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/01/11/meltdown-pcid/" rel="next" title="虚拟机KPTI性能影响分析">
+      虚拟机KPTI性能影响分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="PowerDNS中DNS解析由各类Backend模块处理。如果解析相关的数据存储于MySQL, Postgres等数据库，Backend需要在这些数据库中查询相应的记录是否存在。查询数据库的性能很低。因而PowerDNS中实现了PacketCache来提高性能。PowerDNS接收到请求后，先在PacketCache中查询是否已经有相应的DNS响应。如果有则直接返回该缓存。否则交由backend处">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PowerDNS中PacketCache实现">
+<meta property="og:url" content="http://just4coding.com/2015/01/08/powerdns-packetcache/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="PowerDNS中DNS解析由各类Backend模块处理。如果解析相关的数据存储于MySQL, Postgres等数据库，Backend需要在这些数据库中查询相应的记录是否存在。查询数据库的性能很低。因而PowerDNS中实现了PacketCache来提高性能。PowerDNS接收到请求后，先在PacketCache中查询是否已经有相应的DNS响应。如果有则直接返回该缓存。否则交由backend处">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-01-08T10:14:08.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.472Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2015/01/08/powerdns-packetcache/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>PowerDNS中PacketCache实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2015/01/08/powerdns-packetcache/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          PowerDNS中PacketCache实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2015-01-08 18:14:08" itemprop="dateCreated datePublished" datetime="2015-01-08T18:14:08+08:00">2015-01-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/DNS/" itemprop="url" rel="index">
+                    <span itemprop="name">DNS</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>PowerDNS中DNS解析由各类Backend模块处理。如果解析相关的数据存储于MySQL, Postgres等数据库，Backend需要在这些数据库中查询相应的记录是否存在。查询数据库的性能很低。因而PowerDNS中实现了PacketCache来提高性能。PowerDNS接收到请求后，先在PacketCache中查询是否已经有相应的DNS响应。如果有则直接返回该缓存。否则交由backend处理，处理后再添加到PacketCache中。</p>
+<p>PacketCache实现主要位于packetcache.hh和packetcache.cc中。</p>
+<span id="more"></span>
+<p>common_startup.cc中定义了一些全局对象，其中包括一个PacketCache对象PC，PowerDNS中所有线程会共享这个对象。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PacketCache PC; <span class="comment">//!&lt; This is the main PacketCache, shared accross all threads</span></span><br></pre></td></tr></table></figure>
+<p>来看PacketCache的构造函数，它初始化了一个读写锁和一些变量，接着添加了3个统计变量:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">PacketCache::<span class="built_in">PacketCache</span>()</span><br><span class="line">&#123;</span><br><span class="line">  <span class="built_in">pthread_rwlock_init</span>(&amp;d_mut, <span class="number">0</span>);</span><br><span class="line">  <span class="comment">// d_ops = 0;</span></span><br><span class="line"></span><br><span class="line">  d_ttl=<span class="number">-1</span>;</span><br><span class="line">  d_recursivettl=<span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">  S.<span class="built_in">declare</span>(<span class="string">&quot;packetcache-hit&quot;</span>);</span><br><span class="line">  S.<span class="built_in">declare</span>(<span class="string">&quot;packetcache-miss&quot;</span>);</span><br><span class="line">  S.<span class="built_in">declare</span>(<span class="string">&quot;packetcache-size&quot;</span>);</span><br><span class="line"></span><br><span class="line">  d_statnumhit=S.<span class="built_in">getPointer</span>(<span class="string">&quot;packetcache-hit&quot;</span>);</span><br><span class="line">  d_statnummiss=S.<span class="built_in">getPointer</span>(<span class="string">&quot;packetcache-miss&quot;</span>);</span><br><span class="line">  d_statnumentries=S.<span class="built_in">getPointer</span>(<span class="string">&quot;packetcache-size&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>PowerDNS有多个线程负责接收请求。线程的简化逻辑如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(;;) &#123;</span><br><span class="line">  <span class="keyword">if</span>(!(P=N-&gt;<span class="built_in">receive</span>(&amp;question))) &#123; <span class="comment">// receive a packet         inline</span></span><br><span class="line">    <span class="keyword">continue</span>;                    <span class="comment">// packet was broken, try again</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(P-&gt;<span class="built_in">couldBeCached</span>() &amp;&amp; PC.<span class="built_in">get</span>(P, &amp;cached)) &#123; <span class="comment">// short circuit - does the PacketCache recognize this question?</span></span><br><span class="line">    NS-&gt;<span class="built_in">send</span>(&amp;cached);   <span class="comment">// answer it then</span></span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  distributor-&gt;<span class="built_in">question</span>(P, &amp;sendout);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>首先调用NameServer对象的receiver方法接收请求并解析到DNSPacket对象。接着调用DNSPacket::couldBeCached()判断请求是否可以被缓存, 可以看到PowerDNS只缓存Class为IN(Internet)的DNS请求。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">DNSPacket::couldBeCached</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="keyword">return</span> d_ednsping.<span class="built_in">empty</span>() &amp;&amp; !d_wantsnsid &amp;&amp; qclass==QClass::IN;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果请求可以被缓存，则调用PC.get方法查询PacketCache中是否有相应缓存。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">PacketCache::get</span><span class="params">(DNSPacket *p, DNSPacket *cached)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="keyword">extern</span> StatBag S;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(d_ttl&lt;<span class="number">0</span>)</span><br><span class="line">    <span class="built_in">getTTLS</span>();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(!((++d_ops) % <span class="number">300000</span>)) &#123;</span><br><span class="line">    <span class="built_in">cleanup</span>();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ...</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(<span class="built_in">ntohs</span>(p-&gt;d.qdcount)!=<span class="number">1</span>) <span class="comment">// we get confused by packets with more than one question</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  string value;</span><br><span class="line">  <span class="type">bool</span> haveSomething;</span><br><span class="line">  &#123;</span><br><span class="line">    <span class="function">TryReadLock <span class="title">l</span><span class="params">(&amp;d_mut)</span></span>; <span class="comment">// take a readlock here</span></span><br><span class="line">    <span class="keyword">if</span>(!l.<span class="built_in">gotIt</span>()) &#123;</span><br><span class="line">      S.<span class="built_in">inc</span>(<span class="string">&quot;deferred-cache-lookup&quot;</span>);</span><br><span class="line">      <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">uint16_t</span> maxReplyLen = p-&gt;d_tcp ? <span class="number">0xffff</span> : p-&gt;<span class="built_in">getMaxReplyLen</span>();</span><br><span class="line">    haveSomething=<span class="built_in">getEntryLocked</span>(p-&gt;qdomain, p-&gt;qtype, PacketCache::PACKETCACHE, value, <span class="number">-1</span>, packetMeritsRecursion, maxReplyLen, p-&gt;d_dnssecOk, p-&gt;<span class="built_in">hasEDNS</span>());</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span>(haveSomething) &#123;</span><br><span class="line">    (*d_statnumhit)++;</span><br><span class="line">    <span class="keyword">if</span>(cached-&gt;<span class="built_in">noparse</span>(value.<span class="built_in">c_str</span>(), value.<span class="built_in">size</span>()) &lt; <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    cached-&gt;<span class="built_in">spoofQuestion</span>(p); <span class="comment">// for correct case</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//  cerr&lt;&lt;&quot;Packet cache miss for &#x27;&quot;&lt;&lt;p-&gt;qdomain&lt;&lt;&quot;&#x27;, merits: &quot;&lt;&lt;packetMeritsRecursion&lt;&lt;endl;</span></span><br><span class="line">  (*d_statnummiss)++;</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>; <span class="comment">// bummer</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>get方法在第一次被调用时会调用getTTLS方法获取配置，”cache-ttl”为缓存有效时间。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">PacketCache::getTTLS</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  d_ttl=::<span class="built_in">arg</span>().<span class="built_in">asNum</span>(<span class="string">&quot;cache-ttl&quot;</span>);</span><br><span class="line">  d_recursivettl=::<span class="built_in">arg</span>().<span class="built_in">asNum</span>(<span class="string">&quot;recursive-cache-ttl&quot;</span>);</span><br><span class="line"></span><br><span class="line">  d_doRecursion=::<span class="built_in">arg</span>().<span class="built_in">mustDo</span>(<span class="string">&quot;recursor&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>每进行300000次查询操作(PacketCache::get和PacketCache::getEntry)时，get方法会调用一次cleanup函数。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">PacketCache::cleanup</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="function">WriteLock <span class="title">l</span><span class="params">(&amp;d_mut)</span></span>;</span><br><span class="line"></span><br><span class="line">  *d_statnumentries=d_map.<span class="built_in">size</span>();</span><br><span class="line"></span><br><span class="line">  <span class="type">unsigned</span> <span class="type">int</span> maxCached=::<span class="built_in">arg</span>().<span class="built_in">asNum</span>(<span class="string">&quot;max-cache-entries&quot;</span>);</span><br><span class="line">  <span class="type">unsigned</span> <span class="type">int</span> toTrim=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="type">unsigned</span> <span class="type">int</span> cacheSize=*d_statnumentries;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(maxCached &amp;&amp; cacheSize &gt; maxCached) &#123;</span><br><span class="line">    toTrim = cacheSize - maxCached;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="type">unsigned</span> <span class="type">int</span> lookAt=<span class="number">0</span>;</span><br><span class="line">  <span class="comment">// two modes - if toTrim is 0, just look through 10%  of the cache and nuke everything that is expired</span></span><br><span class="line">  <span class="comment">// otherwise, scan first 5*toTrim records, and stop once we&#x27;ve nuked enough</span></span><br><span class="line">  <span class="keyword">if</span>(toTrim)</span><br><span class="line">    lookAt=<span class="number">5</span>*toTrim;</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    lookAt=cacheSize/<span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//  cerr&lt;&lt;&quot;cacheSize: &quot;&lt;&lt;cacheSize&lt;&lt;&quot;, lookAt: &quot;&lt;&lt;lookAt&lt;&lt;&quot;, toTrim: &quot;&lt;&lt;toTrim&lt;&lt;endl;</span></span><br><span class="line">  <span class="type">time_t</span> now=<span class="built_in">time</span>(<span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="built_in">DLOG</span>(L&lt;&lt;<span class="string">&quot;Starting cache clean&quot;</span>&lt;&lt;endl);</span><br><span class="line">  <span class="keyword">if</span>(d_map.<span class="built_in">empty</span>())</span><br><span class="line">    <span class="keyword">return</span>; <span class="comment">// clean</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">typedef</span> <span class="type">cmap_t</span>::nth_index&lt;<span class="number">1</span>&gt;::type <span class="type">sequence_t</span>;</span><br><span class="line">  <span class="type">sequence_t</span>&amp; sidx=d_map.<span class="built_in">get</span>&lt;<span class="number">1</span>&gt;();</span><br><span class="line">  <span class="type">unsigned</span> <span class="type">int</span> erased=<span class="number">0</span>, lookedAt=<span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span>(<span class="type">sequence_t</span>::iterator i=sidx.<span class="built_in">begin</span>(); i != sidx.<span class="built_in">end</span>(); lookedAt++) &#123;</span><br><span class="line">    <span class="keyword">if</span>(i-&gt;ttd &lt; now) &#123;</span><br><span class="line">      sidx.<span class="built_in">erase</span>(i++);</span><br><span class="line">      erased++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      ++i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span>(toTrim &amp;&amp; erased &gt; toTrim)</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span>(lookedAt &gt; lookAt)</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//  cerr&lt;&lt;&quot;erased: &quot;&lt;&lt;erased&lt;&lt;endl;</span></span><br><span class="line">  *d_statnumentries=d_map.<span class="built_in">size</span>();</span><br><span class="line">  <span class="built_in">DLOG</span>(L&lt;&lt;<span class="string">&quot;Done with cache clean&quot;</span>&lt;&lt;endl);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>cleanup函数首先获取”max-cache-entries”选项。如果配置了该选项，并且缓存数目已经超过该选项的值，则应从缓存的map结构中清除一部分过期缓存项。在清除时，搜寻个数为应清除个数的5倍。如果当前缓存个数没有超过“max-cache-entries”, 则搜寻总个数的1&#x2F;10。</p>
+<p>个人感觉，这样实现并不太好，会导致这次请求处理时间过长。可以创建一个独立的线程周期性地清除缓存map中的过期项。</p>
+<p>之后，get函数调用getEntryLocked来查找缓存中是否有该请求对应响应结果的缓存，通过map::find实现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">PacketCache::getEntryLocked</span><span class="params">(<span class="type">const</span> string &amp;qname, <span class="type">const</span> QType&amp; qtype, CacheEntryType cet, string&amp; value, <span class="type">int</span> zoneID, <span class="type">bool</span> meritsRecursion,</span></span></span><br><span class="line"><span class="params"><span class="function">  <span class="type">unsigned</span> <span class="type">int</span> maxReplyLen, <span class="type">bool</span> dnssecOK, <span class="type">bool</span> hasEDNS)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="type">uint16_t</span> qt = qtype.<span class="built_in">getCode</span>();</span><br><span class="line">  <span class="type">cmap_t</span>::const_iterator i=d_map.<span class="built_in">find</span>(<span class="built_in">tie</span>(qname, qt, cet, zoneID, meritsRecursion, maxReplyLen, dnssecOK, hasEDNS));</span><br><span class="line">  <span class="type">time_t</span> now=<span class="built_in">time</span>(<span class="number">0</span>);</span><br><span class="line">  <span class="type">bool</span> ret=(i!=d_map.<span class="built_in">end</span>() &amp;&amp; i-&gt;ttd &gt; now);</span><br><span class="line">  <span class="keyword">if</span>(ret)</span><br><span class="line">    value = i-&gt;value;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果从缓存中找到了响应数据包，则调用DNSPacket::noparse方法将结果保存到需要发回的响应包的相应结构中。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">DNSPacket::noparse</span><span class="params">(<span class="type">const</span> <span class="type">char</span> *mesg, <span class="type">int</span> length)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  d_rawpacket.<span class="built_in">assign</span>(mesg,length);</span><br><span class="line">  <span class="keyword">if</span>(length &lt; <span class="number">12</span>) &#123;</span><br><span class="line">    L &lt;&lt; Logger::Warning &lt;&lt; <span class="string">&quot;Ignoring packet: too short from &quot;</span></span><br><span class="line">      &lt;&lt; <span class="built_in">getRemote</span>() &lt;&lt; endl;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  d_wantsnsid=<span class="literal">false</span>;</span><br><span class="line">  d_ednsping.<span class="built_in">clear</span>();</span><br><span class="line">  d_maxreplylen=<span class="number">512</span>;</span><br><span class="line">  <span class="built_in">memcpy</span>((<span class="type">void</span> *)&amp;d,(<span class="type">const</span> <span class="type">void</span> *)d_rawpacket.<span class="built_in">c_str</span>(),<span class="number">12</span>);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接着调用DNSPacket::spoofQuestion访求将请求包的请求域名部分复制到响应包的请求域名部分。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">DNSPacket::spoofQuestion</span><span class="params">(<span class="type">const</span> DNSPacket *qd)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  d_wrapped=<span class="literal">true</span>; <span class="comment">// if we do this, don&#x27;t later on wrapup</span></span><br><span class="line"></span><br><span class="line">  <span class="type">int</span> labellen;</span><br><span class="line">  string::size_type i=<span class="built_in">sizeof</span>(d);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span>(;;) &#123;</span><br><span class="line">    labellen = qd-&gt;d_rawpacket[i];</span><br><span class="line">    <span class="keyword">if</span>(!labellen) <span class="keyword">break</span>;</span><br><span class="line">    i++;</span><br><span class="line">    d_rawpacket.<span class="built_in">replace</span>(i, labellen, qd-&gt;d_rawpacket, i, labellen);</span><br><span class="line">    i = i + labellen;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>个人感觉，请求域名部分的复制操作没有必要，缓存中的响应包的域名应该与本次请求包中的域名是相同的。</p>
+<p>调用PC.get获取响应后，修改DNS头部的相应标志位及ID后，将响应发送出去。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">cached.d.rd=P-&gt;d.rd; <span class="comment">// copy in recursion desired bit</span></span><br><span class="line">cached.d.id=P-&gt;d.id;</span><br><span class="line">cached.<span class="built_in">commitD</span>();</span><br><span class="line"></span><br><span class="line">N-&gt;<span class="built_in">send</span>(&amp;cached);</span><br></pre></td></tr></table></figure>
+<p>下面来看添加缓存的过程。</p>
+<p>如果没有找到缓存，PowerDNS交由distributor处理DNS请求。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">distributor-&gt;<span class="built_in">question</span>(P, &amp;sendout); <span class="comment">// otherwise, give to the distributor</span></span><br></pre></td></tr></table></figure>
+<p>这会调用PacketHandler::question函数。question函数会又会调用questionOrRecurse函数。questionOrRecurse函数在一系列检查后，对于CLASS为IN的请求，调用getAuth判断该DNS服务器是否是请求域名的授权服务器。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">PacketHandler::getAuth</span><span class="params">(DNSPacket *p, SOAData *sd, <span class="type">const</span> string &amp;target, <span class="type">int</span> *zoneId)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="type">bool</span> found=<span class="literal">false</span>;</span><br><span class="line">  <span class="function">string <span class="title">subdomain</span><span class="params">(target)</span></span>;</span><br><span class="line">  <span class="keyword">do</span> &#123;</span><br><span class="line">    <span class="keyword">if</span>( B.<span class="built_in">getSOA</span>( subdomain, *sd, p ) ) &#123;</span><br><span class="line">      sd-&gt;qname = subdomain;</span><br><span class="line">      <span class="keyword">if</span>(zoneId)</span><br><span class="line">        *zoneId = sd-&gt;domain_id;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span>(p-&gt;qtype.<span class="built_in">getCode</span>() == QType::DS &amp;&amp; <span class="built_in">pdns_iequals</span>(subdomain, target)) &#123;</span><br><span class="line">        <span class="comment">// Found authoritative zone but look for parent zone with &#x27;DS&#x27; record.</span></span><br><span class="line">        found=<span class="literal">true</span>;</span><br><span class="line">      &#125; <span class="keyword">else</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">while</span>( <span class="built_in">chopOff</span>( subdomain ) );   <span class="comment">// &#x27;www.powerdns.org&#x27; -&gt; &#x27;powerdns.org&#x27; -&gt; &#x27;org&#x27; -&gt; &#x27;&#x27;</span></span><br><span class="line">  <span class="keyword">return</span> found;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>getAuth函数对域名或其子域调用Backend的getSOA函数获得SOA记录，找到则返回。比如，请求解析<code>www.foo.com</code>，首先查找<code>www.foo.com</code>是否存在SOA记录。如果没有，接着查找”foo.com”是否存在SOA记录。直到查找部分为””。如果没有找到SOA记录，返回某种错误的响应。接下来，questionOrRecurse函数以<code>QTYPE::ANY</code>为参数调用Backend的lookup函数，并依次调用<code>B.get</code>获取找到的记录。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">B.<span class="built_in">lookup</span>(<span class="built_in">QType</span>(QType::ANY), target, p, sd.domain_id);</span><br><span class="line">rrset.<span class="built_in">clear</span>();</span><br><span class="line">weDone = weRedirected = weHaveUnauth = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">while</span>(B.<span class="built_in">get</span>(rr)) &#123;</span><br><span class="line">  ...</span><br><span class="line">  rrset.<span class="built_in">push_back</span>(rr);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果没有找到任何记录，则尝试泛解析，处理过程不详述。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(rrset.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">  <span class="keyword">if</span>(<span class="built_in">tryWildcard</span>(p, r, sd, target, wildcard, wereRetargeted, nodata)) &#123;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果有CNAME记录，则重新针对CNAME目标域名进行上述逻辑。如果找到符合请求的记录，则添加到响应里发送出去。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(weRedirected) &#123;</span><br><span class="line">  <span class="built_in">BOOST_FOREACH</span>(rr, rrset) &#123;</span><br><span class="line">    <span class="keyword">if</span>(rr.qtype.<span class="built_in">getCode</span>() == QType::CNAME) &#123;</span><br><span class="line">      r-&gt;<span class="built_in">addRecord</span>(rr);</span><br><span class="line">      target = rr.content;</span><br><span class="line">      retargetcount++;</span><br><span class="line">      <span class="keyword">goto</span> retargeted;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(weDone) &#123;</span><br><span class="line">  <span class="type">bool</span> haveRecords = <span class="literal">false</span>;</span><br><span class="line">  <span class="built_in">BOOST_FOREACH</span>(rr, rrset) &#123;</span><br><span class="line">    <span class="keyword">if</span>((p-&gt;qtype.<span class="built_in">getCode</span>() == QType::ANY || rr.qtype == p-&gt;qtype) &amp;&amp; rr.qtype.<span class="built_in">getCode</span>() &amp;&amp; rr.auth) &#123;</span><br><span class="line">      r-&gt;<span class="built_in">addRecord</span>(rr);</span><br><span class="line">      haveRecords = <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (haveRecords) &#123;</span><br><span class="line">    <span class="keyword">if</span>(p-&gt;qtype.<span class="built_in">getCode</span>() == QType::ANY)</span><br><span class="line">      <span class="built_in">completeANYRecords</span>(p, r, sd, target);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    <span class="built_in">makeNOError</span>(p, r, rr.qname, <span class="string">&quot;&quot;</span>, sd, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">goto</span> sendit;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在发送前，会调用PC.insert将响应添加进PacketCache，实现通过map::insert。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PC.<span class="built_in">insert</span>(p, r, r-&gt;<span class="built_in">getMinTTL</span>()); <span class="comment">// in the packet cache</span></span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/17/flashcache-init/" rel="prev" title="flashcache简介及模块初始化">
+      <i class="fa fa-chevron-left"></i> flashcache简介及模块初始化
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2015/04/27/ejabberd-acl/" rel="next" title="ejabberd中ACL实现">
+      ejabberd中ACL实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

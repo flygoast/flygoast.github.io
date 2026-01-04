@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;Kubernetes网络和CNI&gt;&gt;和&lt;&lt;Kubernetes flannel网络分析&gt;&gt;介绍了Kubernetes集群的pod网络的通信过程。 pod本质上非固定的，经常发生变化，而pod IP在pod销毁和创建的时候会发生变更，因而不能直接对外提供服务。Kubernetes通过service资源来对外提供服务，service的IP是">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes Service网络通信分析">
+<meta property="og:url" content="http://just4coding.com/2021/11/07/kubernetes-clusterip/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;Kubernetes网络和CNI&gt;&gt;和&lt;&lt;Kubernetes flannel网络分析&gt;&gt;介绍了Kubernetes集群的pod网络的通信过程。 pod本质上非固定的，经常发生变化，而pod IP在pod销毁和创建的时候会发生变更，因而不能直接对外提供服务。Kubernetes通过service资源来对外提供服务，service的IP是">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2021-11-07/1.png">
+<meta property="article:published_time" content="2021-11-07T15:26:39.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.497Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Iptables">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="Kube-proxy">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2021-11-07/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2021/11/07/kubernetes-clusterip/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes Service网络通信分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/07/kubernetes-clusterip/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes Service网络通信分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-07 23:26:39" itemprop="dateCreated datePublished" datetime="2021-11-07T23:26:39+08:00">2021-11-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章<a href="/2020/07/25/kubernetes-cni/">&lt;&lt;Kubernetes网络和CNI&gt;&gt;</a>和<a href="/2021/11/03/flannel/">&lt;&lt;Kubernetes flannel网络分析&gt;&gt;</a>介绍了Kubernetes集群的<code>pod</code>网络的通信过程。</p>
+<p><code>pod</code>本质上非固定的，经常发生变化，而<code>pod IP</code>在<code>pod</code>销毁和创建的时候会发生变更，因而不能直接对外提供服务。<code>Kubernetes</code>通过<code>service</code>资源来对外提供服务，<code>service</code>的<code>IP</code>是固定的，它自动绑定一组<code>pod</code>并根据不同实现将流量转发到这些<code>pod</code>中, 并在流量转发的过程中实现负载均衡(load balance)。</p>
+<p>在<code>Kubernetes</code>的<code>node</code>节点上的主要组件有<code>kube-proxy</code>和<code>kubelet</code>, <code>kubelet</code>会调用相关的<code>CNI</code>实现完成<code>POD</code>网络的通信。而<code>kube-proxy</code>则负责上述的<code>service</code>与<code>POD</code>之间的流量转发。实际上，在之前文章的实验环境里，即使把<code>node</code>节点上的<code>kube-proxy</code>组件都停止，也不会影响<code>pod</code>网络通信。</p>
+<p><code>service</code>本质就是将一组<code>pod</code>通过固定<code>IP</code>暴露给使用者，可以由<code>ip:port:protocol</code>来标识。</p>
+<p><code>service</code>主要以下几种类型:</p>
+<ul>
+<li><p><code>ClusterIP</code>: 用<code>Kubernetes</code>集群内部<code>IP</code>暴露服务，也就是说只有在<code>Kubernetes</code>集群内才可以访问这个<code>service</code>。这是默认的<code>service</code>类型。<code>ClusterIP</code>的范围是在<code>kube-apiserver</code>启动时通过<code>-service-cluster-ip-range</code>参数指定的。这些<code>IP</code>只能在<code>kubernetes</code>集群内进行访问。<code>service</code>的相关信息是在<code>yaml</code>文件中定义的，最终暴露的信息可表示为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>NodePort</code>: 在<code>Kubernetes</code>集群的所有<code>node</code>节点上使用相同的固定<code>port</code>来暴露服务。这种类型会自动创建<code>ClusterIP</code>类型的服务，<code>NodePort</code>的<code>service</code>会将流量转发到<code>ClusterIP</code>类型的服务。服务的使用者可以使用<code>NodeIP:NodePort</code>来访问该服务。这种类型服务暴露的信息可以表示为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&lt;NodeIP&gt;:spec.ports[*].nodePort:spec.ports[*].protocol</span><br><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>LoadBalancer</code>: 是通过<code>kubernetes</code>集群外部设施所提供的<code>IP</code>来暴露服务。<code>NodePort</code>和<code>ClusterIP</code>类型的服务会被自动创建。不同的<code>LoadBalancer</code>负责实现外部<code>IP:port</code>与<code>NodePort</code>服务的映射。这种类型暴露的信息可以表示为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">spec.loadBalancerIp:spec.ports[*].port:spec.ports[*].protocol</span><br><span class="line">&lt;NodeIP&gt;:spec.ports[*].nodePort:spec.ports[*].protocol</span><br><span class="line">spec.clusterIp:spec.ports[*].port:spec.ports[*].protocol</span><br></pre></td></tr></table></figure></li>
+</ul>
+<span id="more"></span>
+
+<p><code>Kubernetes</code>集群默认会存在一个<code>ClusterIP</code>类型的服务<code>kubernetes</code>，它可以让集群内部的<code>pod</code>去访问<code>kube-apiserver</code>，如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get svc</span></span><br><span class="line">NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE</span><br><span class="line">kubernetes   ClusterIP   10.32.0.1    &lt;none&gt;        443/TCP   15d</span><br></pre></td></tr></table></figure>
+
+<p>接下来我们基于<code>containous/whoami</code>镜像创建一个<code>ClusterIP</code>类型的服务<code>whoami</code>:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Service</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">ports:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">port:</span> <span class="number">80</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">web</span></span><br><span class="line">    <span class="attr">protocol:</span> <span class="string">TCP</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">type:</span> <span class="string">ClusterIP</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Deployment</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">replicas:</span> <span class="number">3</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">matchLabels:</span></span><br><span class="line">      <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">template:</span></span><br><span class="line">    <span class="attr">metadata:</span></span><br><span class="line">      <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">    <span class="attr">spec:</span></span><br><span class="line">      <span class="attr">containers:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">        <span class="attr">image:</span> <span class="string">containous/whoami</span></span><br><span class="line">        <span class="attr">ports:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">          <span class="attr">name:</span> <span class="string">web</span></span><br></pre></td></tr></table></figure>
+
+<p>创建<code>service</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl apply -f whoami.yaml</span></span><br><span class="line">service/whoami created</span><br><span class="line">deployment.apps/whoami created</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>service</code>资源:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get svc -o wide</span></span><br><span class="line">NAME         TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE    SELECTOR</span><br><span class="line">kubernetes   ClusterIP   10.32.0.1     &lt;none&gt;        443/TCP   16d    &lt;none&gt;</span><br><span class="line"><span class="built_in">whoami</span>       ClusterIP   10.32.0.235   &lt;none&gt;        80/TCP    3m7s   app=<span class="built_in">whoami</span></span><br></pre></td></tr></table></figure>
+
+<p>查看<code>service</code>对应的<code>endpoint</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get ep</span></span><br><span class="line">NAME         ENDPOINTS                                            AGE</span><br><span class="line">kubernetes   10.240.0.10:6443,10.240.0.11:6443,10.240.0.12:6443   16d</span><br><span class="line"><span class="built_in">whoami</span>       10.230.74.7:80,10.230.74.8:80,10.230.95.7:80         3h23m</span><br></pre></td></tr></table></figure>
+
+<p>创建一个客户端<code>curl</code>的<code>pod</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl run curl1 --image=radial/busyboxplus:curl --command -- sleep 3600</span></span><br><span class="line">kubectl run --generator=deployment/apps.v1 is DEPRECATED and will be removed <span class="keyword">in</span> a future version. Use kubectl run --generator=run-pod/v1 or kubectl create instead.</span><br><span class="line">deployment.apps/curl1 created</span><br></pre></td></tr></table></figure>
+<p>此时<code>pod</code>如下, 一个<code>curl</code>客户端，3个<code>whoami</code>的WEB服务器:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get pods -o wide</span></span><br><span class="line">NAME                      READY   STATUS    RESTARTS   AGE    IP             NODE    NOMINATED NODE   READINESS GATES</span><br><span class="line">curl1-54dbd6b8cb-vm5wc    1/1     Running   0          8m1s   10.230.74.19   node1   &lt;none&gt;           &lt;none&gt;</span><br><span class="line">whoami-5df4df6ff5-2frx6   1/1     Running   0          3h     10.230.74.7    node1   &lt;none&gt;           &lt;none&gt;</span><br><span class="line">whoami-5df4df6ff5-84tpp   1/1     Running   0          3h     10.230.95.7    node2   &lt;none&gt;           &lt;none&gt;</span><br><span class="line">whoami-5df4df6ff5-rh4zq   1/1     Running   0          3h     10.230.74.8    node1   &lt;none&gt;           &lt;none&gt;</span><br></pre></td></tr></table></figure>
+
+<p>从客户端<code>pod</code>访问<code>service</code>, 可以看到请求被转发到不同的后端<code>pod</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl exec -it curl1-54dbd6b8cb-vm5wc -- curl http://10.32.0.235</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-rh4zq</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.74.8</span><br><span class="line">IP: fe80::589f:13ff:fef7:bc05</span><br><span class="line">RemoteAddr: 10.230.74.19:36694</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.32.0.235</span><br><span class="line">User-Agent: curl/7.35.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@master1 ~]<span class="comment"># kubectl exec -it curl1-54dbd6b8cb-vm5wc -- curl http://10.32.0.235</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-84tpp</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.95.7</span><br><span class="line">IP: fe80::5433:63ff:fe98:6d1e</span><br><span class="line">RemoteAddr: 10.230.74.0:36698</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.32.0.235</span><br><span class="line">User-Agent: curl/7.35.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@master1 ~]<span class="comment"># kubectl exec -it curl1-54dbd6b8cb-vm5wc -- curl http://10.32.0.235</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-2frx6</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.74.7</span><br><span class="line">IP: fe80::20c8:faff:fe77:7a40</span><br><span class="line">RemoteAddr: 10.230.74.19:36706</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.32.0.235</span><br><span class="line">User-Agent: curl/7.35.0</span><br><span class="line">Accept: */*</span><br></pre></td></tr></table></figure>
+
+<p><code>kube-proxy</code>服务会监听<code>kube-apiserver</code>中的<code>service</code>和<code>endpoint</code>的变化来配置<code>service</code>和<code>endpoint</code>的对应关系。当前具体的转发实现方案有<code>userspace</code>, <code>iptables</code>, <code>ipvs</code>几种，默认实现为<code>iptables</code>。本文来分析<code>iptables</code>实现方案下，<code>POD</code>访问<code>ClusterIP</code>的数据包路径。数据包整体通过<code>iptables</code>链的过程，可以参考之前的文章<a href="/2016/12/11/iptables/">&lt;&lt;IPTABLES机制分析&gt;&gt;</a>。</p>
+<p>要注意的是，<code>kube-proxy</code>的<code>iptables</code>规则都是添加在<code>init_net</code>的，所以数据包从<code>pod</code>一端的<code>veth peer</code>发出，然后从宿主机这端<code>veth peer</code>进入<code>init_net</code>时，才会由<code>nat</code>表的<code>PREROUTING</code>链处理, 跳转至<code>KUBE-SERVICES</code>链:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A PREROUTING -m comment --comment <span class="string">&quot;kubernetes service portals&quot;</span> -j KUBE-SERVICES</span><br></pre></td></tr></table></figure>
+
+<p><code>KUBE-SERVICES</code>链规则如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SERVICES ! -s 10.230.0.0/16 -d 10.32.0.235/32 -p tcp -m comment --comment <span class="string">&quot;default/whoami:web cluster IP&quot;</span> -m tcp --dport 80 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SERVICES -d 10.32.0.235/32 -p tcp -m comment --comment <span class="string">&quot;default/whoami:web cluster IP&quot;</span> -m tcp --dport 80 -j KUBE-SVC-225DYIB7Z2N6SCOU</span><br><span class="line">-A KUBE-SERVICES ! -s 10.230.0.0/16 -d 10.32.0.1/32 -p tcp -m comment --comment <span class="string">&quot;default/kubernetes:https cluster IP&quot;</span> -m tcp --dport 443 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SERVICES -d 10.32.0.1/32 -p tcp -m comment --comment <span class="string">&quot;default/kubernetes:https cluster IP&quot;</span> -m tcp --dport 443 -j KUBE-SVC-NPX46M4PTMTKRN6Y</span><br><span class="line">-A KUBE-SERVICES -m comment --comment <span class="string">&quot;kubernetes service nodeports; NOTE: this must be the last rule in this chain&quot;</span> -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS</span><br></pre></td></tr></table></figure>
+
+<p><code>kubernetes</code>和<code>whoami</code>两个<code>service</code>, 每个<code>service</code>有两条<code>iptables</code>规则:<br>第一条表示，<code>! -s 10.230.0.0/16</code>表示数据包来自<code>kubernetes</code>集群外<code>IP</code>。如果是<code>kubernetes</code>集群外访问<code>service</code>，跳转至<code>KUBE-MARK-MASQ</code>。<br>第二条规则表示，集群内<code>IP</code>访问该<code>service</code>则跳转至<code>KUBE-SVC-225DYIB7Z2N6SCOU</code>处理。</p>
+<p>最后一条<code>KUBE-NODEPORTS</code>用于匹配<code>NodePort</code>类型的<code>service</code>。</p>
+<p><code>KUBE-SVC-225DYIB7Z2N6SCOU</code>的规则如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SVC-225DYIB7Z2N6SCOU -m statistic --mode random --probability 0.33332999982 -j KUBE-SEP-6ALQJ7ITJYIQGLX3</span><br><span class="line">-A KUBE-SVC-225DYIB7Z2N6SCOU -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-GEJ3N4FTSFGJDJNF</span><br><span class="line">-A KUBE-SVC-225DYIB7Z2N6SCOU -j KUBE-SEP-VVIWAZ76Z4TWVPK7</span><br></pre></td></tr></table></figure>
+<p><code>KUBE-SVC-225DYIB7Z2N6SCOU</code>的规则，使用<code>statistic</code>模块的<code>random</code>模式来实现负载均衡，跳转到不同的<code>endpoint</code>。每个<code>endpoint</code>有一条自定义链，如<code>KUBE-SEP-6ALQJ7ITJYIQGLX3</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SEP-6ALQJ7ITJYIQGLX3 -s 10.230.74.7/32 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-SEP-6ALQJ7ITJYIQGLX3 -p tcp -m tcp -j DNAT --to-destination 10.230.74.7:80</span><br></pre></td></tr></table></figure>
+<p>第一条规则表示数据包是由<code>service</code>的<code>endpoint</code>自身去访问<code>ClusterIP</code>而访问到自身, 这种情况跳转至<code>KUBE-MARK-MASQ</code>处理。<br>第二条规则表示源不是自身<code>pod IP</code>的数据包，这种情况下将数据包目标地址的<code>ClusterIP:Port</code>修改为对应<code>pod</code>的地址和端口。</p>
+<p>之后数据包进行路由决策，判断是由<code>flannel.1</code>发送到其他节点，还是由<code>cni0</code>进行二层转发。</p>
+<p>进入<code>filter</code>表的<code>FORWARD</code>链进行处理如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-A FORWARD -m comment --comment <span class="string">&quot;kubernetes forwarding rules&quot;</span> -j KUBE-FORWARD</span><br><span class="line">-A FORWARD -m conntrack --ctstate NEW -m comment --comment <span class="string">&quot;kubernetes service portals&quot;</span> -j KUBE-SERVICES</span><br></pre></td></tr></table></figure>
+
+<p>而<code>KUBE-FORWARD</code>的规则如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-FORWARD -m conntrack --ctstate INVALID -j DROP</span><br><span class="line">-A KUBE-FORWARD -m comment --comment <span class="string">&quot;kubernetes forwarding rules&quot;</span> -m mark --mark 0x4000/0x4000 -j ACCEPT</span><br><span class="line">-A KUBE-FORWARD -s 10.230.0.0/16 -m comment --comment <span class="string">&quot;kubernetes forwarding conntrack pod source rule&quot;</span> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT</span><br><span class="line">-A KUBE-FORWARD -d 10.230.0.0/16 -m comment --comment <span class="string">&quot;kubernetes forwarding conntrack pod destination rule&quot;</span> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT</span><br></pre></td></tr></table></figure>
+
+<p><code>FORWARD</code>阶段主要是由<code>conntrack</code>模块实现连接跟踪。连接状态为<code>NEW</code>的数据包跳转到<code>KUBE-SERVICE</code>链进行处理。需要注意的是，<code>iptables</code>中不同表中的同名链是不相同的链。这里<code>filter</code>表的<code>KUBE-SERVICES</code>链为空。</p>
+<p>数据包路由决策结束之后进入<code>nat</code>的<code>POSTROUTING</code>处理:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-A POSTROUTING -m comment --comment <span class="string">&quot;kubernetes postrouting rules&quot;</span> -j KUBE-POSTROUTING</span><br><span class="line">-A POSTROUTING -s 10.230.74.7/32 -m comment --comment <span class="string">&quot;name: \&quot;cbr0\&quot; id: \&quot;d2ec32c253b68ec5b3c5327c51c62637e8a54f0f96046f4c7820fd671c0c99c8\&quot;&quot;</span> -j CNI-b227064a304757ab8c96d7e0</span><br><span class="line">-A POSTROUTING -s 10.230.74.8/32 -m comment --comment <span class="string">&quot;name: \&quot;cbr0\&quot; id: \&quot;6ddf1a0d25326e975fb4a36f441ff86cb52977de18fbc10d5e153e1ab89ddd6f\&quot;&quot;</span> -j CNI-e4c4a4418638b487abe587d5</span><br><span class="line">-A POSTROUTING -s 10.230.74.19/32 -m comment --comment <span class="string">&quot;name: \&quot;cbr0\&quot; id: \&quot;f75b50453a13f79d2fe56f288b04b248a3194f76ceb56f3a0e55b083cdedc006\&quot;&quot;</span> -j CNI-3f43e40b0646cf4ef37761a7</span><br></pre></td></tr></table></figure>
+
+<p><code>KUBE-POSTROUTING</code>的规则如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-POSTROUTING -m comment --comment <span class="string">&quot;kubernetes service traffic requiring SNAT&quot;</span> -m mark --mark 0x4000/0x4000 -j MASQUERADE</span><br></pre></td></tr></table></figure>
+
+<p>客户端<code>pod</code>发出的数据包匹配到<code>nat:POSTROUTING</code>的第4条规则，跳到转<code>CNI-3f43e40b0646cf4ef37761a7</code>处理:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-A CNI-3f43e40b0646cf4ef37761a7 -d 10.230.74.0/24 -m comment --comment <span class="string">&quot;name: \&quot;cbr0\&quot; id: \&quot;f75b50453a13f79d2fe56f288b04b248a3194f76ceb56f3a0e55b083cdedc006\&quot;&quot;</span> -j ACCEPT</span><br><span class="line">-A CNI-3f43e40b0646cf4ef37761a7 ! -d 224.0.0.0/4 -m comment --comment <span class="string">&quot;name: \&quot;cbr0\&quot; id: \&quot;f75b50453a13f79d2fe56f288b04b248a3194f76ceb56f3a0e55b083cdedc006\&quot;&quot;</span> -j MASQUERADE</span><br></pre></td></tr></table></figure>
+<p>匹配到第一条规则，数据包被接受，转发到目标<code>pod</code>。</p>
+<p>整个匹配过程如图:</p>
+<img src="/images/2021-11-07/1.png" class="">
+
+<p><code>pod</code>的响应数据包进入<code>init_net</code>之后同样首先匹配<code>nat:PREROUTING</code>，匹配不到任何规则，进入<code>filter</code>表的<code>FORWARD</code>链处理, 匹配到<code>conntrack</code>规则，此时根据<code>conntrack</code>的信息，自动完成<code>SNAT</code>过程，将响应数据包的<code>源IP</code>修改为<code>ClusterIP: 10.230.0.235</code>。</p>
+<p>接着进入<code>nat</code>的<code>POSTROUTING</code>, 匹配不到任何规则，转发回客户端<code>pod</code>，完成一来一回的通信过程。</p>
+<p>需要注意的是，这种情况下,<code>node</code>节点的参数<code>net.bridge.bridge-nf-call-iptables</code>需要设置为<code>1</code>。否则，当选择到同一台主机的后端<code>pod</code>时，在<code>KUBE-SEP-*</code>链中完成<code>DNAT</code>之后，目的地址和源地址在同一个二层网络内，直接由网桥转发到相应的网卡上，并不会调用到<code>iptables</code>的<code>FORWARD</code>链。这样，响应数据包回到网桥时，因为不会调用<code>iptables</code>的<code>FORWARD</code>链，不会完成对应的<code>SNAT</code>操作。因而客户端<code>pod</code>会收到源<code>IP</code>为后端<code>pod IP</code>的数据包。对于<code>TCP</code>连接，因为收到的<code>SYN+ACK</code>包不匹配，因而会发送一个<code>RESET</code>包，因而<code>TCP</code>连接无法建立。</p>
+<p>这种场景下，在客户端<code>pod</code>上抓包，可以看到:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]<span class="comment"># tcpdump -i vethb4eaf1e5 -nn</span></span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv <span class="keyword">for</span> full protocol decode</span><br><span class="line">listening on vethb4eaf1e5, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">13:20:38.386567 IP 10.230.74.19.36450 &gt; 10.32.0.235.80: Flags [S], <span class="built_in">seq</span> 1431048683, win 28200, options [mss 1410,sackOK,TS val 52241475 ecr 0,nop,wscale 7], length 0</span><br><span class="line">13:20:38.386609 IP 10.230.74.19.36450 &gt; 10.230.74.8.80: Flags [S], <span class="built_in">seq</span> 1431048683, win 28200, options [mss 1410,sackOK,TS val 52241475 ecr 0,nop,wscale 7], length 0</span><br><span class="line">13:20:38.386631 IP 10.230.74.8.80 &gt; 10.230.74.19.36450: Flags [S.], <span class="built_in">seq</span> 1948187370, ack 1431048684, win 27960, options [mss 1410,sackOK,TS val 52241475 ecr 52241475,nop,wscale 7], length 0</span><br><span class="line">13:20:38.386639 IP 10.230.74.19.36450 &gt; 10.230.74.8.80: Flags [R], <span class="built_in">seq</span> 1431048684, win 0, length 0</span><br><span class="line">^C</span><br><span class="line">4 packets captured</span><br><span class="line">4 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>收到的<code>SYN+ACK</code>包的源<code>IP</code>并不是<code>10.32.0.235</code>, 而是后端<code>pod</code>的<code>10.230.74.8</code>，因而返回一个<code>RESET</code>数据包。</p>
+<p>如果<code>KUBE-SVC-*</code>链里匹配到的<code>endpoint</code>不在该<code>node</code>, 路由决策完会从<code>flannel.1</code>发送。数据包通过<code>VXLAN</code>到达<code>node2</code>之后，数据包地址已经过<code>DNAT</code>，目标地址为<code>pod IP</code>，就是正常的<code>POD</code>网络通信过程，经由<code>nat:PREROUTING</code>，<code>filter:FORWARD</code>和<code>nat:POSTROUTING</code>处理，匹配不到任何规则，转发到目标<code>POD</code>。</p>
+<p>响应包在<code>node2</code>上是正常的<code>POD</code>网络通信过程，通过<code>VXLAN</code>回到<code>node1</code>。然后进入<code>nat:PREROUTING</code>链处理, 匹配不到任何规则，进入<code>filter:FORWARD</code>链处理, 匹配到<code>conntrack</code>规则，根据<code>conntrack</code>的信息，自动完成<code>SNAT</code>过程，数据包的<code>源IP</code>修改回<code>10.230.0.235</code>。接着进入<code>nat:POSTROUTING</code>处理, 匹配不到任何规则，转发回客户端<code>pod</code>，完成一来一回的数据包过程。</p>
+<p><code>POD</code>访问<code>ClusterIP</code>的基础过程就是这样。</p>
+<p>我们把上边的<code>service</code>修改为<code>NodePort</code>类型。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl get svc -o wide</span></span><br><span class="line">NAME         TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE   SELECTOR</span><br><span class="line">kubernetes   ClusterIP   10.32.0.1     &lt;none&gt;        443/TCP        18d   &lt;none&gt;</span><br><span class="line"><span class="built_in">whoami</span>       NodePort    10.32.0.235   &lt;none&gt;        80:31554/TCP   33h   app=<span class="built_in">whoami</span></span><br></pre></td></tr></table></figure>
+<p>查看<code>service</code>信息，分配的<code>port</code>为<code>31554</code>,</p>
+<p>访问<code>NodeIP:NodePort</code>的数据包进入<code>node1</code>之后，先由<code>nat:PREROUTING</code>链处理, 匹配到<code>KUBE-SERVICES</code>中的规则，进而由<code>KUBE-NODEPORTS</code>进行处理:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SERVICES -m comment --comment &quot;kubernetes service nodeports; NOTE: this must be the last rule in this chain&quot; -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS</span><br></pre></td></tr></table></figure>
+
+<p>配置<code>NodePort</code>类型<code>service</code>后，<code>iptables</code>增加了两条规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-NODEPORTS -p tcp -m comment --comment &quot;default/whoami:web&quot; -m tcp --dport 31554 -j KUBE-MARK-MASQ</span><br><span class="line">-A KUBE-NODEPORTS -p tcp -m comment --comment &quot;default/whoami:web&quot; -m tcp --dport 31554 -j KUBE-SVC-225DYIB7Z2N6SCOU</span><br></pre></td></tr></table></figure>
+
+<p>在<code>KUBE-MARK-MASQ</code>链中设置<code>0x4000/0x4000</code>的<code>mark</code>值:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-MARK-MASQ -j MARK --set-xmark 0x4000/0x4000</span><br></pre></td></tr></table></figure>
+
+<p>然后跳转到<code>KUBE-SVC-225DYIB7Z2N6SCOU</code>进行处理，之后的过程和<code>ClusterIP</code>的通信过程一致，直到<code>nat:POSTROUTING</code>链的处理:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-POSTROUTING -m comment --comment &quot;kubernetes service traffic requiring SNAT&quot; -m mark --mark 0x4000/0x4000 -j MASQUERADE</span><br></pre></td></tr></table></figure>
+<p>因为数据包在<code>PREROUTING</code>阶段已经设置<code>mark</code>, 匹配到这条规则完成<code>SNAT</code>过程，因而在这种情况下，后端<code>pod</code>看到的源<code>IP</code>为所在<code>node</code>上<code>MASQUERADE</code>选择的<code>IP</code>。如果选定的后端<code>pod</code>位于本<code>node</code>上，则出口设备为网桥<code>cni0</code>，因而后端<code>pod</code>上看到的源<code>IP</code>为<code>cni0</code>的地址。如果选定的后端位于其他<code>node</code>, 需要通过<code>VXLAN</code>转发到其他节点，则出口设备为<code>flannel.1</code>, 因而后端<code>pod</code>上看到的源<code>IP</code>为该<code>node</code>上<code>flannel.1</code>的<code>IP</code>, 比如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]<span class="comment"># kubectl exec -it curl1-54dbd6b8cb-vm5wc -- curl http://10.240.0.101:31554</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-2frx6</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.74.7</span><br><span class="line">IP: fe80::20c8:faff:fe77:7a40</span><br><span class="line">RemoteAddr: 10.230.74.1:37722</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.101:31554</span><br><span class="line">User-Agent: curl/7.35.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@master1 ~]<span class="comment"># kubectl exec -it curl1-54dbd6b8cb-vm5wc -- curl http://10.240.0.101:31554</span></span><br><span class="line">Hostname: whoami-5df4df6ff5-84tpp</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.95.7</span><br><span class="line">IP: fe80::5433:63ff:fe98:6d1e</span><br><span class="line">RemoteAddr: 10.230.74.0:37726</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.101:31554</span><br><span class="line">User-Agent: curl/7.35.0</span><br><span class="line">Accept: */*</span><br></pre></td></tr></table></figure>
+
+<p>总结来说，<code>kube-proxy</code>的<code>iptables</code>模式主要用到这些自定义链:</p>
+<ul>
+<li><code>nat:KUBE-SERVICES</code>: 匹配数据包目标地址，跳转到相应的<code>KUBE-SVC-*</code></li>
+<li><code>nat:KUBE-SVC-*</code>: 作为负载均衡设备，分发流量到不同的<code>KUBE-SEP-*</code></li>
+<li><code>nat:KUBE-SEP-*</code>: 代表一个后端<code>pod</code>, 也叫<code>service end-point</code>，完成<code>DNAT</code>过程</li>
+<li><code>nat:KUBE-MARK-MASQ</code>: 给来自集群外的数据包设置<code>mark</code>, 这些数据包在<code>POSTROUTING</code>阶段需要完成<code>SNAT</code>操作</li>
+<li><code>nat:KUBE-NODEPORTS</code>: 当配置<code>NodePort</code>或者<code>LoadBalancer</code>类型的<code>service</code>时，跳转到<code>KUBE-MARK-MASQ</code>设置<code>mark</code>和跳转到相应的<code>KUBE-SVC-*</code></li>
+</ul>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/cracking-k8s-node-proxy/#1-background-knowledge">https://arthurchiao.art/blog/cracking-k8s-node-proxy/#1-background-knowledge</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cloudsavvyit.com/11261/kubernetes-clusterip-nodeport-or-ingress-when-to-use-each/">https://www.cloudsavvyit.com/11261/kubernetes-clusterip-nodeport-or-ingress-when-to-use-each/</a></li>
+<li><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/service/">https://kubernetes.io/docs/concepts/services-networking/service/</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/41509439/whats-the-difference-between-clusterip-nodeport-and-loadbalancer-service-types">https://stackoverflow.com/questions/41509439/whats-the-difference-between-clusterip-nodeport-and-loadbalancer-service-types</a></li>
+<li><a target="_blank" rel="noopener" href="https://cizixs.com/2017/03/30/kubernetes-introduction-service-and-kube-proxy/">https://cizixs.com/2017/03/30/kubernetes-introduction-service-and-kube-proxy/</a></li>
+<li><a target="_blank" rel="noopener" href="https://faun.pub/kubernetes-without-kube-proxy-1c5d25786e18">https://faun.pub/kubernetes-without-kube-proxy-1c5d25786e18</a></li>
+<li><a target="_blank" rel="noopener" href="https://bugzilla.redhat.com/show_bug.cgi?id=512206">https://bugzilla.redhat.com/show_bug.cgi?id=512206</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/flxzlxb/article/details/112849468">https://blog.csdn.net/flxzlxb/article/details/112849468</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.codeleading.com/article/46422763270/">https://www.codeleading.com/article/46422763270/</a></li>
+<li><a target="_blank" rel="noopener" href="https://serenafeng.github.io/2020/03/26/kube-proxy-in-iptables-mode/">https://serenafeng.github.io/2020/03/26/kube-proxy-in-iptables-mode/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Iptables/" rel="tag"># Iptables</a>
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/Kube-proxy/" rel="tag"># Kube-proxy</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/11/03/flannel/" rel="prev" title="Kubernetes flannel网络分析">
+      <i class="fa fa-chevron-left"></i> Kubernetes flannel网络分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/11/14/external-ip/" rel="next" title="基于LVS DR模式的Kubernetes Service External-IP实现">
+      基于LVS DR模式的Kubernetes Service External-IP实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

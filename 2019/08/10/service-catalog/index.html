@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在一些场景下，运行在CloudFoundry和Kubernetes等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，CloudFoundry及Google等一系列公司创建了Open Service Broker API(OSBAPI)项目，致力于将外部服务">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes服务目录简要介绍">
+<meta property="og:url" content="http://just4coding.com/2019/08/10/service-catalog/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在一些场景下，运行在CloudFoundry和Kubernetes等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，CloudFoundry及Google等一系列公司创建了Open Service Broker API(OSBAPI)项目，致力于将外部服务">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2019-08-10/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2019-08-10/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2019-08-10/3.png">
+<meta property="article:published_time" content="2019-08-10T00:14:56.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.490Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2019-08-10/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2019/08/10/service-catalog/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes服务目录简要介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2019/08/10/service-catalog/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes服务目录简要介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-08-10 08:14:56" itemprop="dateCreated datePublished" datetime="2019-08-10T08:14:56+08:00">2019-08-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在一些场景下，运行在<code>CloudFoundry</code>和<code>Kubernetes</code>等平台上的Cloud Native应用需要使用各种各样的外部服务，如数据库，消息队列等。但应用开发者并不想关心这些服务的配置、管理和位置等信息，以便将精力集中在业务逻辑开发上。为了满足这种需要，<code>CloudFoundry</code>及<code>Google</code>等一系列公司创建了<a target="_blank" rel="noopener" href="https://www.openservicebrokerapi.org/"><code>Open Service Broker API(OSBAPI)</code>项目</a>，致力于将外部服务的生命周期管理，应用平台与服务代理的交互，服务实例的访问等内容标准化。</p>
+<p><code>OSBAPI</code>规范定义了高度抽象的应用平台与外部服务代理的交互逻辑，规范化外部服务的使用，主要包括:</p>
+<ul>
+<li>注册服务代理: 应用平台会获取服务代理提供的服务列表及相应规格，<code>OSBAPI</code>使用术语<code>Plan</code>来表示规格。</li>
+<li><code>Provision</code>服务实例: <code>OSBAPI</code>使用术语<code>Provision</code>来统一指定服务资源的供应。在外部服务具体实现上，可以是创建虚拟机实例，也可以是分配资源，也可以是创建SaaS帐号等等。</li>
+<li>绑定应用及服务实例: 当服务实例创建完成后，开发者想要其应用与该服务实例进行交互。从服务代理的角度来看，就是将应用与服务实例进行绑定。具体实现逻辑可以非常灵活，一般情况下，会生成访问该服务实例所需的新凭证。比如，生成数据库实例的IP、端口、用户名、密码等等。这些凭证会被返回给应用平台以提供给具体应用使用。</li>
+</ul>
+<p><code>OSBAPI</code>的具体工作模式如下图:</p>
+<img src="/images/2019-08-10/1.png" class="">
+
+<span id="more"></span>
+
+<p>Kubernetes的<a target="_blank" rel="noopener" href="https://svc-cat.io/">Service Catalog项目</a>实现了<code>OSBAPI</code>规范，Kubernetes平台的应用通过service catalog来使用外部服务。<br>大体实现架构如图:</p>
+<img src="/images/2019-08-10/2.png" class="">
+
+<p>Service catalog实现将service catalog资源对象的管理映射到<code>OSBAPI</code>相应资源的操作, 架构上主要包括两部分:</p>
+<ul>
+<li>API Server:<br>它基于<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/">API-aggregation</a>实了一个扩展API Server, 使用<a target="_blank" rel="noopener" href="https://etcd.io/">etcd</a>做为后端存储。<br>Kubernetes用户和service catalog controller通过与API Server交互完成Service Catalog资源的CRUD操作。</li>
+<li>Controller:<br>Controller实现了<code>OSBAPI</code>规范。它监控API Server上资源对象的事件，并完成与<code>OSBAPI</code>对应的操作。比如，当用户创建一个ClusterServiceBroker对象, API Server会存储该资源并产生一个事件。Controller会接收到该事件，接着去请求指定的服务代理获取该服务代理所提供的资源。</li>
+</ul>
+<p>Service catalog的API组为: <code>servicecatalog.k8s.io</code>, 当前的API资源版本为: <code>v1beta1</code>，提供的主要资源有: </p>
+<ul>
+<li>ClusterServiceBroker:<br>Service Broker在Kubernetes集群内的表示, 包含Service Broker的相关信息。</li>
+<li>ClusterServiceClass:<br>表示特定ServiceBroker所提供的外部服务，ClusterServiceBroker创建后，controller会自动从ClusterServiceBroker所提供的URL拉取服务列表，为每个外部服务创建一个ClusterServiceClass。</li>
+<li>ClusterServicePlan:<br>表示外部服务的规格，ClusterServiceBroker创建后，controller也会自动创建ClusterServicePlan对象。</li>
+<li>ServiceInstance:<br>外部服务的服务实例，创建该对象时，controller会发送<code>OSBAPI</code> <code>Provision</code>请求。</li>
+<li>ServiceBinding:<br>创建该对象后，controller发送<code>OSBAPI</code>的Binding请求，并将返回的凭证信息存储在kubernetes的Secret对象中。该Secret对象需要被挂载到需要使用该服务的Pod中。</li>
+</ul>
+<p>其他的一些资源具体可参考: <a target="_blank" rel="noopener" href="https://svc-cat.io/docs/resources/">https://svc-cat.io/docs/resources/</a></p>
+<p>当存储有相关凭证信息的<code>Secret</code>对象挂载到特定应用的<code>Pod</code>中，该应用则可以使用这些信息与外部服务进行交互, 如下图所示:</p>
+<img src="/images/2019-08-10/3.png" class="">
+
+<p>下面通过一个实例来说明Kubernetes与外部服务的交互。</p>
+<p>首先，我们基于python的<a target="_blank" rel="noopener" href="https://pypi.org/project/openbrokerapi/0.3.1/">openbrokerapi</a>来实现一个demo broker, 它只是简单的返回服务信息，并不真实分配服务资源。</p>
+<p>源码<code>broker.py</code>内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> openbrokerapi <span class="keyword">import</span> api</span><br><span class="line"><span class="keyword">from</span> openbrokerapi.catalog <span class="keyword">import</span> ServicePlan</span><br><span class="line"><span class="keyword">from</span> openbrokerapi.service_broker <span class="keyword">import</span> (</span><br><span class="line">    ServiceBroker,</span><br><span class="line">    Service,</span><br><span class="line">    ProvisionedServiceSpec,</span><br><span class="line">    ProvisionState,</span><br><span class="line">    UpdateServiceSpec,</span><br><span class="line">    BindState,</span><br><span class="line">    Binding,</span><br><span class="line">    DeprovisionServiceSpec,</span><br><span class="line">    LastOperation,</span><br><span class="line">    UnbindDetails,</span><br><span class="line">    ProvisionDetails,</span><br><span class="line">    UpdateDetails,</span><br><span class="line">    BindDetails,</span><br><span class="line">    DeprovisionDetails</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ExampleServiceBroker</span>(<span class="title class_ inherited__">ServiceBroker</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">catalog</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> Service(</span><br><span class="line">            <span class="built_in">id</span>=<span class="string">&#x27;6b6b5306-5c37-4fba-a402-186f8a0dfa0a&#x27;</span>,</span><br><span class="line">            name=<span class="string">&#x27;demo-service&#x27;</span>,</span><br><span class="line">            description=<span class="string">&#x27;demo service does nothing&#x27;</span>,</span><br><span class="line">            bindable=<span class="literal">True</span>,</span><br><span class="line">            plans=[</span><br><span class="line">                ServicePlan(</span><br><span class="line">                    <span class="built_in">id</span>=<span class="string">&#x27;9a411f4c-01fa-4996-a780-a0d1b8dcb234&#x27;</span>,</span><br><span class="line">                    name=<span class="string">&#x27;default&#x27;</span>,</span><br><span class="line">                    description=<span class="string">&#x27;default service plan&#x27;</span>,</span><br><span class="line">                ),</span><br><span class="line">            ],</span><br><span class="line">            tags=[<span class="string">&#x27;demo&#x27;</span>, <span class="string">&#x27;service&#x27;</span>],</span><br><span class="line">            plan_updateable=<span class="literal">True</span>,</span><br><span class="line">        )</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">provision</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, service_details: ProvisionDetails,</span></span><br><span class="line"><span class="params">                  async_allowed: <span class="built_in">bool</span></span>) -&gt; ProvisionedServiceSpec:</span><br><span class="line">        <span class="keyword">return</span> ProvisionedServiceSpec(</span><br><span class="line">            state=ProvisionState.SUCCESSFUL_CREATED,</span><br><span class="line">            dashboard_url=<span class="string">&quot;http://demo.local/&#123;&#125;&quot;</span>.<span class="built_in">format</span>(instance_id)</span><br><span class="line">        )</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">bind</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, binding_id: <span class="built_in">str</span>, details: BindDetails</span>) -&gt; Binding:</span><br><span class="line">        <span class="keyword">return</span> Binding(</span><br><span class="line">            state=BindState.SUCCESSFUL_BOUND,</span><br><span class="line">            credentials = &#123;</span><br><span class="line">                <span class="string">&quot;uri&quot;</span>: <span class="string">&quot;http://demo.local/&#123;&#125;&quot;</span>.<span class="built_in">format</span>(binding_id),</span><br><span class="line">                <span class="string">&quot;username&quot;</span>: <span class="string">&quot;abc&quot;</span>,</span><br><span class="line">                <span class="string">&quot;password&quot;</span>: <span class="string">&quot;123456&quot;</span></span><br><span class="line">            &#125;</span><br><span class="line">        )</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">update</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, details: UpdateDetails, async_allowed: <span class="built_in">bool</span></span>) -&gt; UpdateServiceSpec:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">unbind</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, binding_id: <span class="built_in">str</span>, details: UnbindDetails</span>):</span><br><span class="line">        <span class="keyword">return</span> details</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">deprovision</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, details: DeprovisionDetails, async_allowed: <span class="built_in">bool</span></span>) -&gt; DeprovisionServiceSpec:</span><br><span class="line">        <span class="keyword">return</span> DeprovisionServiceSpec(</span><br><span class="line">            is_async=<span class="literal">False</span>,</span><br><span class="line">            operation=<span class="literal">None</span></span><br><span class="line">        )</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">last_operation</span>(<span class="params">self, instance_id: <span class="built_in">str</span>, operation_data: <span class="built_in">str</span></span>) -&gt; LastOperation:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line">api.serve(ExampleServiceBroker(), <span class="literal">None</span>, port=<span class="number">5000</span>)</span><br></pre></td></tr></table></figure>
+
+<p>运行该broker:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">python broker.py</span><br></pre></td></tr></table></figure>
+<p>该虚拟机IP为<code>10.0.0.231</code>，它监听<code>5000</code>端口。</p>
+<p>我们假定Kubernetes集群搭建和Service Catalog已经安装完成。</p>
+<p>首先，在Kubernetest集群创建ClusterServiceBroker:</p>
+<p><code>demo-broker.yaml</code>的内容如下:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">servicecatalog.k8s.io/v1beta1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterServiceBroker</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">demo-broker</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">url:</span> <span class="string">http://10.0.0.231:5000</span></span><br></pre></td></tr></table></figure>
+
+<p>创建demo-broker:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl create -f demo-broker.yaml</span><br><span class="line">clusterservicebroker.servicecatalog.k8s.io/demo-broker created</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>clusterservicebrokers</code>列表:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get clusterservicebrokers</span><br><span class="line">NAME          URL                        STATUS   AGE</span><br><span class="line">demo-broker   http://10.0.0.231:5000   Ready    70s</span><br></pre></td></tr></table></figure>
+<p>查看<code>clusterserviceclasses</code>列表, 可以看到demo-broker所提供的demo-service:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get clusterserviceclasses</span><br><span class="line">NAME                                   EXTERNAL-NAME   BROKER        AGE</span><br><span class="line">6b6b5306-5c37-4fba-a402-186f8a0dfa0a   demo-service    demo-broker   34s</span><br></pre></td></tr></table></figure>
+<p>查看<code>clusterserviceplans</code>列表:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get clusterserviceplans</span><br><span class="line">NAME                                   EXTERNAL-NAME   BROKER        CLASS                                  AGE</span><br><span class="line">9a411f4c-01fa-4996-a780-a0d1b8dcb234   default         demo-broker   6b6b5306-5c37-4fba-a402-186f8a0dfa0a   40s</span><br></pre></td></tr></table></figure>
+
+<p>接下来，创建服务实例。<br><code>demo-instance.yaml</code>内容如下:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">servicecatalog.k8s.io/v1beta1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ServiceInstance</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">demo-instance</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">clusterServiceClassExternalName:</span> <span class="string">demo-service</span></span><br><span class="line">  <span class="attr">planName:</span> <span class="string">default</span></span><br></pre></td></tr></table></figure>
+<p>创建ServiceInstance对象:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl create -f demo-instance.yaml</span><br><span class="line">serviceinstance.servicecatalog.k8s.io/demo-instance created</span><br></pre></td></tr></table></figure>
+
+<p>查看实例列表，可以看到新创建的demo-instance实例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get serviceinstances</span><br><span class="line">NAME            CLASS                              PLAN      STATUS   AGE</span><br><span class="line">demo-instance   ClusterServiceClass/demo-service   default   Ready    11s</span><br></pre></td></tr></table></figure>
+
+<p>接着，创建Binding:<br><code>demo-binding.yaml</code>内容如下:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">servicecatalog.k8s.io/v1beta1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ServiceBinding</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">demo-binding</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">instanceRef:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">demo-instance</span></span><br><span class="line">  <span class="attr">secretName:</span> <span class="string">demo-instance-credentials</span></span><br></pre></td></tr></table></figure>
+<p>创建ServiceBinding对象:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl create -f demo-binding.yaml</span><br><span class="line">servicebinding.servicecatalog.k8s.io/demo-binding created</span><br></pre></td></tr></table></figure>
+
+<p>查看ServiceBindings列表可以看到demo-binding创建成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get servicebindings</span><br><span class="line">NAME           SERVICE-INSTANCE   SECRET-NAME                 STATUS   AGE</span><br><span class="line">demo-binding   demo-instance      demo-instance-credentials   Ready    7s</span><br></pre></td></tr></table></figure>
+
+<p>我们在<code>demo-binding.yaml</code>中指定凭证信息存储在Secret对象<code>demo-instance-credentials</code>中，我们来查看这个Secret对象:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl get secret demo-instance-credentials -o yaml</span><br><span class="line">apiVersion: v1</span><br><span class="line">data:</span><br><span class="line">  password: MTIzNDU2</span><br><span class="line">  uri: aHR0cDovL2RlbW8ubG9jYWwvYmY2YWRlZTItYmJkNC0xMWU5LWFhYmYtMDI0MmFjMTEwMDA3</span><br><span class="line">  username: YWJj</span><br><span class="line">kind: Secret</span><br><span class="line">metadata:</span><br><span class="line">  creationTimestamp: &quot;2019-08-11T01:10:03Z&quot;</span><br><span class="line">  name: demo-instance-credentials</span><br><span class="line">  namespace: default</span><br><span class="line">  ownerReferences:</span><br><span class="line">  - apiVersion: servicecatalog.k8s.io/v1beta1</span><br><span class="line">    blockOwnerDeletion: true</span><br><span class="line">    controller: true</span><br><span class="line">    kind: ServiceBinding</span><br><span class="line">    name: demo-binding</span><br><span class="line">    uid: bf6adf2b-bbd4-11e9-aabf-0242ac110007</span><br><span class="line">  resourceVersion: &quot;307730&quot;</span><br><span class="line">  selfLink: /api/v1/namespaces/default/secrets/demo-instance-credentials</span><br><span class="line">  uid: 7c159d9c-0cb0-4a4e-86da-ea7480255e5e</span><br><span class="line">type: Opaque</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# echo &#x27;aHR0cDovL2RlbW8ubG9jYWwvYmY2YWRlZTItYmJkNC0xMWU5LWFhYmYtMDI0MmFjMTEwMDA3&#x27; | base64 --decode</span><br><span class="line">http://demo.local/bf6adee2-bbd4-11e9-aabf-0242ac110007</span><br><span class="line">[root@fg-t1 yaml]# echo &#x27;MTIzNDU2&#x27; |base64 --decode</span><br><span class="line">123456</span><br><span class="line">[root@fg-t1 yaml]# echo &#x27;YWJj&#x27; |base64 --decode</span><br><span class="line">abc</span><br></pre></td></tr></table></figure>
+
+<p>可以看到，返回的内容正是我们在<code>broker.py</code>中所指定的内容。</p>
+<p>最后，我们清理掉这些实例内容:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t1 yaml]# kubectl delete servicebindings demo-binding</span><br><span class="line">servicebinding.servicecatalog.k8s.io &quot;demo-binding&quot; deleted</span><br><span class="line">[root@fg-t1 yaml]# kubectl delete serviceinstance demo-instance</span><br><span class="line">serviceinstance.servicecatalog.k8s.io &quot;demo-instance” deleted</span><br><span class="line">[root@fg-t1 yaml]# kubectl delete clusterservicebroker demo-broker</span><br><span class="line">clusterservicebroker.servicecatalog.k8s.io &quot;demo-broker” deleted</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/11/23/fabric/" rel="prev" title="Python远程执行库Fabric简要介绍">
+      <i class="fa fa-chevron-left"></i> Python远程执行库Fabric简要介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/02/13/open-policy-agent/" rel="next" title="Open Policy Agent简介">
+      Open Policy Agent简介 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

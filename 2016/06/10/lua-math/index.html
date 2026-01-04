@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Lua通过标准库实现了核心之外的功能，如math库，I&#x2F;O库等。本文来分析math标准库的实现, 代码位于lmathlib.c。 math库提供了一组标准的数学函数，如绝对值函数, 三角函数，随机数函数等。调用方式为: 1a &#x3D; math.abs(-1) 标准库由C语言函数实现，提供给Lua程序使用。Lua程序与C函数通过虚拟栈交互。Lua将参数压入栈中，C函数从栈中获取参数，并将结果压">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Lua源码分析: 2. math标准库实现">
+<meta property="og:url" content="http://just4coding.com/2016/06/10/lua-math/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Lua通过标准库实现了核心之外的功能，如math库，I&#x2F;O库等。本文来分析math标准库的实现, 代码位于lmathlib.c。 math库提供了一组标准的数学函数，如绝对值函数, 三角函数，随机数函数等。调用方式为: 1a &#x3D; math.abs(-1) 标准库由C语言函数实现，提供给Lua程序使用。Lua程序与C函数通过虚拟栈交互。Lua将参数压入栈中，C函数从栈中获取参数，并将结果压">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2016-06-10/6.png">
+<meta property="og:image" content="http://just4coding.com/images/2016-06-10/7.png">
+<meta property="article:published_time" content="2016-06-10T15:09:33.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.475Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2016-06-10/6.png">
+
+<link rel="canonical" href="http://just4coding.com/2016/06/10/lua-math/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Lua源码分析: 2. math标准库实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/06/10/lua-math/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Lua源码分析: 2. math标准库实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-06-10 23:09:33" itemprop="dateCreated datePublished" datetime="2016-06-10T23:09:33+08:00">2016-06-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Lua/" itemprop="url" rel="index">
+                    <span itemprop="name">Lua</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Lua通过标准库实现了核心之外的功能，如math库，I&#x2F;O库等。本文来分析math标准库的实现, 代码位于<code>lmathlib.c</code>。</p>
+<p>math库提供了一组标准的数学函数，如绝对值函数, 三角函数，随机数函数等。调用方式为:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">a = <span class="built_in">math</span>.<span class="built_in">abs</span>(<span class="number">-1</span>)</span><br></pre></td></tr></table></figure>
+<p>标准库由C语言函数实现，提供给Lua程序使用。Lua程序与C函数通过虚拟栈交互。Lua将参数压入栈中，C函数从栈中获取参数，并将结果压入栈中，C函数返回入栈的结果数量。C函数无需在压入结果前清空栈，Lua会在函数执行完成后从栈中获取结果并自动清空结果下的内容。</p>
+<p>Lua调用的C函数的格式是固定的，定义在lua.h中:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="title function_">int</span> <span class="params">(*lua_CFunction)</span> <span class="params">(lua_State *L)</span>;</span><br></pre></td></tr></table></figure>
+<span id="more"></span>
+<p>下面分析math库具体代码:<br>标准库加载时，会调用相应的初始化函数，格式为<code>luaopen_xxx</code>, math库的初始化函数为luaopen_math:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment">** Open math library</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line">LUAMOD_API <span class="type">int</span> <span class="title function_">luaopen_math</span> <span class="params">(lua_State *L)</span> &#123;</span><br><span class="line">  luaL_newlib(L, mathlib);</span><br><span class="line">  lua_pushnumber(L, PI);</span><br><span class="line">  lua_setfield(L, <span class="number">-2</span>, <span class="string">&quot;pi&quot;</span>);</span><br><span class="line">  lua_pushnumber(L, (lua_Number)HUGE_VAL);</span><br><span class="line">  lua_setfield(L, <span class="number">-2</span>, <span class="string">&quot;huge&quot;</span>);</span><br><span class="line">  lua_pushinteger(L, LUA_MAXINTEGER);</span><br><span class="line">  lua_setfield(L, <span class="number">-2</span>, <span class="string">&quot;maxinteger&quot;</span>);</span><br><span class="line">  lua_pushinteger(L, LUA_MININTEGER);</span><br><span class="line">  lua_setfield(L, <span class="number">-2</span>, <span class="string">&quot;mininteger&quot;</span>);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>luaopen_math()首先调用luaL_newlib()创建一个table压入栈中, 然后将mathlib数组中的函数注册到table中。<br>mathlib定义:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">const</span> luaL_Reg mathlib[] = &#123;</span><br><span class="line">  &#123;<span class="string">&quot;abs&quot;</span>,   math_abs&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;acos&quot;</span>,  math_acos&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;asin&quot;</span>,  math_asin&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;atan&quot;</span>,  math_atan&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;ceil&quot;</span>,  math_ceil&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;cos&quot;</span>,   math_cos&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;deg&quot;</span>,   math_deg&#125;,</span><br><span class="line">  &#123;<span class="string">&quot;exp&quot;</span>,   math_exp&#125;,</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>luaL_Reg的第一个成员表示Lua函数名称，第二个成员表示相应的C函数指针。如:<code>&#123;“abs”, math_abs&#125;</code>表示Lua中调用”math.abs”时，会执行C函数math_abs()。</p>
+<p>此时，创建table后，栈结构为:</p>
+<img src="/images/2016-06-10/6.png" class="">
+
+<p>接着，luaopen_math()调用lua_pushnumber()将常量PI入栈，PI定义如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> l_mathop(op)        op##f</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PI  (l_mathop(3.141592653589793238462643383279502884))</span></span><br></pre></td></tr></table></figure>
+<p>此时栈结构为:</p>
+<img src="/images/2016-06-10/7.png" class="">
+
+<p>然后调用lua_setfield()在table中添加”pi”变量，赋值为常量<code>PI</code>, 相当于:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="built_in">math</span>[<span class="string">&quot;pi&quot;</span>] = PI</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>此时，栈结构恢复为之前的只有math table的状态。</p>
+<p>接下来同样方式注册<code>huge</code>, <code>mininteger</code>, <code>maxinteger</code>三个变量，完成math库的初始化工作。</p>
+<p>当相应的Lua函数被调用时，对应的C函数被执行，下面以<code>math_abs()</code>为例分析相应C函数的实现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">math_abs</span> <span class="params">(lua_State *L)</span> &#123;</span><br><span class="line">  <span class="keyword">if</span> (lua_isinteger(L, <span class="number">1</span>)) &#123;</span><br><span class="line">    lua_Integer n = lua_tointeger(L, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (n &lt; <span class="number">0</span>) n = (lua_Integer)(<span class="number">0u</span> - (lua_Unsigned)n);</span><br><span class="line">    lua_pushinteger(L, n);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    lua_pushnumber(L, l_mathop(<span class="built_in">fabs</span>)(luaL_checknumber(L, <span class="number">1</span>)));</span><br><span class="line">  <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>math_abs()函数从栈中获取参数，然后根据参数为浮点数还是整数分别计算绝对值，最终将结果压入栈中，并返回压入栈中结果的个数。</p>
+<p>标准库与Lua的C动态扩展代码实现是一致的，只是编译和加载方式不同。标准库与核心编译在同一个库，动态扩展编译成 SO 文件，标准库通过调用luaL_openlibs()进行加载，动态扩展通过”require”语句加载。后续我们再分析luaL_openlibs()和”require”的处理流程。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2016/06/10/lua-command/" rel="prev" title="Lua源码分析: 1. Lua命令行程序实现">
+      <i class="fa fa-chevron-left"></i> Lua源码分析: 1. Lua命令行程序实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2016/11/06/xenserver-kernel-module/" rel="next" title="XenServer编译内核模块">
+      XenServer编译内核模块 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

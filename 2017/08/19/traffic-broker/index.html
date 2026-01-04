@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VMware vSphere虚拟网络防护&gt;&gt;介绍了vSphere环境下基于NAT实现不同子网之间的网络安全防护。在OpenStack环境下网络安全防护也可以采用同样的方式。比如，我们在OpenStack环境中，有两个私有网络, 名称分别为web和db, 两个私有网络由虚拟路由连接。架构示意图如下:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="OpenStack私有网络安全防护">
+<meta property="og:url" content="http://just4coding.com/2017/08/19/traffic-broker/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VMware vSphere虚拟网络防护&gt;&gt;介绍了vSphere环境下基于NAT实现不同子网之间的网络安全防护。在OpenStack环境下网络安全防护也可以采用同样的方式。比如，我们在OpenStack环境中，有两个私有网络, 名称分别为web和db, 两个私有网络由虚拟路由连接。架构示意图如下:">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-08-19/6.png">
+<meta property="article:published_time" content="2017-08-19T13:42:33.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.483Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-08-19/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/08/19/traffic-broker/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>OpenStack私有网络安全防护 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/08/19/traffic-broker/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          OpenStack私有网络安全防护
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-08-19 21:42:33" itemprop="dateCreated datePublished" datetime="2017-08-19T21:42:33+08:00">2017-08-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/05/01/vmvare/">VMware vSphere虚拟网络防护</a>&gt;&gt;介绍了vSphere环境下基于NAT实现不同子网之间的网络安全防护。在OpenStack环境下网络安全防护也可以采用同样的方式。比如，我们在OpenStack环境中，有两个私有网络, 名称分别为<code>web</code>和<code>db</code>, 两个私有网络由虚拟路由连接。架构示意图如下:</p>
+<img src="/images/2017-08-19/1.png" class="">
+
+<span id="more"></span>
+
+<p>为了防护私有网络<code>db</code>，可以将虚拟防火墙设备串接在虚拟路由器和私有网络<code>db</code>之间。需要访问私有网络<code>db</code>下的实例时，改为访问虚拟防火墙的IP，虚拟防火墙对数据包做NAT操作并完成安全过滤后，将数据包转发至DB服务器。架构示意图如下:</p>
+<img src="/images/2017-08-19/2.png" class="">
+
+<p>图中的私有网络<code>fw-man</code>为虚拟防火墙实例的管理网络。OpenStack平台的网络拓朴图如下:</p>
+<img src="/images/2017-08-19/3.png" class="">
+
+<p>在我们设置的环境中，所有私有网络<code>db</code>下实例的默认网关为<code>192.168.0.1</code>，因而我们在创建虚拟防火墙实例时，需要将连接私有网络db的接口IP设置为<code>192.168.0.1</code>，保证私有网络<code>db</code>下实例对外的三层流量都会发送至<code>fw</code>实例。</p>
+<p>Horizon界面上不能自己指定接口IP，因而我们需要使用命令行指定IP为<code>192.168.0.1</code>创建好相应port，再attach到<code>fw</code>实例上:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">neutron port-create 9789bff6-a502-4fe2-9baa-4446de37a43e --fixed-ip subnet_id=4f04cf0e-4229-46d7-b967-7ffa78a01d4b,ip_address=192.168.0.1</span><br><span class="line">nova interface-attach --port-id 1a8224cf-a81a-4a78-b0ad-a828bd4e5802 fw</span><br></pre></td></tr></table></figure>
+<p>假设<code>web</code>虚拟机若需要访问<code>192.168.0.7:80</code>，我们在<code>fw</code>实例上配置DNAT规则，令<code>web</code>虚拟机访问<code>10.0.1.11:80</code>时将数据包转发至<code>192.168.0.7:80</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">iptables -t nat -A PREROUTING -d 10.0.1.11 --protocol tcp --dport 80 -j DNAT --to-destination 192.168.0.7:80</span><br></pre></td></tr></table></figure>
+<p>为了能够令数据包通过<code>fw</code>实例，需要开启数据转发功能:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.ip_forward=1</span><br></pre></td></tr></table></figure>
+<p>OpenStack有Anti Mac-Spoofing的机制。默认情况下，只有数据包的MAC、IP与当前接口所配置的MAC、IP都匹配时才能通过。<code>fw</code>实例中完成NAT操作后的数据包，由于IP地址已经更改会被安全规则丢弃。我们需要给<code>fw</code>实例上连接db网络的端口设置上可以通过的可用地址对(MAC、IP)。我们将可用地址对的IP设置为<code>0.0.0.0/0</code>, MAC设置为接口本身的MAC则允许所有数据包通过。</p>
+<p>此外，由于fw实例上有多个连接外网的接口，需要对默认路由进行修改。这里我们手动指定<code>10.0.0.0/24</code>网段由网卡<code>eth0</code>发送。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip route add 10.0.0.0/24 dev eth0 via 10.0.1.1</span><br></pre></td></tr></table></figure>
+
+<p>至此私有网络<code>web</code>到私有网络<code>db</code>的网络路径已经打通，只需要在<code>fw</code>实例上添加安全过滤功能就能完成网络安全防护。</p>
+<p>这种方式下，虚拟安全设备实例与业务虚拟机实例共享底层的计算资源池。为了防止虚拟安全设备实例的资源消耗影响业务虚拟实例，特定场景下希望虚拟安全设备处于独立的安全资源池中。这种方式下则需要将流量牵引至独立的安全资源池。下面介绍思路及demo实现。</p>
+<p>上述NAT方案的基本逻辑是数据包从一个网卡流入再从另一网卡流出。我们在这两个网卡的数据通道之间可以串接一个TAP设备。用户态进程从TAP设备读取数据包，封装后发送给外部的安全设备。安全设备过滤完再将数据封装后发送回用户态进程。用户态进程将数据包解封装后再从TAP设备发送给出口接口。</p>
+<p>本文为了简单，AGENT直接将数据包以UDP负载发送，并以一个UDP服务器来直接将UDP负载中的数据包返回来模拟独立的安全资源池。架构示意图如下:</p>
+<img src="/images/2017-08-19/4.png" class="">
+
+<p>环境创建过程如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br0</span><br><span class="line">ovs-vsctl add-port br0 eth1</span><br><span class="line">ip addr del 192.168.0.1/24 dev eth1</span><br><span class="line">ip addr add 192.168.0.1/24 dev br0</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up br0</span><br><span class="line">ip tuntap add dev tap0 mode tap</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up tap0</span><br><span class="line">ovs-vsctl add-port br0 tap0</span><br></pre></td></tr></table></figure>
+<p>此时OVS网桥结构如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[root@fw ~]# ovs-ofctl show br0</span><br><span class="line">OFPT_FEATURES_REPLY (xid=0x2): dpid:00003a21b7bf9a4c</span><br><span class="line">n_tables:254, n_buffers:256</span><br><span class="line">capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP</span><br><span class="line">actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst</span><br><span class="line"> 5(eth1): addr:fa:16:3e:3c:8c:b3</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     speed: 0 Mbps now, 0 Mbps max</span><br><span class="line"> 8(tap0): addr:ca:d8:6d:24:e0:8c</span><br><span class="line">     config:     0</span><br><span class="line">     state:      LINK_DOWN</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line"> LOCAL(br0): addr:3a:21:b7:bf:9a:4c</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     speed: 0 Mbps now, 0 Mbps max</span><br><span class="line">OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0</span><br></pre></td></tr></table></figure>
+<p>这样构造环境后，数据包从<code>eth0</code>到<code>eth1</code>的数据路径变更为”eth0-&gt;br0-&gt;eth1”。我们使用OpenFlow流表将TAP设备<code>tap0</code>串接入<code>br0</code>与<code>eth1</code>之间。</p>
+<p>添加流表项用于正常转发ARP请求:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=10,dl_type=0x0806,in_port=LOCAL actions=output:5&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=10,dl_type=0x0806,in_port=5 actions=output:LOCAL”</span></span><br></pre></td></tr></table></figure>
+
+<p>添加流表项用于正常转发<code>fw</code>实例自身访问目标虚拟机的流量:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=9,dl_type=0x0800,nw_src=192.168.0.1/32, in_port=LOCAL, actions=output:5&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=9,dl_type=0x0800,nw_dst=192.168.0.1/32, in_port=5, actions=output:LOCAL”</span></span><br></pre></td></tr></table></figure>
+<p>添加流表项将从<code>br0</code>或者<code>eth1</code>流入的数据包转发到<code>tap0</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=8,dl_type=0x0800,in_port=LOCAL actions=output:8&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=8,dl_type=0x0800,in_port=5 actions=output:8”</span></span><br></pre></td></tr></table></figure>
+<p>添加流表项根据<code>tap0</code>流入的数据包中的目的地址转发到<code>br0</code>或者<code>eth1</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=7,dl_type=0x0800,nw_dst=192.168.0.0/24, in_port=8, actions=output:5&quot;</span></span><br><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=7,dl_type=0x0800,nw_dst=10.0.0.0/24, in_port=8, actions=output:LOCAL”</span></span><br></pre></td></tr></table></figure>
+<p>添加流表项将其他数据包丢弃:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br0 <span class="string">&quot;priority=0, actions=drop”</span></span><br></pre></td></tr></table></figure>
+<p><code>FW</code>实例的环境构造完成。</p>
+<p>Agent代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/ioctl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/socket.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;netinet/in.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;arpa/inet.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;net/if.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/if_tun.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">udp_socket</span><span class="params">(<span class="type">char</span> *remote_addr, <span class="type">int</span> port)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span>                 fd;</span><br><span class="line">    <span class="type">int</span>                 length;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_in</span>  <span class="title">skaddr</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_in</span>  <span class="title">remote</span>;</span></span><br><span class="line"></span><br><span class="line">    assert((fd = socket( PF_INET, SOCK_DGRAM, <span class="number">0</span> )) &gt;= <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    skaddr.sin_family = AF_INET;</span><br><span class="line">    skaddr.sin_addr.s_addr = htonl(INADDR_ANY);</span><br><span class="line">    skaddr.sin_port = htons(<span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    assert(bind(fd, (<span class="keyword">struct</span> sockaddr *) &amp;skaddr, <span class="keyword">sizeof</span>(skaddr)) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    remote.sin_family = AF_INET;</span><br><span class="line">    remote.sin_addr.s_addr = inet_addr(remote_addr);</span><br><span class="line">    remote.sin_port = htons(port);</span><br><span class="line">    assert(connect(fd, (<span class="keyword">struct</span> sockaddr *) &amp;skaddr, <span class="keyword">sizeof</span>(remote)) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> fd;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">open_tap</span><span class="params">(<span class="type">char</span> *dev)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">ifreq</span>  <span class="title">ifr</span>;</span></span><br><span class="line">    <span class="type">int</span>  fd, err;</span><br><span class="line"></span><br><span class="line">    assert(dev &amp;&amp; *dev);</span><br><span class="line">    assert((fd = open(<span class="string">&quot;/dev/net/tun&quot;</span>, O_RDWR)) &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">memset</span>(&amp;ifr, <span class="number">0</span>, <span class="keyword">sizeof</span>(ifr));</span><br><span class="line"></span><br><span class="line">    ifr.ifr_flags = IFF_TAP;</span><br><span class="line">    <span class="built_in">strncpy</span>(ifr.ifr_name, dev, IFNAMSIZ);</span><br><span class="line"></span><br><span class="line">    assert(ioctl(fd, TUNSETIFF, (<span class="type">void</span> *) &amp;ifr) &gt;= <span class="number">0</span>);</span><br><span class="line">    assert(<span class="built_in">strcmp</span>(dev, ifr.ifr_name) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> fd;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span>     tap_fd;</span><br><span class="line">    <span class="type">int</span>     udp_fd;</span><br><span class="line">    <span class="type">int</span>     max_fd;</span><br><span class="line">    <span class="type">int</span>     ret;</span><br><span class="line">    <span class="type">int</span>     n;</span><br><span class="line">    <span class="type">int</span>     len;</span><br><span class="line">    fd_set  rd_set;</span><br><span class="line">    <span class="type">char</span>    buf[<span class="number">4096</span>];</span><br><span class="line"></span><br><span class="line">    assert((tap_fd = open_tap(<span class="string">&quot;tap0&quot;</span>)) &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;TAP FD: %d\n&quot;</span>, tap_fd);</span><br><span class="line"></span><br><span class="line">    assert((udp_fd = udp_socket(<span class="string">&quot;10.95.46.177&quot;</span>, <span class="number">4789</span>)) &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;UDP FD: %d\n&quot;</span>, udp_fd);</span><br><span class="line"></span><br><span class="line">    max_fd = (tap_fd &gt; udp_fd) ? tap_fd : udp_fd;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        FD_ZERO(&amp;rd_set);</span><br><span class="line">        FD_SET(tap_fd, &amp;rd_set);</span><br><span class="line">        FD_SET(udp_fd, &amp;rd_set);</span><br><span class="line"></span><br><span class="line">        ret = select(max_fd + <span class="number">1</span>, &amp;rd_set, <span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span> &amp;&amp; errno == EINTR) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            perror(<span class="string">&quot;select&quot;</span>);</span><br><span class="line">            <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (FD_ISSET(tap_fd, &amp;rd_set)) &#123;</span><br><span class="line">            n = read(tap_fd, buf, <span class="keyword">sizeof</span>(buf));</span><br><span class="line">            assert(n &gt;= <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;READ from TAP: %d bytes\n&quot;</span>, n);</span><br><span class="line"></span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;WRITE to UDP\n&quot;</span>);</span><br><span class="line">            assert(write(udp_fd, buf, n) == n);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (FD_ISSET(udp_fd, &amp;rd_set)) &#123;</span><br><span class="line">            n = read(udp_fd, buf, <span class="keyword">sizeof</span>(buf));</span><br><span class="line">            assert(n &gt;= <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;READ from UDP: %d bytes\n&quot;</span>, n);</span><br><span class="line"></span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;WRITE to TAP\n&quot;</span>);</span><br><span class="line">            assert(write(tap_fd, buf, n) == n);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将其编译运行:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">gcc demo.c -o demo</span><br><span class="line">./demo</span><br></pre></td></tr></table></figure>
+
+<p>UDP服务器的代码来自这里:<br><a target="_blank" rel="noopener" href="http://www.cs.rpi.edu/~goldsd/docs/spring2014-csci4220/echo-server-udp.c.txt">http://www.cs.rpi.edu/~goldsd/docs/spring2014-csci4220/echo-server-udp.c.txt</a></p>
+<p>此时，<code>web</code>虚拟机实例访问<code>fw</code>实例的80端口，<code>fw</code>实例首先完成DNAT操作，数据包由<code>br0</code>接口进入OVS网桥。根据流表规则，数据包转发至TAP设备。AGENT从TAP设备读取数据包做为UDP负载发送至UDP服务器。UDP服务器将数据包返回给AGENT。AGENT将数据包写入TAP设备。数据包再次进入OVS网桥。根据流表规则，数据包转发至<code>eth1</code>, 从而送达<code>db</code>实例。响应包逻辑类似。数据包路径示意图如下:</p>
+<img src="/images/2017-08-19/5.png" class="">
+
+<p>在实际方案中，数据包到达外部的安全资源池之后，安全资源池需要完成服务编排，令数据包流经一系列VNF安全设备，再流回<code>FW</code>实例。架构示意图如下:</p>
+<img src="/images/2017-08-19/6.png" class="">
+
+<p>本文简要介绍了从私有网络内将流量牵引至云环境外部的实例，后续我们再来分析安全资源内的服务链实现。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/07/07/websocket/" rel="prev" title="WebSocket介绍与实例分析">
+      <i class="fa fa-chevron-left"></i> WebSocket介绍与实例分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/08/26/tarantool/" rel="next" title="Tarantool介绍">
+      Tarantool介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

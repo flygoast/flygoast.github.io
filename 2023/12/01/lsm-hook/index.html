@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="LSM: Linux Security Modules是内核中对象访问控制机制。最早的基于访问主体(subject)的身份或者所属组(User,Group,Other)的访问控制机制被称为DAC: Discretionary Access Control, 在许多安全性要求较高的场景下不能适用。于是Linux内核中实现了MAC: Mandatory Access Control机制，来表达访问主体">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LSM模块动态Hook实现">
+<meta property="og:url" content="http://just4coding.com/2023/12/01/lsm-hook/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="LSM: Linux Security Modules是内核中对象访问控制机制。最早的基于访问主体(subject)的身份或者所属组(User,Group,Other)的访问控制机制被称为DAC: Discretionary Access Control, 在许多安全性要求较高的场景下不能适用。于是Linux内核中实现了MAC: Mandatory Access Control机制，来表达访问主体">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2023-12-01/1.png">
+<meta property="article:published_time" content="2023-12-01T07:24:44.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.509Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="LSM">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2023-12-01/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2023/12/01/lsm-hook/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>LSM模块动态Hook实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/12/01/lsm-hook/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          LSM模块动态Hook实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-12-01 15:24:44" itemprop="dateCreated datePublished" datetime="2023-12-01T15:24:44+08:00">2023-12-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>LSM: Linux Security Modules</code>是内核中对象访问控制机制。最早的基于访问主体(<code>subject</code>)的身份或者所属组(<code>User,Group,Other</code>)的访问控制机制被称为<code>DAC: Discretionary Access Control</code>, 在许多安全性要求较高的场景下不能适用。于是<code>Linux</code>内核中实现了<code>MAC: Mandatory Access Control</code>机制，来表达访问主体(<code>Subject</code>)是否有权限对访问客体(<code>Object</code>)进行相应操作(<code>Operation</code>), 这个实现就是<code>LSM</code>框架。</p>
+<p>在具体实现上，内核会在相应对象访问前进行相应操作的检测，以<code>系统调用</code>为例来看, 如图:</p>
+<img src="/images/2023-12-01/1.png" class="">
+<p>来自<a target="_blank" rel="noopener" href="https://github.com/kubearmor/KubeArmor/wiki/Introduction-to-Linux-Security-Modules-(LSMs)">链接</a></p>
+<span id="more"></span>
+
+<p>系统调用的实现首先会进行传统的<code>DAC</code>机制检查，通过之后再进行<code>LSM</code>机制检测。</p>
+<p><code>LSM</code>在内核中实现了通用的挂载点(<code>hook</code>)框架, 具体的安全检测逻辑是由独立的安全模块来实现。尽管<code>LSM</code>命名中含有<code>Module</code>，但实际上安全模块的实现并不是正常可动态加载卸载的内核模块，而是必须和内核编译一起编译成二进制。比如，<code>SELinux</code>, <code>AppArmor</code>都是这种形态。</p>
+<p><code>LSM</code>中实现了大量的内核对象被访问前的挂载点，对于我们实现安全功能非常有意义。但我们又没有条件去和内核一起编译，因而需要一种能在内核模块中使用<code>LSM</code>框架的机制。</p>
+<h4 id="CentOS7"><a href="#CentOS7" class="headerlink" title="CentOS7"></a>CentOS7</h4><p><code>CentOS7</code>系列使用的<code>3.10</code>版本内核中，<code>LSM</code>实现是将所有安全检测回调函数组织为<code>struct security_operations</code>结构体:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> &#123;</span></span><br><span class="line">    <span class="type">char</span> name[SECURITY_NAME_MAX + <span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">    <span class="type">int</span> (*ptrace_access_check) (<span class="keyword">struct</span> task_struct *child, <span class="type">unsigned</span> <span class="type">int</span> mode);</span><br><span class="line">    <span class="type">int</span> (*ptrace_traceme) (<span class="keyword">struct</span> task_struct *parent);</span><br><span class="line">    <span class="type">int</span> (*capget) (<span class="keyword">struct</span> task_struct *target,</span><br><span class="line">               <span class="type">kernel_cap_t</span> *effective,</span><br><span class="line">               <span class="type">kernel_cap_t</span> *inheritable, <span class="type">kernel_cap_t</span> *permitted);</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>基于<code>LSM</code>的安全模块会创建自己的<code>security_operations</code>结构，然后调用<code>register_security</code>使模块生效。比如，<code>SELinux</code>的结构为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> <span class="title">selinux_ops</span> =</span> &#123;</span><br><span class="line">    .name =             <span class="string">&quot;selinux&quot;</span>,</span><br><span class="line"></span><br><span class="line">    .ptrace_access_check =      selinux_ptrace_access_check,</span><br><span class="line">    .ptrace_traceme =       selinux_ptrace_traceme,</span><br><span class="line">    .capget =           selinux_capget,</span><br><span class="line">    .capset =           selinux_capset,</span><br><span class="line">    .capable =          selinux_capable,</span><br><span class="line">    .quotactl =         selinux_quotactl,</span><br><span class="line">    .quota_on =         selinux_quota_on,</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> __init <span class="title function_">register_security</span><span class="params">(<span class="keyword">struct</span> security_operations *ops)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (verify(ops)) &#123;</span><br><span class="line">        printk(KERN_DEBUG <span class="string">&quot;%s could not verify &quot;</span></span><br><span class="line">               <span class="string">&quot;security_operations structure.\n&quot;</span>, __func__);</span><br><span class="line">        <span class="keyword">return</span> -EINVAL;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (security_ops != &amp;default_security_ops)</span><br><span class="line">        <span class="keyword">return</span> -EAGAIN;</span><br><span class="line"></span><br><span class="line">    security_ops = ops;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>从<code>register_recurity</code>源码知道，内核中使用全局指针<code>security_ops</code>指向<code>security_operations</code>结构体:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> *<span class="title">security_ops</span>;</span></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> <span class="title">default_security_ops</span> =</span> &#123;</span><br><span class="line">    .name   = <span class="string">&quot;default&quot;</span>,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>据此，我们可以动态将该全局指针<code>security_ops</code>指向我们的结构体，或者动态修改其中的回调函数指针，即可调用动态加载的内核模块中的回调函数。</p>
+<p>简单的demo代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kallsyms.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/security.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/stop_machine.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> **<span class="title">ops_symbol</span>;</span></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> *<span class="title">ops_addr</span>;</span></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_operations</span> <span class="title">bak_ops</span>;</span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">my_file_open</span><span class="params">(<span class="keyword">struct</span> file *file, <span class="type">const</span> <span class="keyword">struct</span> cred *cred)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;file open: %s\n&quot;</span>, file-&gt;f_path.dentry-&gt;d_iname);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">hook_lsm</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    ops_addr-&gt;file_open = my_file_open;</span><br><span class="line">    pr_info(<span class="string">&quot;hook file_open: 0x%p-&gt;0x%p, 0x%p\n&quot;</span>, bak_ops.file_open, my_file_open, ops_addr-&gt;file_open);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">unhook_lsm</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">void</span> *now_file_open = (<span class="type">void</span> *) ops_addr-&gt;file_open;</span><br><span class="line"></span><br><span class="line">    ops_addr-&gt;file_open = bak_ops.file_open;</span><br><span class="line">    pr_info(<span class="string">&quot;restore file_open: 0x%p-&gt;0x%p, 0x%p\n&quot;</span>, now_file_open, bak_ops.file_open, ops_addr-&gt;file_open);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">lsmhook_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;lsm hook module init\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    ops_symbol = (<span class="keyword">struct</span> security_operations **) kallsyms_lookup_name(<span class="string">&quot;security_ops&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (ops_symbol == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        pr_err(<span class="string">&quot;symbol security_ops not found\n&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ops_addr = *ops_symbol;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;symbol security_ops: 0x%p,  security_operations struct address: 0x%p\n&quot;</span>,</span><br><span class="line">            ops_symbol, ops_addr);</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;name: %s\n&quot;</span>, ops_addr-&gt;name);</span><br><span class="line">    pr_info(<span class="string">&quot;file_open: 0x%p\n&quot;</span>, ops_addr-&gt;file_open);</span><br><span class="line"></span><br><span class="line">    bak_ops.file_open = ops_addr-&gt;file_open;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;start hook LSM\n&quot;</span>);</span><br><span class="line">    stop_machine(hook_lsm, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __exit <span class="title function_">lsmhook_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    stop_machine(unhook_lsm, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line">    pr_info(<span class="string">&quot;exit\n&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(lsmhook_init);</span><br><span class="line">module_exit(lsmhook_exit);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>代码里通过动态获取<code>securit_ops</code>指针的符号地址，然后将<code>file_open</code>指针指向了我们所编写的函数。当内核执行打开文件的动作时，会调用函数<code>do_dentry_open</code>, 它会调用<code>security_file_open</code>函数, 源码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">security_file_open</span><span class="params">(<span class="keyword">struct</span> file *file, <span class="type">const</span> <span class="keyword">struct</span> cred *cred)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> ret;</span><br><span class="line"></span><br><span class="line">    ret = security_ops-&gt;file_open(file, cred);</span><br><span class="line">    <span class="keyword">if</span> (ret)</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> fsnotify_perm(file, MAY_OPEN);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这样<code>security_file_open</code>函数就会调用到我们所编写的函数，从而实现我们的逻辑控制。</p>
+<h4 id="CentOS8"><a href="#CentOS8" class="headerlink" title="CentOS8"></a>CentOS8</h4><p>而<code>CentOS8</code>上所使用的<code>4.18</code>内核实现与<code>3.10</code>上有所不同。</p>
+<p>它将所有的回调函数指针统一定义为<code>union</code>结构体:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">union</span> <span class="title">security_list_options</span> &#123;</span></span><br><span class="line">    <span class="type">int</span> (*binder_set_context_mgr)(<span class="keyword">struct</span> task_struct *mgr);</span><br><span class="line">    <span class="type">int</span> (*binder_transaction)(<span class="keyword">struct</span> task_struct *from,</span><br><span class="line">                    <span class="keyword">struct</span> task_struct *to);</span><br><span class="line">    <span class="type">int</span> (*binder_transfer_binder)(<span class="keyword">struct</span> task_struct *from,</span><br><span class="line">                    <span class="keyword">struct</span> task_struct *to);</span><br><span class="line">    <span class="type">int</span> (*binder_transfer_file)(<span class="keyword">struct</span> task_struct *from,</span><br><span class="line">                    <span class="keyword">struct</span> task_struct *to,</span><br><span class="line">                    <span class="keyword">struct</span> file *file);</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>进而将每个回调函数组织成一个链表的元素:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">security_hook_list</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_node</span>       <span class="title">list</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span>       *<span class="title">head</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> <span class="title">security_list_options</span> <span class="title">hook</span>;</span></span><br><span class="line">    <span class="type">char</span>                *lsm;</span><br><span class="line">&#125; __randomize_layout;</span><br></pre></td></tr></table></figure>
+
+<p>所有支持的回调函数都集中在结构体<code>security_hook_heads</code>中:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">security_hook_heads</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">binder_set_context_mgr</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">binder_transaction</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">binder_transfer_binder</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">binder_transfer_file</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">ptrace_access_check</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">ptrace_traceme</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">capget</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">capset</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">capable</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">quotactl</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">hlist_head</span> <span class="title">quota_on</span>;</span></span><br></pre></td></tr></table></figure>
+
+<p>在特定的挂载点注册安全检测逻辑需要调用函数<code>security_add_hooks</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> __init <span class="title function_">security_add_hooks</span><span class="params">(<span class="keyword">struct</span> security_hook_list *hooks, <span class="type">int</span> count,</span></span><br><span class="line"><span class="params">                <span class="type">char</span> *lsm)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; count; i++) &#123;</span><br><span class="line">        hooks[i].lsm = lsm;</span><br><span class="line">        hlist_add_tail_rcu(&amp;hooks[i].<span class="built_in">list</span>, hooks[i].head);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (lsm_append(lsm, &amp;lsm_names) &lt; <span class="number">0</span>)</span><br><span class="line">        panic(<span class="string">&quot;%s - Cannot get early memory.\n&quot;</span>, __func__);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>它会将回调函数添加到特定挂载点链表的尾部。</p>
+<p>同样，结构体<code>security_hook_heads</code>也存在全局变量:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">security_hook_heads</span> <span class="title">security_hook_heads</span> __<span class="title">lsm_ro_after_init</span>;</span></span><br></pre></td></tr></table></figure>
+
+<p>基于这种实现，我们可以动态获取全局变量<code>security_hook_heads</code>的符号地址，进而将我们的函数添加到特定挂载点的链表中。</p>
+<p>demo代码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> pr_fmt(fmt) <span class="string">&quot;[%s]: &quot;</span> fmt, KBUILD_MODNAME</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/version.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kallsyms.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/stop_machine.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/security.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/lsm_hooks.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">my_file_open</span><span class="params">(<span class="keyword">struct</span> file *file)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;file open: %s\n&quot;</span>, file-&gt;f_path.dentry-&gt;d_iname);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MY_LSM_HOOK_INIT(HEAD, HOOK) \</span></span><br><span class="line"><span class="meta">    &#123; .head = &amp;((struct security_hook_heads *)0)-&gt;HEAD, .hook = &#123; .HEAD = HOOK &#125; &#125;</span></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">security_hook_heads</span> *<span class="title">heads_symbol</span>;</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">security_hook_list</span> <span class="title">hooks</span>[] =</span> &#123;</span><br><span class="line">    MY_LSM_HOOK_INIT(file_open, my_file_open),</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">hook_lsm</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; ARRAY_SIZE(hooks); i++) &#123;</span><br><span class="line">        hooks[i].lsm = <span class="string">&quot;lsmhook&quot;</span>;</span><br><span class="line">        hooks[i].head = (<span class="keyword">struct</span> hlist_head *) ((<span class="type">unsigned</span> <span class="type">long</span>)hooks[i].head + (<span class="type">unsigned</span> <span class="type">long</span>)heads_symbol);</span><br><span class="line">        hlist_add_tail_rcu(&amp;hooks[i].<span class="built_in">list</span>, hooks[i].head);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">unhook_lsm</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; ARRAY_SIZE(hooks); i++) &#123;</span><br><span class="line">        hlist_del_rcu(&amp;hooks[i].<span class="built_in">list</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">lsm_info_get</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    heads_symbol = (<span class="keyword">struct</span> security_hook_heads *) kallsyms_lookup_name(<span class="string">&quot;security_hook_heads&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (heads_symbol == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        pr_err(<span class="string">&quot;symbol security_hook_heads not found\n&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;symbol security_hook_heads: 0x%lx\n&quot;</span>, (<span class="type">unsigned</span> <span class="type">long</span>)heads_symbol);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> __init <span class="title function_">lsmhook_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    pr_info(<span class="string">&quot;lsm hook module init\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (lsm_info_get() != <span class="number">0</span>) &#123;</span><br><span class="line">        pr_err(<span class="string">&quot;get LSM information failed\n&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pr_info(<span class="string">&quot;start hook LSM\n&quot;</span>);</span><br><span class="line">    stop_machine(hook_lsm, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __exit <span class="title function_">lsmhook_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    stop_machine(unhook_lsm, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line">    pr_info(<span class="string">&quot;exit\n&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(lsmhook_init);</span><br><span class="line">module_exit(lsmhook_exit);</span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<h4 id="说明"><a href="#说明" class="headerlink" title="说明"></a>说明</h4><p>实际上，将我们的逻辑以内核模块动态插入到<code>LSM</code>中，思路是比较简单、比较清晰的。但是移除的逻辑就要比较小心了。如何保证移除我们的模块时，函数已经不会再被使用是需要非常小心处理的。因为是从内核其实部分调用进我们提供的回调函数，因而我们在我们模块中实现引用计数机制无法保证内核其他部分没有在使用我们的函数。处理不当，很容易导致内核崩溃。文中所提供的演示代码并没有涉及这部分，不能应用到生产环境中。</p>
+<h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/kubearmor/KubeArmor/wiki/Introduction-to-Linux-Security-Modules-(LSMs)">https://github.com/kubearmor/KubeArmor/wiki/Introduction-to-Linux-Security-Modules-(LSMs)</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tutorialspoint.com/difference-between-mac-and-dac">https://www.tutorialspoint.com/difference-between-mac-and-dac</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/kubearmor/KubeArmor/wiki/Introduction-to-Linux-Security-Modules-(LSMs)">https://github.com/kubearmor/KubeArmor/wiki/Introduction-to-Linux-Security-Modules-(LSMs)</a></li>
+<li><a target="_blank" rel="noopener" href="https://medium.com/@boutnaru/linux-security-lsm-linux-security-modules-907bbcf8c8b4">https://medium.com/@boutnaru/linux-security-lsm-linux-security-modules-907bbcf8c8b4</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.starlab.io/blog/a-brief-tour-of-linux-security-modules">https://www.starlab.io/blog/a-brief-tour-of-linux-security-modules</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1887264">https://cloud.tencent.com/developer/article/1887264</a></li>
+<li><a target="_blank" rel="noopener" href="https://liwugang.github.io/2020/10/25/introduce_lsm.html">https://liwugang.github.io/2020/10/25/introduce_lsm.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/352103792">https://zhuanlan.zhihu.com/p/352103792</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/feelabclihu/article/details/121059328">https://blog.csdn.net/feelabclihu/article/details/121059328</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/article/1993317">https://cloud.tencent.com/developer/article/1993317</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/LSM/" rel="tag"># LSM</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/11/01/boot-iso/" rel="prev" title="ISO启动原理及启动盘制作">
+      <i class="fa fa-chevron-left"></i> ISO启动原理及启动盘制作
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2024/11/17/ctr-vs-crictl/" rel="next" title="ctr和crictl命令的简单区别">
+      ctr和crictl命令的简单区别 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#CentOS7"><span class="nav-number">1.</span> <span class="nav-text">CentOS7</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#CentOS8"><span class="nav-number">2.</span> <span class="nav-text">CentOS8</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E8%AF%B4%E6%98%8E"><span class="nav-number">3.</span> <span class="nav-text">说明</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%8F%82%E8%80%83"><span class="nav-number">4.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

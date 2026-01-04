@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ejbberd中多个模块或组件都允许管理员在配置文件中基于用户JID进行访问限制, 如在ejabberd_c2s模块中禁用某用户. ejabberd实现了一套通用的ACL机制来满足各模块的需求. 配置方法如下:  添加acl规则, 如: 1&amp;#123;acl, blocked, &amp;#123;user, &quot;test&quot;&amp;#125;&amp;#125;. acl元组第2个元素为该条acl规则">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd中ACL实现">
+<meta property="og:url" content="http://just4coding.com/2015/04/27/ejabberd-acl/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="ejbberd中多个模块或组件都允许管理员在配置文件中基于用户JID进行访问限制, 如在ejabberd_c2s模块中禁用某用户. ejabberd实现了一套通用的ACL机制来满足各模块的需求. 配置方法如下:  添加acl规则, 如: 1&amp;#123;acl, blocked, &amp;#123;user, &quot;test&quot;&amp;#125;&amp;#125;. acl元组第2个元素为该条acl规则">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-04-27T08:10:08.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.472Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2015/04/27/ejabberd-acl/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd中ACL实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2015/04/27/ejabberd-acl/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd中ACL实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2015-04-27 16:10:08" itemprop="dateCreated datePublished" datetime="2015-04-27T16:10:08+08:00">2015-04-27</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>ejbberd中多个模块或组件都允许管理员在配置文件中基于用户JID进行访问限制, 如在ejabberd_c2s模块中禁用某用户.</p>
+<p>ejabberd实现了一套通用的ACL机制来满足各模块的需求.</p>
+<p>配置方法如下:</p>
+<ul>
+<li><p>添加acl规则, 如:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;acl, blocked, &#123;user, <span class="string">&quot;test&quot;</span>&#125;&#125;.</span><br></pre></td></tr></table></figure>
+<p>acl元组第2个元素为该条acl规则的名称, 第3个元素为JID的过滤规则. 示例中的过滤规则表示用户JID的User部分为”test”.</p>
+</li>
+<li><p>添加access规则, 如:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;access, c2s, [&#123;deny, blocked&#125;, &#123;allow, all&#125;]&#125;.</span><br></pre></td></tr></table></figure>
+<p>access元组第2个元素为access规则的名称, 第3个元素中的每个元素为一个指定值和一个acl规则名字.<br>当JID满足某条acl规则时, 该条access规则的值则为该acl规则的对应值. 示例中, 当用户JID中的User部分为”test”时, access规则c2s值为<code>deny</code>, 否则为<code>allow</code>.</p>
+</li>
+<li><p>为模块或组件指定access规则(不同的模块或组件所用的配置指令可能不同) 如:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;<span class="number">5222</span>, ejabberd_c2s, [</span><br><span class="line">                        &#123;access, c2s&#125;,</span><br><span class="line">                        &#123;shaper, c2s_shaper&#125;,</span><br><span class="line">                        &#123;max_stanza_size, <span class="number">65536</span>&#125;</span><br><span class="line">                       ]&#125;.</span><br></pre></td></tr></table></figure>
+<p>按示例配置后, ejabberd_c2s会根据access规则c2s的值禁用相应用户, 如JID中User为”test”的用户全部被禁用.</p>
+</li>
+</ul>
+<span id="more"></span>
+<p>下边来看具体实现:</p>
+<p>ejabberd启动时, <code>ejabberd_app:start/2</code>会调用<code>acl:start/0</code>.</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">()</span> -&gt;</span></span><br><span class="line">    mnesia:create_table(acl,</span><br><span class="line">            [&#123;disc_copies, [node()]&#125;,</span><br><span class="line">             &#123;type, bag&#125;,</span><br><span class="line">             &#123;attributes, record_info(fields, acl)&#125;]),</span><br><span class="line">    mnesia:add_table_copy(acl, node(), ram_copies),</span><br><span class="line">    ok.</span><br></pre></td></tr></table></figure>
+<p>start函数创建了一个名为<code>acl</code>的表,来存储各条acl规则, <code>&#123;type, bag&#125;</code>使表中可以保存多个KEY相同的record, 即可以保存多个acl名称相同的acl规则, acl的record定义为:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">-record</span><span class="params">(acl, &#123;aclname, aclspec&#125;)</span>.</span><br></pre></td></tr></table></figure>
+<p>如配置中可以添加多条相同名字的ACL规则:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#123;acl, admin, &#123;user, <span class="string">&quot;aleksey&quot;</span>, <span class="string">&quot;localhost&quot;</span>&#125;&#125;.</span><br><span class="line">&#123;acl, admin, &#123;user, <span class="string">&quot;ermine&quot;</span>, <span class="string">&quot;example.org&quot;</span>&#125;&#125;.</span><br><span class="line">&#123;acl, admin, &#123;user, <span class="string">&quot;admin&quot;</span>, <span class="string">&quot;localhost&quot;</span>&#125;&#125;.</span><br></pre></td></tr></table></figure>
+<p>ejabberd启动加载配置文件时, ejabberd_config模块会将相应<code>&#123;acl, ...&#125;</code>配置写入<code>acl</code>表中, <code>&#123;access, ...&#125;</code>配置写入<code>config</code>表中, 具体过程请参考&lt;ejabberd配置模块分析&gt;一文.</p>
+<p>当各模块或组件需要基于JID对访问进行限制时, 使用<code>acl:match_rule/3</code>来获取所配置的access规则的值, 进而根据所得的access规则的值进行后续逻辑处理. 如ejabberd_c2s模块完成XMPP的BIND流程后, 为用户建立session前, 调用<code>match_rule/3</code>来获取指定的access规则的值, 如果值为<code>allow</code>则允许请用户请求继续,否则返回禁止信息.</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> acl:match_rule(StateData#state.server,</span><br><span class="line">                    StateData#state.access, JID) <span class="keyword">of</span></span><br><span class="line">allow -&gt;</span><br><span class="line">    ...</span><br><span class="line">_ -&gt;</span><br><span class="line">    ...</span><br><span class="line"><span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>来看acl:match_rule&#x2F;3实现:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">match_rule</span><span class="params">(global, Rule, JID)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> Rule <span class="keyword">of</span></span><br><span class="line">    all -&gt; allow;</span><br><span class="line">    none -&gt; deny;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        <span class="keyword">case</span> ejabberd_config:get_global_option(&#123;access, Rule, global&#125;) <span class="keyword">of</span></span><br><span class="line">        undefined -&gt;</span><br><span class="line">            deny;</span><br><span class="line">        GACLs -&gt;</span><br><span class="line">            match_acls(GACLs, JID, global)</span><br><span class="line">        <span class="keyword">end</span></span><br><span class="line">    <span class="keyword">end</span>;</span><br></pre></td></tr></table></figure>
+<p><code>all</code>和<code>none</code>为两个特殊的access规则, 对应的值分别为<code>allow</code>和<code>deny</code>. 若规则不为这两个, 则调用<br><code>ejabberd_config:get_global_option/1</code>来获取该条access规则所指定的一系列acl规则.<br>如果没有则返回<code>deny</code>, 否则接着调用<code>match_acls</code>.</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">match_acls</span><span class="params">([], _, _Host)</span> -&gt;</span></span><br><span class="line">    deny;</span><br><span class="line"><span class="function"><span class="title">match_acls</span><span class="params">([&#123;Access, ACL&#125; | ACLs], JID, Host)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> match_acl(ACL, JID, Host) <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        Access;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        match_acls(ACLs, JID, Host)</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p><code>match_acls</code>对ACL列表进行递归处理, 对每条acl规则调用<code>match_acl</code>. 如果<code>match_acl</code>返回<code>true</code>, 则递归结束,返回该acl规则所对应的值, 如果没有任何一条acl规则满足, 则返回<code>deny</code>.<br>来看<code>match_acl</code>实现, 简化后的逻辑如下:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">match_acl</span><span class="params">(ACL, JID, Host)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> ACL <span class="keyword">of</span></span><br><span class="line">    all -&gt; <span class="literal">true</span>;</span><br><span class="line">    none -&gt; <span class="literal">false</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        &#123;User, Server, Resource&#125; = jlib:jid_tolower(JID),</span><br><span class="line">        lists:any(<span class="keyword">fun</span>(#acl&#123;aclspec = Spec&#125;) -&gt;</span><br><span class="line">                  <span class="keyword">case</span> Spec <span class="keyword">of</span></span><br><span class="line">                  all -&gt;</span><br><span class="line">                      <span class="literal">true</span>;</span><br><span class="line">                  &#123;user, U&#125; -&gt;</span><br><span class="line">                      (U == User)</span><br><span class="line">                      <span class="keyword">andalso</span></span><br><span class="line">                        ((Host == Server) <span class="keyword">orelse</span></span><br><span class="line">                         ((Host == global) <span class="keyword">andalso</span></span><br><span class="line">                          lists:member(Server, ?MYHOSTS)));</span><br><span class="line">                 ...</span><br><span class="line"></span><br><span class="line">                  WrongSpec -&gt;</span><br><span class="line">                      ?ERROR_MSG(</span><br><span class="line">                     <span class="string">&quot;Wrong ACL expression: ~p~n&quot;</span></span><br><span class="line">                     <span class="string">&quot;Check your config file and reload it with the override_acls option enabled&quot;</span>,</span><br><span class="line">                     [WrongSpec]),</span><br><span class="line">                      <span class="literal">false</span></span><br><span class="line">                  <span class="keyword">end</span></span><br><span class="line">              <span class="keyword">end</span>,</span><br><span class="line">              ets:lookup(acl, &#123;ACL, global&#125;) ++</span><br><span class="line">              ets:lookup(acl, &#123;ACL, Host&#125;))</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p><code>match_acl</code>从<code>acl</code>表中查出该名称所有的acl规则(可能有多个), 只要其中一条acl规则匹配了用户的JID, <code>match_acl</code>就返回<code>true</code>.</p>
+<p>具体的acl过滤条件有多个, 如</p>
+<ul>
+<li>user</li>
+<li>server</li>
+<li>user_glob</li>
+<li>user_regexp<br>等, 具体涵义请参考acl.erl源码.</li>
+</ul>
+<p>注意: access规则的值可以为任意值,不一定要是allow或者deny, 这些由特定的模块自行处理.</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;access, max_user_sessions, [&#123;<span class="number">10</span>, all&#125;]&#125;.</span><br></pre></td></tr></table></figure>
+<p>ejabberd中acl功能实现的简单却通用, 类似逻辑可以借鉴到我们的其他项目中.</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2015/01/08/powerdns-packetcache/" rel="prev" title="PowerDNS中PacketCache实现">
+      <i class="fa fa-chevron-left"></i> PowerDNS中PacketCache实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2015/09/08/ngx-http-limit-req-module/" rel="next" title="ngx_http_limit_req_module分析">
+      ngx_http_limit_req_module分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

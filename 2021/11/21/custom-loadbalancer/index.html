@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Kubernetes没有给本地环境(Bare-metal, On-Premise)提供负载均衡实现，LoadBalancer类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建LoadBalancer类型的服务后，服务的EXTERNAL-IP会一直处于&lt;pending&gt;状态。这是因为在本地环境没有相应的controller来处理这些LoadBalancer服务。比如: 12">
+<meta property="og:type" content="article">
+<meta property="og:title" content="本地环境Kubernetes LoadBalancer实现">
+<meta property="og:url" content="http://just4coding.com/2021/11/21/custom-loadbalancer/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Kubernetes没有给本地环境(Bare-metal, On-Premise)提供负载均衡实现，LoadBalancer类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建LoadBalancer类型的服务后，服务的EXTERNAL-IP会一直处于&lt;pending&gt;状态。这是因为在本地环境没有相应的controller来处理这些LoadBalancer服务。比如: 12">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2021-11-21/1.png">
+<meta property="article:published_time" content="2021-11-21T06:04:59.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.497Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="LoadBalance">
+<meta property="article:tag" content="ExternalIP">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2021-11-21/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2021/11/21/custom-loadbalancer/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>本地环境Kubernetes LoadBalancer实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/11/21/custom-loadbalancer/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          本地环境Kubernetes LoadBalancer实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-11-21 14:04:59" itemprop="dateCreated datePublished" datetime="2021-11-21T14:04:59+08:00">2021-11-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>Kubernetes</code>没有给本地环境(<code>Bare-metal</code>, <code>On-Premise</code>)提供负载均衡实现，<code>LoadBalancer</code>类型的服务主要在各大公有云厂商上能够得到原生支持。在本地环境创建<code>LoadBalancer</code>类型的服务后，服务的<code>EXTERNAL-IP</code>会一直处于<code>&lt;pending&gt;</code>状态。这是因为在本地环境没有相应的<code>controller</code>来处理这些<code>LoadBalancer</code>服务。比如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl get svc</span></span><br><span class="line">NAME         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE</span><br><span class="line">kubernetes   ClusterIP      10.32.0.1     &lt;none&gt;        443/TCP        31d</span><br><span class="line"><span class="built_in">whoami</span>       LoadBalancer   10.32.0.132   &lt;pending&gt;     80:31620/TCP   103s</span><br></pre></td></tr></table></figure>
+
+<p>之前的文章<a href="/2021/11/14/external-ip/">&lt;&lt;基于LVS DR模式的Kubernetes Service External-IP实现&gt;&gt;</a>介绍了手动设置<code>EXTERNAL-IP</code>的方式实现外部负载均衡。本文通过在本地环境实现一个简单的<code>controller</code>来处理<code>LoadBalancer</code>类型服务自动实现负载均衡器。架构示意如图:</p>
+<img src="/images/2021-11-21/1.png" class="">
+
+<p><code>LoadBalancer</code>是位于<code>Kubernetes</code>集群外的独立集群。可以通过<code>ECMP</code>将请求分散到不同的<code>LoaderBalancer</code>节点上，<code>LoadBalancer</code>再将请求分发到<code>Kubernetes</code>的<code>node</code>上。</p>
+<span id="more"></span>
+
+<p>服务依然使用之前文章中的<code>whoami</code>服务定义，<code>type</code>修改为<code>LoadBalancer</code>:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Service</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">ports:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">port:</span> <span class="number">80</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">web</span></span><br><span class="line">    <span class="attr">protocol:</span> <span class="string">TCP</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">type:</span> <span class="string">LoadBalancer</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Deployment</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">replicas:</span> <span class="number">3</span></span><br><span class="line">  <span class="attr">selector:</span></span><br><span class="line">    <span class="attr">matchLabels:</span></span><br><span class="line">      <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">  <span class="attr">template:</span></span><br><span class="line">    <span class="attr">metadata:</span></span><br><span class="line">      <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">app:</span> <span class="string">whoami</span></span><br><span class="line">    <span class="attr">spec:</span></span><br><span class="line">      <span class="attr">containers:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">whoami</span></span><br><span class="line">        <span class="attr">image:</span> <span class="string">containous/whoami:latest</span></span><br><span class="line">        <span class="attr">imagePullPolicy:</span> <span class="string">IfNotPresent</span></span><br><span class="line">        <span class="attr">ports:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">          <span class="attr">name:</span> <span class="string">web</span></span><br></pre></td></tr></table></figure>
+
+<p>创建服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl apply -f whoami.yaml</span></span><br><span class="line">service/whoami created</span><br><span class="line">deployment.apps/whoami created</span><br></pre></td></tr></table></figure>
+<p>此时查看集群中的<code>service</code>, 可以看到<code>whoami</code>服务的<code>EXTERNAL-IP</code>处于<code>&lt;pending&gt;</code>状态:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl get svc -o wide</span></span><br><span class="line">NAME         TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE   SELECTOR</span><br><span class="line">kubernetes   ClusterIP      10.32.0.1     &lt;none&gt;        443/TCP        31d   &lt;none&gt;</span><br><span class="line"><span class="built_in">whoami</span>       LoadBalancer   10.32.0.188   &lt;pending&gt;     80:31220/TCP   6s    app=<span class="built_in">whoami</span></span><br></pre></td></tr></table></figure>
+
+<p>接着编写自定义的<code>controller</code>来处理<code>LoadBalancer</code>, 自定义<code>controller</code>的编写可以参考之前的文章<a href="/2020/03/02/Kubernetes-CDR/">&lt;&lt;Kubernetes CDR和Custom Controller&gt;&gt;</a>, <code>main.py</code>源码如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># coding: utf-8</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> logging</span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"><span class="keyword">from</span> kubernetes <span class="keyword">import</span> client, config, watch</span><br><span class="line"></span><br><span class="line">log = logging.getLogger(__name__)</span><br><span class="line">out_hdlr = logging.StreamHandler(sys.stdout)</span><br><span class="line">out_hdlr.setFormatter(logging.Formatter(<span class="string">&#x27;%(asctime)s %(message)s&#x27;</span>))</span><br><span class="line">out_hdlr.setLevel(logging.INFO)</span><br><span class="line">log.addHandler(out_hdlr)</span><br><span class="line">log.setLevel(logging.INFO)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">lb_ip_pools = [</span><br><span class="line">    <span class="string">&#x27;10.240.0.210&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;10.240.0.211&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;10.240.0.212&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;10.240.0.213&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;10.240.0.214&#x27;</span>,</span><br><span class="line">    <span class="string">&#x27;10.240.0.215&#x27;</span></span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">node_ips = [<span class="string">&#x27;10.240.0.101&#x27;</span>, <span class="string">&#x27;10.240.0.102&#x27;</span>]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">lb_services = &#123;&#125;</span><br><span class="line">kubernetes_services = &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">add_services</span>(<span class="params">svc_manifest</span>):</span><br><span class="line">    ports = svc_manifest.spec.ports</span><br><span class="line">    lb_svcs = []</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> ip <span class="keyword">in</span> lb_ip_pools:</span><br><span class="line">        <span class="keyword">if</span> (ip <span class="keyword">not</span> <span class="keyword">in</span> lb_services) <span class="keyword">or</span> (<span class="built_in">len</span>(lb_services[ip]) == <span class="number">0</span>):</span><br><span class="line">            lb_services[ip] = &#123;&#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">for</span> port <span class="keyword">in</span> ports:</span><br><span class="line">                lb_svcs.append((port.protocol, ip, port.port))</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> port.port <span class="keyword">not</span> <span class="keyword">in</span> lb_services[ip]:</span><br><span class="line">                    lb_services[ip][port.port] = []</span><br><span class="line">                lb_services[ip][port.port].append(port.protocol)</span><br><span class="line"></span><br><span class="line">            kubernetes_services[svc_manifest.metadata.name] = lb_svcs</span><br><span class="line">            <span class="keyword">return</span> lb_svcs</span><br><span class="line"></span><br><span class="line">        valid_ip = <span class="literal">True</span></span><br><span class="line">        <span class="keyword">for</span> port <span class="keyword">in</span> ports:</span><br><span class="line">            <span class="keyword">if</span> port.port <span class="keyword">in</span> lb_services[ip]:</span><br><span class="line">                valid_ip = <span class="literal">False</span></span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> valid_ip:</span><br><span class="line">            <span class="keyword">for</span> port <span class="keyword">in</span> ports:</span><br><span class="line">                lb_svcs.append((port.protocol, ip, port.port))</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> port.port <span class="keyword">not</span> <span class="keyword">in</span> lb_services[ip]:</span><br><span class="line">                    lb_services[ip][port.port] = []</span><br><span class="line">                lb_services[ip][port.port].append(port.protocol)</span><br><span class="line"></span><br><span class="line">            kubernetes_services[svc_manifest.metadata.name] = lb_svcs</span><br><span class="line">            <span class="keyword">return</span> lb_svcs</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">del_services</span>(<span class="params">svc_manifest</span>):</span><br><span class="line">    lb_svcs = kubernetes_services[svc_manifest.metadata.name]</span><br><span class="line">    <span class="keyword">del</span> kubernetes_services[svc_manifest.metadata.name]</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> svc <span class="keyword">in</span> lb_svcs:</span><br><span class="line">        <span class="keyword">del</span> lb_services[svc[<span class="number">1</span>]][svc[<span class="number">2</span>]]</span><br><span class="line">    <span class="keyword">return</span> lb_svcs</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">del_ipvs</span>(<span class="params">lb_svcs</span>):</span><br><span class="line">    <span class="keyword">for</span> item <span class="keyword">in</span> lb_svcs:</span><br><span class="line">        <span class="keyword">if</span> item[<span class="number">0</span>] == <span class="string">&#x27;TCP&#x27;</span>:</span><br><span class="line">            command = <span class="string">&quot;ipvsadm -D -t %s:%d&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>])</span><br><span class="line">            os.system(command)</span><br><span class="line">        <span class="keyword">elif</span> item[<span class="number">0</span>] == <span class="string">&#x27;UDP&#x27;</span>:</span><br><span class="line">            command = <span class="string">&quot;ipvsadm -D -u %s:%d&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>])</span><br><span class="line">            os.system(command)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">add_ipvs</span>(<span class="params">lb_svcs</span>):</span><br><span class="line">    <span class="keyword">for</span> item <span class="keyword">in</span> lb_svcs:</span><br><span class="line">        <span class="keyword">if</span> item[<span class="number">0</span>] == <span class="string">&#x27;TCP&#x27;</span>:</span><br><span class="line">            command = <span class="string">&quot;ipvsadm -A -t %s:%d -s rr&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>])</span><br><span class="line">            os.system(command)</span><br><span class="line">            <span class="keyword">for</span> node_ip <span class="keyword">in</span> node_ips:</span><br><span class="line">                command = <span class="string">&quot;ipvsadm -a -t %s:%d -r %s -g&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>], node_ip)</span><br><span class="line">                os.system(command)</span><br><span class="line">        <span class="keyword">elif</span> item[<span class="number">0</span>] == <span class="string">&#x27;UDP&#x27;</span>:</span><br><span class="line">            command = <span class="string">&quot;ipvsadm -A -u %s:%d -s rr&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>])</span><br><span class="line">            os.system(command)</span><br><span class="line">            <span class="keyword">for</span> node_ip <span class="keyword">in</span> node_ips:</span><br><span class="line">                command = <span class="string">&quot;ipvsadm -a -u %s:%d -r %s -g&quot;</span> % (item[<span class="number">1</span>], item[<span class="number">2</span>], node_ip)</span><br><span class="line">                os.system(command)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            log.error(<span class="string">&quot;invalid protocol: %s&quot;</span>, item[<span class="number">0</span>])</span><br><span class="line"></span><br><span class="line"> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    config.load_kube_config()</span><br><span class="line"></span><br><span class="line">    v1 = client.CoreV1Api()</span><br><span class="line">    w = watch.Watch()</span><br><span class="line">    <span class="keyword">for</span> item <span class="keyword">in</span> w.stream(v1.list_service_for_all_namespaces):</span><br><span class="line">        <span class="keyword">if</span> item[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;ADDED&quot;</span>:</span><br><span class="line">            svc_manifest = item[<span class="string">&#x27;object&#x27;</span>]</span><br><span class="line">            namespace = svc_manifest.metadata.namespace</span><br><span class="line">            name = svc_manifest.metadata.name</span><br><span class="line">            svc_type = svc_manifest.spec.<span class="built_in">type</span></span><br><span class="line"></span><br><span class="line">            log.info(<span class="string">&quot;Service ADDED: %s %s %s&quot;</span> % (namespace, name, svc_type))</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> svc_type == <span class="string">&quot;LoadBalancer&quot;</span>:</span><br><span class="line">                <span class="keyword">if</span> svc_manifest.status.load_balancer.ingress == <span class="literal">None</span>:</span><br><span class="line">                    log.info(<span class="string">&quot;Process load balancer service add event&quot;</span>)</span><br><span class="line">                    lb_svcs = add_services(svc_manifest)</span><br><span class="line">                    <span class="keyword">if</span> lb_svcs == <span class="literal">None</span>:</span><br><span class="line">                        log.error(<span class="string">&quot;no available loadbalancer IP&quot;</span>)</span><br><span class="line">                        <span class="keyword">continue</span></span><br><span class="line">                    add_ipvs(lb_svcs)</span><br><span class="line">                    svc_manifest.status.load_balancer.ingress = [&#123;<span class="string">&#x27;ip&#x27;</span>: lb_svcs[<span class="number">0</span>][<span class="number">1</span>]&#125;]</span><br><span class="line">                    v1.patch_namespaced_service_status(name, namespace, svc_manifest)</span><br><span class="line">                    log.info(<span class="string">&quot;Update service status&quot;</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">elif</span> item[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;MODIFIED&quot;</span>:</span><br><span class="line">            log.info(<span class="string">&quot;Service MODIFIED: %s %s&quot;</span> % (item[<span class="string">&#x27;object&#x27;</span>].metadata.name, item[<span class="string">&#x27;object&#x27;</span>].spec.<span class="built_in">type</span>))</span><br><span class="line"></span><br><span class="line">        <span class="keyword">elif</span> item[<span class="string">&quot;type&quot;</span>] == <span class="string">&quot;DELETED&quot;</span>:</span><br><span class="line">            svc_manifest = item[<span class="string">&#x27;object&#x27;</span>]</span><br><span class="line">            namespace = svc_manifest.metadata.namespace</span><br><span class="line">            name = svc_manifest.metadata.name</span><br><span class="line">            svc_type = svc_manifest.spec.<span class="built_in">type</span></span><br><span class="line"></span><br><span class="line">            log.info(<span class="string">&quot;Service DELETED: %s %s %s&quot;</span> % (namespace, name, svc_type))</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> svc_type == <span class="string">&quot;LoadBalancer&quot;</span>:</span><br><span class="line">                <span class="keyword">if</span> svc_manifest.status.load_balancer.ingress != <span class="literal">None</span>:</span><br><span class="line">                    log.info(<span class="string">&quot;Process load balancer service delete event&quot;</span>)</span><br><span class="line">                    lb_svcs = del_services(svc_manifest)</span><br><span class="line">                    <span class="keyword">if</span> <span class="built_in">len</span>(lb_svcs) != <span class="number">0</span>:</span><br><span class="line">                        del_ipvs(lb_svcs)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&#x27;__main__&#x27;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+
+<p>我们的<code>controller</code>程序通过<code>Kubernetes APIServer</code>监控<code>service</code>对象。当检测到有<code>LoadBalancer</code>类型的<code>service</code>创建后，则分配<code>VIP</code>并在节点上创建<code>IPVS</code>服务，然后修改相应<code>service</code>的<code>status</code>。我们使用的依然是<code>RR</code>模式，将数据包分发到后端的<code>node</code>。修改目的<code>MAC</code>地址的数据包到达<code>node</code>能够正常处理是由于<code>kube-proxy</code>会根据修改后的<code>service</code>对象创建相应的<code>iptables</code>规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-A KUBE-SERVICES -d 10.240.0.210/32 -p tcp -m comment --comment &quot;default/whoami:web loadbalancer IP&quot; -m tcp --dport 80 -j KUBE-FW-225DYIB7Z2N6SCOU</span><br></pre></td></tr></table></figure>
+
+<p>我们的实验环境是单节点的<code>IPVS</code>, 为了简单直接在<code>IPVS</code>节点上运行我们的<code>controller</code>，因而不存在多次修改<code>service</code>状态的问题。如果在多节点的<code>IPVS</code>集群，<code>controller</code>可以通过<code>Puppet</code>,<code>SaltStack</code>或者<code>Ansible</code>等运维部署工具创建<code>IPVS</code>服务。</p>
+<p>在<code>IPVS</code>节点上安装依赖的<code>kubernetes</code>库, 因为我们使用的<code>kubernetes</code>版本为<code>1.15.3</code>, 因而安装<code>11.0.0</code>版本, 具体版本依赖参考<a target="_blank" rel="noopener" href="https://github.com/kubernetes-client/python">官网说明</a></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip3 install kubernetes==11.0.0</span><br></pre></td></tr></table></figure>
+
+<p>运行我们的<code>controller</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ipvslb]<span class="comment"># python3 main.py</span></span><br><span class="line">2021-11-21 04:18:25,018 Service ADDED: default kubernetes ClusterIP</span><br><span class="line">2021-11-21 04:18:25,019 Service ADDED: default <span class="built_in">whoami</span> LoadBalancer</span><br><span class="line">2021-11-21 04:18:25,019 Process load balancer service add event</span><br><span class="line">2021-11-21 04:18:25,064 Update service status</span><br><span class="line">2021-11-21 04:18:25,066 Service MODIFIED: <span class="built_in">whoami</span> LoadBalancer</span><br><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>此时再去查看<code>service</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl get svc</span></span><br><span class="line">NAME         TYPE           CLUSTER-IP    EXTERNAL-IP    PORT(S)        AGE</span><br><span class="line">kubernetes   ClusterIP      10.32.0.1     &lt;none&gt;         443/TCP        31d</span><br><span class="line"><span class="built_in">whoami</span>       LoadBalancer   10.32.0.132   10.240.0.210   80:31620/TCP   2m40s</span><br></pre></td></tr></table></figure>
+
+<p>可以看到<code>whoami</code>服务的<code>EXTERNAL-IP</code>获取到了分配的<code>VIP: 10.240.0.210</code>。查看<code>IPVS</code>服务, 也可以看到对应的服务已经建立:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ipvslb]<span class="comment"># ipvsadm -L -n</span></span><br><span class="line">IP Virtual Server version 1.2.1 (size=4096)</span><br><span class="line">Prot LocalAddress:Port Scheduler Flags</span><br><span class="line">  -&gt; RemoteAddress:Port           Forward Weight ActiveConn InActConn</span><br><span class="line">TCP  10.240.0.210:80 rr</span><br><span class="line">  -&gt; 10.240.0.101:80              Route   1      0          0</span><br><span class="line">  -&gt; 10.240.0.102:80              Route   1      0          0</span><br></pre></td></tr></table></figure>
+
+<p>此时去访问<code>VIP</code>, 访问成功:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># curl http://10.240.0.210</span></span><br><span class="line">Hostname: whoami-6756777fd4-4lpvl</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.64.2</span><br><span class="line">IP: fe80::ec48:94ff:fea0:db31</span><br><span class="line">RemoteAddr: 10.230.10.0:45298</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.210</span><br><span class="line">User-Agent: curl/7.29.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br><span class="line">[root@master1 vagrant]<span class="comment"># curl http://10.240.0.210</span></span><br><span class="line">Hostname: whoami-6756777fd4-qzm6r</span><br><span class="line">IP: 127.0.0.1</span><br><span class="line">IP: ::1</span><br><span class="line">IP: 10.230.10.19</span><br><span class="line">IP: fe80::60b7:2aff:feab:68c2</span><br><span class="line">RemoteAddr: 10.230.64.0:45304</span><br><span class="line">GET / HTTP/1.1</span><br><span class="line">Host: 10.240.0.210</span><br><span class="line">User-Agent: curl/7.29.0</span><br><span class="line">Accept: */*</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>接着删除<code>whoami</code>服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 vagrant]<span class="comment"># kubectl delete svc/whoami</span></span><br><span class="line">service <span class="string">&quot;whoami&quot;</span> deleted</span><br></pre></td></tr></table></figure>
+
+<p>从<code>controller</code>输出可以看到事件被正确处理:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">2021-11-21 04:27:34,046 Service DELETED: default <span class="built_in">whoami</span> LoadBalancer</span><br><span class="line">2021-11-21 04:27:34,047 Process load balancer service delete event</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>IPVS</code>服务, 也被正确删除了:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ipvslb]<span class="comment"># ipvsadm -L -n</span></span><br><span class="line">IP Virtual Server version 1.2.1 (size=4096)</span><br><span class="line">Prot LocalAddress:Port Scheduler Flags</span><br><span class="line">  -&gt; RemoteAddress:Port           Forward Weight ActiveConn InActConn</span><br></pre></td></tr></table></figure>
+
+
+<p>在我们的示例中，<code>VIP</code>池中的<code>IP</code>需要提前在<code>IPVS</code>节点配置好，比如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">[root@lb1 ipvslb]<span class="comment"># ip a  show eth1</span></span><br><span class="line">3: eth1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000</span><br><span class="line">    <span class="built_in">link</span>/ether 08:00:27:48:90:6c brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 10.240.0.6/24 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.201/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.210/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.211/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.212/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.213/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.214/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet 10.240.0.215/32 scope global eth1</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::a00:27ff:fe48:906c/64 scope <span class="built_in">link</span></span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p><code>node</code>的<code>IP</code>也是在代码里提前配置的，正常应该从<code>Kubernetess APIServer</code>获取。在示例里简单处理了。</p>
+<p><a target="_blank" rel="noopener" href="https://metallb.universe.tf/">metallb</a>是当前使用范围较广的本地环境<code>LoadBalancer</code>实现，它本身没有使用外部独立的负载均衡集群，是在<code>node</code>节点上实现的负载均衡功能。很多<code>Kubernetes</code>产品已经集成了它，后续有时间可以分析一下它的源码实现。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://developer-docs.citrix.com/projects/citrix-k8s-ingress-controller/en/latest/network/type_loadbalancer/">https://developer-docs.citrix.com/projects/citrix-k8s-ingress-controller/en/latest/network/type_loadbalancer/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.openshift.com/container-platform/4.9/networking/metallb/about-metallb.html">https://docs.openshift.com/container-platform/4.9/networking/metallb/about-metallb.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://kubernetes.github.io/ingress-nginx/deploy/baremetal/">https://kubernetes.github.io/ingress-nginx/deploy/baremetal/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.k0sproject.io/main/examples/metallb-loadbalancer/">https://docs.k0sproject.io/main/examples/metallb-loadbalancer/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/LoadBalance/" rel="tag"># LoadBalance</a>
+              <a href="/tags/ExternalIP/" rel="tag"># ExternalIP</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/11/14/external-ip/" rel="prev" title="基于LVS DR模式的Kubernetes Service External-IP实现">
+      <i class="fa fa-chevron-left"></i> 基于LVS DR模式的Kubernetes Service External-IP实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/12/29/nfqueue-dns/" rel="next" title="NFQUEUE机制导致DNS请求5秒超时分析">
+      NFQUEUE机制导致DNS请求5秒超时分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

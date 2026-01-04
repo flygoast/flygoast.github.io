@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="CNI: Container Network Interface是配置Linux容器网络接口的一种规范。它将容器运行时和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的容器运行时环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。 CNI规范主要涉及容器运行时和CNI插件两个角色，规范约定了二者的交互方式。容器运行时在容器实例创建时调用CNI插件的ADD接">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes网络和CNI">
+<meta property="og:url" content="http://just4coding.com/2020/07/25/kubernetes-cni/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="CNI: Container Network Interface是配置Linux容器网络接口的一种规范。它将容器运行时和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的容器运行时环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。 CNI规范主要涉及容器运行时和CNI插件两个角色，规范约定了二者的交互方式。容器运行时在容器实例创建时调用CNI插件的ADD接">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-07-25/1.png">
+<meta property="article:published_time" content="2020-07-25T02:40:57.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.493Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kubernetes">
+<meta property="article:tag" content="CNI">
+<meta property="article:tag" content="Daemonset">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-07-25/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/07/25/kubernetes-cni/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kubernetes网络和CNI | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/07/25/kubernetes-cni/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes网络和CNI
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-07-25 10:40:57" itemprop="dateCreated datePublished" datetime="2020-07-25T10:40:57+08:00">2020-07-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kubernetes/" itemprop="url" rel="index">
+                    <span itemprop="name">Kubernetes</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="https://github.com/containernetworking/cni"><code>CNI: Container Network Interface</code></a>是配置Linux容器网络接口的一种规范。它将<code>容器运行时</code>和容器网络实现解耦，使容器网络实现成为可插拔的插件。在不同的<code>容器运行时</code>环境中，容器网络实现可以复用。而在不同的网络环境中，也可以灵活的插拔不同的网络实现。</p>
+<p><code>CNI</code>规范主要涉及<code>容器运行时</code>和<code>CNI</code>插件两个角色，规范约定了二者的交互方式。<code>容器运行时</code>在容器实例创建时调用<code>CNI</code>插件的<code>ADD</code>接口以创建容器络连接所需的资源网络连接，当容器删除时调用<code>CNI</code>的<code>DEL</code>接口移除所创建的相应资源完成资源释放。不同的<code>CNI</code>插件按照规范所统一定义的接口、参数、响应实现不同的网络方案。</p>
+<p>官方提供了开发库<code>libcni</code>，<code>容器运行时</code>可以使用该库来集成<code>CNI</code>能力，并且还提供了一系列的<a target="_blank" rel="noopener" href="https://github.com/containernetworking/plugins">CNI插件参考实现</a>。</p>
+<p>目前<code>CNI</code>规范的最新版本为<code>0.4.0</code>。</p>
+<p>从具体实现上看，<code>容器运行时</code>会先创建好相应的<code>network namespace</code>, 然后<code>CNI</code>插件负责将网络接口插入到容器实例的<code>network namespace</code>、在宿主机上做必要的网络操作(如绑定IP到接口、建立路由等)以实现容器网络连通。</p>
+<p>一般设计中，主体模块与插件之间的交互会采用<code>RPC</code>、二进制兼容的动态库加载等手段。<code>CNI</code>规范则指定<code>CNI</code>插件实现为可执行程序，相应接口参数通过环境变量与标准输入流传给<code>CNI</code>插件，类似于早年WEB领域的<code>CGI</code>模式。</p>
+<span id="more"></span>
+
+<p>规范规定了如下操作:</p>
+<ul>
+<li><code>ADD</code>: 容器实例创建时，建立网络资源</li>
+<li><code>DEL</code>: 容器实例销毁时，释放网络资源</li>
+<li><code>CHECK</code>: 检查容器网络是否符合预期，这是<code>0.4.0</code>才引入的新接口</li>
+<li><code>VERSION</code>: 返回版本信息</li>
+</ul>
+<p>而通过环境变量来传递的参数有:</p>
+<ul>
+<li><code>CNI_COMMAND</code>: 所调用的操作，为<code>ADD</code>、<code>DEL</code>、<code>CHECK</code>、<code>VERSION</code></li>
+<li><code>CNI_CONTAINERID</code>: 容器ID</li>
+<li><code>CNI_NETNS</code>: 容器的<code>network namespace</code>文件的路径</li>
+<li><code>CNI_IFNAME</code>: 容器网络接口的名称</li>
+<li><code>CNI_ARGS</code>: 额外需要传递给<code>CNI</code>插件的参数，格式为以<code>;</code>分隔的Key&#x2F;Value对，如”<code>FOO=BAR;ABC=123</code>“</li>
+<li><code>CNI_PATH</code>: <code>CNI</code>插件的搜索路径</li>
+</ul>
+<p><code>CNI</code>规范还规定，容器网络实现所需的网络配置信息需要以JSON格式表达，<code>容器运行时</code>调用<code>CNI</code>插件时会将这些信息从插件进程的<code>stdin</code>输入， 格式为下:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;cniVersion&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.4.0&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mynet&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bridge&quot;</span><span class="punctuation">,</span></span><br><span class="line">    ...</span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>这三个参数是强制要求的:</p>
+<ul>
+<li><code>cniVersion</code>: 插件版本</li>
+<li><code>name</code>: 网络名称</li>
+<li><code>type</code>: 插件二进制文件名</li>
+</ul>
+<p>其他参数是特定插件的自定义参数。</p>
+<p><code>IPAM: IP Address Management</code>是各种网络实现中相对独立的部分，因而<code>CNI</code>规范中将这部分以独立插件的形式进行约定。<code>CNI</code>插件可以调用各种不同的<code>IPAM</code>插件完成分配IP的操作。当前实现的有<code>dhcp</code>和<code>host-local</code>插件。</p>
+<p><code>Kubernetes</code>就是通过<code>CNI</code>机制来实现它的容器网络。<code>Worker</code>节点上的<code>kubelet</code>创建没有网络接口的容器后, 根据<code>CNI</code>网络配置文件来调用所指定的<code>CNI</code>插件完成容器网络的配置。</p>
+<p><code>kublet</code>会从参数<code>--cni-conf-dir</code>(默认值:<code>/etc/cni/net.d</code>)指定的目录中读取<code>CNI</code>网络配置文件, 然后从参数<code>--cni-bin-dir</code>(默认值:<code>/opt/cni/bin</code>)所指定的目录中找到<code>CNI</code>插件可执行程序进行调用。当有多个<code>CNI</code>网络配置时，<code>kubelet</code>会读取以字母顺序排序的第一个配置。</p>
+<p>下面我们使用<code>BASH</code>来编写一个简单的<code>CNI</code>插件, 为了简单，我们基于<code>0.3.1</code>版本规范来实现。</p>
+<p><code>Kubernetes</code>网络模型的设计基于一个考虑：可以不做任何改变就将工作负载从虚拟机迁移到<code>Kubernetes</code>平台。因而它制定了三条基本原则:</p>
+<ul>
+<li>所有<code>POD</code>之间能够不经过<code>NAT</code>直接通信</li>
+<li>所有<code>NODE</code>能够不经过<code>NAT</code>与<code>POD</code>直接通信</li>
+<li><code>POD</code>内看到的IP与其他<code>POD</code>看到它的IP是一致的</li>
+</ul>
+<p>在一个节点上实现满足这些条件的虚拟网络比较简单，较为复杂和困难的是在不同的节点之上构建满足这些约束的分布式网络。一般有两种方式：</p>
+<ul>
+<li><code>Overlay</code>: 通过隧道实现不同节点上的容器网络通信</li>
+<li><code>Underlay</code>: 通过路由等实现容器网络通信</li>
+</ul>
+<p>我们的<code>CNI</code>插件基于简单的静态路由配置实现容器网络通信。网络结构如图:</p>
+<img src="/images/2020-07-25/1.png" class="">
+
+<p>节点上创建一个Linux网桥<code>bashcni0</code>, 容器网络接口接口<code>bashcni0</code>上，三层接口<code>bashcni0</code>做为节点上容器网络的网关，节点之间通过静态路由实现容器网络数据包转发。</p>
+<p><code>CNI</code>插件可执行程序<code>bash-cni</code>代码如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash -e</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [[ <span class="variable">$&#123;DEBUG&#125;</span> -gt 0 ]]; <span class="keyword">then</span> <span class="built_in">set</span> -x; <span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">exec</span> 3&gt;&amp;1 <span class="comment"># make stdout available as fd 3 for the result</span></span><br><span class="line"><span class="built_in">exec</span> 1&gt;&gt; /var/log/bash-cni.log 2&gt;&amp;1</span><br><span class="line"></span><br><span class="line">IP_STORE=/tmp/reserved_ips</span><br><span class="line">VETH_STORE=/tmp/veth_index</span><br><span class="line"></span><br><span class="line">stdin=`<span class="built_in">cat</span> /dev/stdin`</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">log</span></span>() &#123;</span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;[<span class="subst">$(date --rfc-3339=seconds)</span>]: $*&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">allocate_ip</span></span>() &#123;</span><br><span class="line">    <span class="keyword">for</span> ip <span class="keyword">in</span> <span class="string">&quot;<span class="variable">$&#123;all_ips[@]&#125;</span>&quot;</span></span><br><span class="line">    <span class="keyword">do</span></span><br><span class="line">        reserved=<span class="literal">false</span></span><br><span class="line">        <span class="keyword">for</span> reserved_ip <span class="keyword">in</span> <span class="string">&quot;<span class="variable">$&#123;reserved_ips[@]&#125;</span>&quot;</span></span><br><span class="line">        <span class="keyword">do</span></span><br><span class="line">            <span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$ip</span>&quot;</span> = <span class="string">&quot;<span class="variable">$reserved_ip</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">                reserved=<span class="literal">true</span></span><br><span class="line">                <span class="built_in">break</span></span><br><span class="line">            <span class="keyword">fi</span></span><br><span class="line">        <span class="keyword">done</span></span><br><span class="line">        <span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$reserved</span>&quot;</span> = <span class="literal">false</span> ]; <span class="keyword">then</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="string">&quot;<span class="variable">$ip</span>&quot;</span> &gt;&gt; <span class="variable">$IP_STORE</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="string">&quot;<span class="variable">$ip</span>&quot;</span></span><br><span class="line">            <span class="built_in">return</span></span><br><span class="line">        <span class="keyword">fi</span></span><br><span class="line">    <span class="keyword">done</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> <span class="variable">$CNI_COMMAND</span> <span class="keyword">in</span></span><br><span class="line">ADD)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;CNI_COMMAND: <span class="variable">$CNI_COMMAND</span> CONTAINERID: <span class="variable">$CNI_CONTAINERID</span> NETNS: <span class="variable">$CNI_NETNS</span> IFNAME: <span class="variable">$CNI_IFNAME</span>&quot;</span></span><br><span class="line"></span><br><span class="line">    network=$(<span class="built_in">echo</span> <span class="variable">$stdin</span> | jq -r <span class="string">&quot;.network&quot;</span>)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;NETWORK: <span class="variable">$network</span>&quot;</span></span><br><span class="line">    subnet=$(<span class="built_in">echo</span> <span class="variable">$stdin</span> | jq -r <span class="string">&quot;.subnet&quot;</span>)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;SUBNET: <span class="variable">$subnet</span>&quot;</span></span><br><span class="line">    subnet_mask_size=$(<span class="built_in">echo</span> <span class="variable">$subnet</span> | awk -F <span class="string">&quot;/&quot;</span> <span class="string">&#x27;&#123;print $2&#125;&#x27;</span>)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;NETMASK: <span class="variable">$subnet_mask_size</span>&quot;</span></span><br><span class="line"></span><br><span class="line">    all_ips=$(nmap -n -sL <span class="variable">$subnet</span> | grep <span class="string">&quot;Nmap scan report&quot;</span> | awk <span class="string">&#x27;&#123;print $NF&#125;&#x27;</span>)</span><br><span class="line">    all_ips=(<span class="variable">$&#123;all_ips[@]&#125;</span>)</span><br><span class="line">    skip_ip=<span class="variable">$&#123;all_ips[0]&#125;</span></span><br><span class="line">    gw_ip=<span class="variable">$&#123;all_ips[1]&#125;</span></span><br><span class="line"></span><br><span class="line">    reserved_ips=$(<span class="built_in">cat</span> <span class="variable">$IP_STORE</span> 2&gt; /dev/null || <span class="built_in">printf</span> <span class="string">&quot;<span class="variable">$skip_ip</span>\n<span class="variable">$gw_ip</span>\n&quot;</span>)</span><br><span class="line">    reserved_ips=(<span class="variable">$&#123;reserved_ips[@]&#125;</span>)</span><br><span class="line">    <span class="built_in">printf</span> <span class="string">&#x27;%s\n&#x27;</span> <span class="string">&quot;<span class="variable">$&#123;reserved_ips[@]&#125;</span>&quot;</span> &gt; <span class="variable">$IP_STORE</span></span><br><span class="line"></span><br><span class="line">    container_ip=$(allocate_ip)</span><br><span class="line"></span><br><span class="line">    <span class="built_in">mkdir</span> -p /var/run/netns/</span><br><span class="line">    <span class="built_in">ln</span> -sfT <span class="variable">$CNI_NETNS</span> /var/run/netns/<span class="variable">$CNI_CONTAINERID</span></span><br><span class="line"></span><br><span class="line">    index=$(<span class="built_in">cat</span> <span class="variable">$VETH_STORE</span> 2&gt; /dev/null || <span class="built_in">printf</span> <span class="string">&quot;0\n&quot;</span>)</span><br><span class="line">    host_if_name=<span class="string">&quot;veth<span class="variable">$index</span>&quot;</span></span><br><span class="line">    temp_if_name=<span class="string">&quot;veth_c_<span class="variable">$index</span>&quot;</span></span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;HOST IFNAME: <span class="variable">$host_if_name</span> CONTAINERIP: <span class="variable">$container_ip</span>&quot;</span></span><br><span class="line"></span><br><span class="line">    index=$((index + <span class="number">1</span>))</span><br><span class="line">    <span class="built_in">echo</span> <span class="variable">$index</span> &gt; <span class="variable">$VETH_STORE</span></span><br><span class="line"></span><br><span class="line">    ip <span class="built_in">link</span> add <span class="variable">$temp_if_name</span> <span class="built_in">type</span> veth peer name <span class="variable">$host_if_name</span></span><br><span class="line"></span><br><span class="line">    ip <span class="built_in">link</span> <span class="built_in">set</span> <span class="variable">$host_if_name</span> up</span><br><span class="line">    ip <span class="built_in">link</span> <span class="built_in">set</span> <span class="variable">$host_if_name</span> master bashcni0</span><br><span class="line"></span><br><span class="line">    ip <span class="built_in">link</span> <span class="built_in">set</span> <span class="variable">$temp_if_name</span> netns <span class="variable">$CNI_CONTAINERID</span></span><br><span class="line">    ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip <span class="built_in">link</span> <span class="built_in">set</span> <span class="variable">$temp_if_name</span> name <span class="variable">$CNI_IFNAME</span></span><br><span class="line">    ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip <span class="built_in">link</span> <span class="built_in">set</span> <span class="variable">$CNI_IFNAME</span> up</span><br><span class="line">    ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip addr add <span class="variable">$container_ip</span>/<span class="variable">$subnet_mask_size</span> dev <span class="variable">$CNI_IFNAME</span></span><br><span class="line">    ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip route add default via <span class="variable">$gw_ip</span> dev <span class="variable">$CNI_IFNAME</span></span><br><span class="line">    mac=$(ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip <span class="built_in">link</span> show <span class="variable">$CNI_IFNAME</span> | awk <span class="string">&#x27;/ether/ &#123;print $2&#125;&#x27;</span>)</span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;&#123;</span></span><br><span class="line"><span class="string">  \&quot;cniVersion\&quot;: \&quot;0.3.1\&quot;,</span></span><br><span class="line"><span class="string">  \&quot;interfaces\&quot;: [</span></span><br><span class="line"><span class="string">    &#123;</span></span><br><span class="line"><span class="string">      \&quot;name\&quot;: \&quot;<span class="variable">$CNI_IFNAME</span>\&quot;,</span></span><br><span class="line"><span class="string">      \&quot;mac\&quot;: \&quot;<span class="variable">$mac</span>\&quot;,</span></span><br><span class="line"><span class="string">      \&quot;sandbox\&quot;: \&quot;<span class="variable">$CNI_NETNS</span>\&quot;</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  ],</span></span><br><span class="line"><span class="string">  \&quot;ips\&quot;: [</span></span><br><span class="line"><span class="string">    &#123;</span></span><br><span class="line"><span class="string">      \&quot;version\&quot;: \&quot;4\&quot;,</span></span><br><span class="line"><span class="string">      \&quot;address\&quot;: \&quot;<span class="variable">$container_ip</span>/<span class="variable">$subnet_mask_size</span>\&quot;,</span></span><br><span class="line"><span class="string">      \&quot;gateway\&quot;: \&quot;<span class="variable">$gw_ip</span>\&quot;,</span></span><br><span class="line"><span class="string">      \&quot;interface\&quot;: 0</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">  ]</span></span><br><span class="line"><span class="string">&#125;&quot;</span> &gt;&amp;3</span><br><span class="line">    ;;</span><br><span class="line"></span><br><span class="line">DEL)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;CNI_COMMAND: <span class="variable">$CNI_COMMAND</span> CONTAINERID: <span class="variable">$CNI_CONTAINERID</span> NETNS: <span class="variable">$CNI_NETNS</span> IFNAME: <span class="variable">$CNI_IFNAME</span>&quot;</span></span><br><span class="line">    <span class="keyword">if</span> [ -z <span class="string">&quot;<span class="variable">$CNI_NETNS</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">        <span class="built_in">exit</span></span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line">    ip=$(ip netns <span class="built_in">exec</span> <span class="variable">$CNI_CONTAINERID</span> ip addr show <span class="variable">$CNI_IFNAME</span> | awk <span class="string">&#x27;/inet / &#123;print $2&#125;&#x27;</span> | sed s%/.*%% || <span class="built_in">echo</span> <span class="string">&quot;&quot;</span>)</span><br><span class="line">    <span class="keyword">if</span> [ ! -z <span class="string">&quot;<span class="variable">$ip</span>&quot;</span> ]</span><br><span class="line">    <span class="keyword">then</span></span><br><span class="line">        sed -i <span class="string">&quot;/<span class="variable">$ip</span>/d&quot;</span> <span class="variable">$IP_STORE</span></span><br><span class="line">        <span class="built_in">unlink</span> /var/run/netns/<span class="variable">$CNI_CONTAINERID</span></span><br><span class="line">    <span class="keyword">fi</span></span><br><span class="line">    ;;</span><br><span class="line"></span><br><span class="line">CHECK)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;CNI_COMMAND: <span class="variable">$CNI_COMMAND</span> CONTAINERID: <span class="variable">$CNI_CONTAINERID</span> NETNS: <span class="variable">$CNI_NETNS</span> IFNAME: <span class="variable">$CNI_IFNAME</span>&quot;</span></span><br><span class="line">    ;;</span><br><span class="line"></span><br><span class="line">VERSION)</span><br><span class="line">    <span class="built_in">log</span> <span class="string">&quot;CNI_COMMAND: <span class="variable">$CNI_COMMAND</span> CONTAINERID: <span class="variable">$CNI_CONTAINERID</span> NETNS: <span class="variable">$CNI_NETNS</span> IFNAME: <span class="variable">$CNI_IFNAME</span>&quot;</span></span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&#x27;&#123;</span></span><br><span class="line"><span class="string">      &quot;cniVersion&quot;: &quot;0.3.1&quot;,</span></span><br><span class="line"><span class="string">      &quot;supportedVersions&quot;: [ &quot;0.3.0&quot;, &quot;0.3.1&quot;, &quot;0.4.0&quot;]</span></span><br><span class="line"><span class="string">    &#125;&#x27;</span> &gt;&amp;3</span><br><span class="line">    ;;</span><br><span class="line"></span><br><span class="line">*)</span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;Unknown cni command: <span class="variable">$CNI_COMMAND</span>&quot;</span></span><br><span class="line">    <span class="built_in">exit</span></span><br><span class="line">    ;;</span><br><span class="line"><span class="keyword">esac</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>ADD</code>操作中，我们创建一对<code>veth pair</code>设备，一端接入<code>bashcni0</code>, 另一端放入容器的<code>network namespace</code>中。</p>
+<p>我的实验环境为两个<code>worker</code>节点的<code>Kubernetes</code>集群。在两个节点上，将<code>bash-cni</code>程序放入<code>/opt/cni/bin/</code>目录下。<br>在两个节点上，在<code>/etc/cni/net.d</code>中写入文件<code>00-bash-cni.conf</code>, 内容分别如下:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;cniVersion&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.3.1&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mynet&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bash-cni&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;network&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10.10.0.0/16&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;subnet&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10.10.1.0/24&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;cniVersion&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.3.1&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;mynet&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;bash-cni&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;network&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10.10.0.0/16&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;subnet&quot;</span><span class="punctuation">:</span> <span class="string">&quot;10.10.2.0/24&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>两个节点各分配一个子网。将文件名以<code>00</code>开头是因为<code>kubelet</code>会从目录中以字母顺序读取配置文件。</p>
+<p>接着，分别在两节点完成网桥创建与静态路由操作:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add dev bashcni0 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up dev bashcni0</span><br><span class="line">ip addr add 10.10.1.1/24 dev bashcni0</span><br><span class="line">ip route add 10.10.2.0/24 via 10.240.0.102</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add dev bashcni0 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up dev bashcni0</span><br><span class="line">ip addr add 10.10.2.1/24 dev bashcni0</span><br><span class="line">ip route add 10.10.1.0/24 via 10.240.0.101</span><br></pre></td></tr></table></figure>
+
+<p>然后分别在每节点上创建两个<code>pod</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@master1 ~]# kubectl apply -f nginx.yml</span><br><span class="line">pod/nginx1 created</span><br><span class="line">pod/nginx2 created</span><br><span class="line">pod/nginx3 created</span><br><span class="line">pod/nginx4 created</span><br><span class="line">[root@master1 ~]# kubectl get pods</span><br><span class="line">NAME     READY   STATUS    RESTARTS   AGE</span><br><span class="line">nginx1   1/1     Running   0          18s</span><br><span class="line">nginx2   1/1     Running   0          18s</span><br><span class="line">nginx3   1/1     Running   0          18s</span><br><span class="line">nginx4   1/1     Running   0          18s</span><br></pre></td></tr></table></figure>
+<p><code>nginx.yml</code>代码如下:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">nginx1</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">containers:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">  <span class="attr">nodeSelector:</span></span><br><span class="line">    <span class="attr">kubernetes.io/hostname:</span> <span class="string">node1</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">nginx2</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">containers:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">  <span class="attr">nodeSelector:</span></span><br><span class="line">    <span class="attr">kubernetes.io/hostname:</span> <span class="string">node1</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">nginx3</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">containers:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">  <span class="attr">nodeSelector:</span></span><br><span class="line">    <span class="attr">kubernetes.io/hostname:</span> <span class="string">node2</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">nginx4</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">containers:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">nginx</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">containerPort:</span> <span class="number">80</span></span><br><span class="line">  <span class="attr">nodeSelector:</span></span><br><span class="line">    <span class="attr">kubernetes.io/hostname:</span> <span class="string">node2</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>node1</code>上查看<code>network namespace</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip netns</span><br><span class="line">3860f40d9c4fa78726bbd64963717f72389df8377406c5a7c7602d7cbdda4e3e (id: 1)</span><br><span class="line">2dc473f08ebf516ac9de7e2f90212bc5814a15354a72db8d4ba93bb69189bd7b (id: 0)</span><br><span class="line">cni-09556e7a-9c65-1f07-e7e3-b507b5497bff (id: 1)</span><br><span class="line">cni-a119e178-7853-df56-86a1-1ebcac565ca4 (id: 0)</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>nginx1</code>的IP，为<code>10.10.1.2</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip netns exec 2dc473f08ebf516ac9de7e2f90212bc5814a15354a72db8d4ba93bb69189bd7b ip addr</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">16: eth0@if15: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default qlen 1000</span><br><span class="line">    link/ether aa:2d:38:3d:83:79 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br><span class="line">    inet 10.10.1.2/24 scope global eth0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::a82d:38ff:fe3d:8379/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>node2</code>上<code>nginx3</code>的IP，为:<code>10.10.2.3</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@node2 ~]# ip netns exec b6ba2fefdac62fe2730aa77a3a4aae415cdd5c2186716463910c20c5602ea27c ip addr</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">    inet 127.0.0.1/8 scope host lo</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 ::1/128 scope host</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">16: eth0@if15: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default qlen 1000</span><br><span class="line">    link/ether d2:39:4f:ae:0e:b5 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br><span class="line">    inet 10.10.2.3/24 scope global eth0</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::d039:4fff:feae:eb5/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+
+<p>我们从<code>10.10.1.2</code>访问<code>10.10.2.3</code>, 访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@node1 ~]# ip netns exec 2dc473f08ebf516ac9de7e2f90212bc5814a15354a72db8d4ba93bb69189bd7b ping -c 2 10.10.2.3</span><br><span class="line">PING 10.10.2.3 (10.10.2.3) 56(84) bytes of data.</span><br><span class="line">64 bytes from 10.10.2.3: icmp_seq=1 ttl=62 time=1.68 ms</span><br><span class="line">64 bytes from 10.10.2.3: icmp_seq=2 ttl=62 time=0.611 ms</span><br><span class="line"></span><br><span class="line">--- 10.10.2.3 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1001ms</span><br><span class="line">rtt min/avg/max/mdev = 0.611/1.146/1.681/0.535 ms</span><br></pre></td></tr></table></figure>
+
+<p>上边的步骤中，<code>CNI</code>可执行程序和配置文件的部署，网桥创建、静态路由配置都是手动执行完成。在实现生产可用的<code>CNI</code>插件时，一般可以使用<code>Daemonset</code>方式在每个节点上完成上述的环境初始化工作及程序配置安装。</p>
+<p>可以简单的把上述步骤用<code>BASH</code>实现, <code>install-cni.sh</code>代码如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/sh</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">set</span> -x;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ -w <span class="string">&quot;/host/opt/cni/bin/&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">cp</span> /opt/cni/bin/bash-cni /host/opt/cni/bin/;</span><br><span class="line">    <span class="built_in">echo</span> <span class="string">&quot;Wrote CNI binaries to /host/opt/cni/bin/&quot;</span>;</span><br><span class="line"><span class="keyword">fi</span>;</span><br><span class="line"></span><br><span class="line">sysctl -w net.ipv4.ip_forward=1</span><br><span class="line"></span><br><span class="line">ip <span class="built_in">link</span> add dev bashcni0 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up dev bashcni0</span><br><span class="line"></span><br><span class="line">HOSTNAME=$(hostname -s)</span><br><span class="line"><span class="keyword">case</span> <span class="variable">$HOSTNAME</span> <span class="keyword">in</span></span><br><span class="line">node1)</span><br><span class="line">    SUBNET=<span class="string">&#x27;10.10.1.0/24&#x27;</span></span><br><span class="line">    ip addr add 10.10.1.1/24 dev bashcni0</span><br><span class="line">    ip route add 10.10.2.0/24 via 10.240.0.102</span><br><span class="line">    ;;</span><br><span class="line">node2)</span><br><span class="line">    SUBNET=<span class="string">&#x27;10.10.2.0/24&#x27;</span></span><br><span class="line">    ip addr add 10.10.2.1/24 dev bashcni0</span><br><span class="line">    ip route add 10.10.1.0/24 via 10.240.0.101</span><br><span class="line">    ;;</span><br><span class="line"><span class="keyword">esac</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">TMP_CONF=<span class="string">&#x27;/tmp/00-bash-cni.conf&#x27;</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;&#123;</span></span><br><span class="line"><span class="string">    \&quot;cniVersion\&quot;: \&quot;0.3.1\&quot;,</span></span><br><span class="line"><span class="string">    \&quot;name\&quot;: \&quot;mynet\&quot;,</span></span><br><span class="line"><span class="string">    \&quot;type\&quot;: \&quot;bash-cni\&quot;,</span></span><br><span class="line"><span class="string">    \&quot;subnet\&quot;: \&quot;<span class="variable">$SUBNET</span>\&quot;</span></span><br><span class="line"><span class="string">&#125;&quot;</span> &gt;<span class="variable">$TMP_CONF</span></span><br><span class="line"></span><br><span class="line">CNI_CONF_NAME=<span class="string">&quot;<span class="variable">$&#123;CNI_CONF_NAME:-00-bash-cni.conf&#125;</span>&quot;</span></span><br><span class="line"><span class="built_in">mv</span> <span class="variable">$TMP_CONF</span> /host/etc/cni/net.d/<span class="variable">$&#123;CNI_CONF_NAME&#125;</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">&quot;Wrote CNI config: <span class="subst">$(cat /host/etc/cni/net.d/$&#123;CNI_CONF_NAME&#125;)</span>&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">while</span> :; <span class="keyword">do</span> <span class="built_in">sleep</span> 3600; <span class="keyword">done</span>;</span><br></pre></td></tr></table></figure>
+
+<p>可以将这个文件构造成<code>docker</code>镜像, 用如下的<code>YAML</code>文件创建<code>Daemonset</code>实现各个节点的<code>CNI</code>插件部署。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">extensions/v1beta1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">DaemonSet</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line">  <span class="attr">name:</span> <span class="string">bash-cni</span></span><br><span class="line">  <span class="attr">namespace:</span> <span class="string">kube-system</span></span><br><span class="line">  <span class="attr">labels:</span></span><br><span class="line">    <span class="attr">tier:</span> <span class="string">node</span></span><br><span class="line">    <span class="attr">k8s-app:</span> <span class="string">bash-cni</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line">  <span class="attr">template:</span></span><br><span class="line">    <span class="attr">metadata:</span></span><br><span class="line">      <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">tier:</span> <span class="string">node</span></span><br><span class="line">        <span class="attr">k8s-app:</span> <span class="string">bash-cni</span></span><br><span class="line">    <span class="attr">spec:</span></span><br><span class="line">      <span class="attr">containers:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">install-cni</span></span><br><span class="line">        <span class="attr">image:</span> <span class="string">flygoast/bash-cni:0.0.3</span></span><br><span class="line">        <span class="attr">imagePullPolicy:</span> <span class="string">IfNotPresent</span></span><br><span class="line">        <span class="attr">command:</span> [<span class="string">&quot;/install-cni.sh&quot;</span>]</span><br><span class="line">        <span class="attr">volumeMounts:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">cni</span></span><br><span class="line">          <span class="attr">mountPath:</span> <span class="string">/host/etc/cni/net.d</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">host-cni-bin</span></span><br><span class="line">          <span class="attr">mountPath:</span> <span class="string">/host/opt/cni/bin/</span></span><br><span class="line">      <span class="attr">hostNetwork:</span> <span class="literal">true</span></span><br><span class="line">      <span class="attr">tolerations:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">key:</span> <span class="string">node-role.kubernetes.io/master</span></span><br><span class="line">        <span class="attr">operator:</span> <span class="string">Exists</span></span><br><span class="line">        <span class="attr">effect:</span> <span class="string">NoSchedule</span></span><br><span class="line">      <span class="attr">volumes:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">cni</span></span><br><span class="line">          <span class="attr">hostPath:</span></span><br><span class="line">            <span class="attr">path:</span> <span class="string">/etc/cni/net.d</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">host-cni-bin</span></span><br><span class="line">          <span class="attr">hostPath:</span></span><br><span class="line">            <span class="attr">path:</span> <span class="string">/opt/cni/bin</span></span><br><span class="line">  <span class="attr">updateStrategy:</span></span><br><span class="line">    <span class="attr">rollingUpdate:</span></span><br><span class="line">      <span class="attr">maxUnavailable:</span> <span class="number">1</span></span><br><span class="line">    <span class="attr">type:</span> <span class="string">RollingUpdate</span></span><br></pre></td></tr></table></figure>
+
+<p>本文只是用于实验<code>CNI</code>规范的目的，如果需要实现一个生产使用的<code>CNI</code>插件，最好还是参考官方的框架与示例来实现:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/containernetworking/plugins/tree/master/plugins/sample">https://github.com/containernetworking/plugins/tree/master/plugins/sample</a></li>
+</ul>
+<p>参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.altoros.com/blog/kubernetes-networking-writing-your-own-simple-cni-plug-in-with-bash/">https://www.altoros.com/blog/kubernetes-networking-writing-your-own-simple-cni-plug-in-with-bash/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kubernetes/" rel="tag"># Kubernetes</a>
+              <a href="/tags/CNI/" rel="tag"># CNI</a>
+              <a href="/tags/Daemonset/" rel="tag"># Daemonset</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/07/13/nsx-t/" rel="prev" title="NSX-T路由逻辑介绍">
+      <i class="fa fa-chevron-left"></i> NSX-T路由逻辑介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/07/21/socket-to-pid/" rel="next" title="Linux内核TCP网络连接关联进程">
+      Linux内核TCP网络连接关联进程 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

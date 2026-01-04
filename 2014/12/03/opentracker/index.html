@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="opentracker是一个开源P2P tracker服务器.之前我们系统中主要使用的是PHP+MYSQL实现的peertracker。随着业务增长，peertracker的性能已经不能满足系统需要。因而我们决定引入性能更好的opentracker。不过, opentracker在功能上并不能完全满足我们的需求，因而我对它进行了一些扩展。  UDP单播同步数据  opentracker本身支持cl">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Opentracker扩展">
+<meta property="og:url" content="http://just4coding.com/2014/12/03/opentracker/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="opentracker是一个开源P2P tracker服务器.之前我们系统中主要使用的是PHP+MYSQL实现的peertracker。随着业务增长，peertracker的性能已经不能满足系统需要。因而我们决定引入性能更好的opentracker。不过, opentracker在功能上并不能完全满足我们的需求，因而我对它进行了一些扩展。  UDP单播同步数据  opentracker本身支持cl">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-03T03:27:11.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.469Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/03/opentracker/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Opentracker扩展 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/opentracker/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Opentracker扩展
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 11:27:11" itemprop="dateCreated datePublished" datetime="2014-12-03T11:27:11+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OPENTRACKER/" itemprop="url" rel="index">
+                    <span itemprop="name">OPENTRACKER</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="http://erdgeist.org/arts/software/opentracker">opentracker</a>是一个开源P2P tracker服务器.之前我们系统中主要使用的是PHP+MYSQL实现的peertracker。随着业务增长，peertracker的性能已经不能满足系统需要。因而我们决定引入性能更好的opentracker。不过, opentracker在功能上并不能完全满足我们的需求，因而我对它进行了一些扩展。</p>
+<ul>
+<li>UDP单播同步数据</li>
+</ul>
+<p>opentracker本身支持cluster模式。cluster内各节点之间会同步数据。这样可以通过添加节点提高整体的集群性能。然而，opentracker原生通过UDP多播进行数据同步。我们不具备多播IP，因而开发了单播模式进行同步。实现非常简单，就是依次向cluster内其他节点发送数据。缺点是当节点数较多时，会影响性能。</p>
+<ul>
+<li>持久化支持</li>
+</ul>
+<p>opentracker将torrent和peer信息保存在内存中。当opentracker重启时，所有的torrent和peer信息就都丢失了。这会导致我们的系统一段时间内不能进行正常的P2P传输。因而我扩展了持久化功能。opentracker架构上通过多个不同的线程执行不同的任务。我添加了一个线程，周期性地将内存中的torrent和peer信息保存到磁盘文件中。这个线程很像Redis中进行数据dump的进程。磁盘文件格式定义为ODB(opentracker database)，它主要借鉴自Redis的RDB格式。目前，没有处理IPV6格式，因而只支持IPV4。<br>我还提供了一个工具支持流式地对odb文件进行处理。</p>
+<p>具体用法请参考: <code>perldoc OdbParser</code></p>
+<p>格式规范:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">----------------------------------- # ODB is a binary format. There are no new lines or spaces in the file.</span><br><span class="line">4f 50 45 4e 54 52 41 43 4b 45 52    # Magic String &quot;OPENTRACKER&quot;</span><br><span class="line">30 30 30 33                         # ODB Version Number in ASCII characters. In this case, version = &quot;0001&quot; = 1</span><br><span class="line">-----------------------------------</span><br><span class="line">FE                                  # FE = Opcode that indicates following is a torrent information.</span><br><span class="line">----------------------------------- # Torrent information starts from here.</span><br><span class="line">00 02 2e 33 01 c4 a1 df bb 82</span><br><span class="line">1f 51 0f b5 b6 02 6f 93 6e 9f       # 20 byte info_hash of torrent</span><br><span class="line">-----------------------------------</span><br><span class="line">e2 37 59 01 00 00 00 00             # Last access time in minutes since UNIX epoch, 8 bytes.</span><br><span class="line">                                    # At present, when loading ODB file, just use current clock, ignore this.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Seeding peer count for current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Total peer count for current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">00 00 00 00 00 00 00 00             # Download times of files in current torrent. 8 bytes long integer in little endian.</span><br><span class="line">                                    # NOT used at present.</span><br><span class="line">-----------------------------------</span><br><span class="line">01 00 00 00                         # Peer count in current peer, 4 bytes integer in little endian.</span><br><span class="line">----------------------------------- # Peers information starts from here.</span><br><span class="line">7f 00 00 01                         # 4 bytes ip address in network byte order. In this case, 0x7f000001 = &quot;127.0.0.1&quot;</span><br><span class="line">1b 31                               # 2 bytes port in network byte order. In this case, 0x1b31 = 6961.</span><br><span class="line">80                                  # Flag of peers. SEEDING = 0x80, COMPLETED = 0x40, STOPPED = 0x20, LEECHING = 0x00</span><br><span class="line">00                                  # Reserved. Just set zero.</span><br><span class="line">-----------------------------------</span><br><span class="line">...                                 # Other peers information.</span><br><span class="line">-----------------------------------</span><br><span class="line">FE</span><br><span class="line">-----------------------------------</span><br><span class="line">...                                 # Other torrent information.</span><br><span class="line">-----------------------------------</span><br><span class="line">FF                                  # EOF opcode.</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>HTTP debug接口</li>
+</ul>
+<p>由于opentracker响应内容是按BENCODE编码过的,调试时不太方便。因而扩展了一个返回human-readable内容的调试接口。</p>
+<p>具体参看: <a target="_blank" rel="noopener" href="https://github.com/flygoast/opentracker">https://github.com/flygoast/opentracker</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/03/passenger-blocking/" rel="prev" title="Passenger导致NGINX master进程阻塞定位及解决">
+      <i class="fa fa-chevron-left"></i> Passenger导致NGINX master进程阻塞定位及解决
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/03/tt-skeleton/" rel="next" title="Abstract Database和Skeleton Database">
+      Abstract Database和Skeleton Database <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VXLAN原理介绍与实例分析&gt;&gt;简要介绍了VXLAN的基本概念和基于组播的通信过程实例。其中控制面是混合在数据面中的，由洪泛(flood)和源地址学习实现。本文通过实例将控制面从数据面中分离，手动维护FDB及ARP表项实现通信过程。 对于大规模的VXLAN网络中，最核心的问题一般有两个:  如何发现网络中其他VTEP 如何降低BUM（Broadcast, Un">
+<meta property="og:type" content="article">
+<meta property="og:title" content="动态维护FDB表项实现VXLAN通信">
+<meta property="og:url" content="http://just4coding.com/2020/04/20/vxlan-fdb/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VXLAN原理介绍与实例分析&gt;&gt;简要介绍了VXLAN的基本概念和基于组播的通信过程实例。其中控制面是混合在数据面中的，由洪泛(flood)和源地址学习实现。本文通过实例将控制面从数据面中分离，手动维护FDB及ARP表项实现通信过程。 对于大规模的VXLAN网络中，最核心的问题一般有两个:  如何发现网络中其他VTEP 如何降低BUM（Broadcast, Un">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-04-20/1.png">
+<meta property="article:published_time" content="2020-04-20T08:45:48.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.491Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="VXLAN">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-04-20/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/04/20/vxlan-fdb/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>动态维护FDB表项实现VXLAN通信 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/04/20/vxlan-fdb/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          动态维护FDB表项实现VXLAN通信
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-04-20 16:45:48" itemprop="dateCreated datePublished" datetime="2020-04-20T16:45:48+08:00">2020-04-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a href="/2017/05/21/vxlan/">VXLAN原理介绍与实例分析</a>&gt;&gt;简要介绍了VXLAN的基本概念和基于组播的通信过程实例。其中控制面是混合在数据面中的，由洪泛(flood)和源地址学习实现。本文通过实例将控制面从数据面中分离，手动维护<code>FDB</code>及<code>ARP</code>表项实现通信过程。</p>
+<p>对于大规模的VXLAN网络中，最核心的问题一般有两个:</p>
+<ol>
+<li>如何发现网络中其他VTEP</li>
+<li>如何降低BUM（Broadcast, Unknown unicast, Multicast)流量</li>
+</ol>
+<p>在对于问题一来说，之前的文章中的解决方法是洪泛，对于问题二，则通过源地址学习来确定MAC地址的归属。VXLAN的转发过程主要依赖FDB(Forwarding Database)实现。二层网桥的FDB表项格式可表达为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VLAN&gt; &lt;DEV PORT&gt;</span><br></pre></td></tr></table></figure>
+<p>VXLAN设备的表项与之类似，可以表达为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;MAC&gt; &lt;VNI&gt; &lt;REMOTE IP&gt;</span><br></pre></td></tr></table></figure>
+
+<p>VXLAN设备根据MAC地址来查找相应的VTEP IP地址，继而将二层数据帧封装发送至相应VTEP。</p>
+<p>如果我们能够从集中的Controller或者存储中获取VTEP信息以及MAC地址与VTEP的对应信息，则问题一和问题二都可以通过根据相应信息动态更新FDB表项来解决，OpenStack的Neutron, VMware的NSX，Docker Overlay都有类似的思路。</p>
+<p>下面我们通过实例来手动更新FDB表来实现VXLAN通信。我们的实验环境如下图, VTEP本地使用Linux bridge来挂载连接到network namespace中的<code>veth pair</code>虚拟网卡，我们要实现<code>3.3.3.3</code>二层访问<code>3.3.3.4</code>。</p>
+<img src="/images/2020-04-20/1.png" class="">
+
+<span id="more"></span>
+
+<p>分别两台主机执行命令构建环境，Host1上的命令如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.ip_forward=1</span><br><span class="line">ip netns add ns1</span><br><span class="line">ip <span class="built_in">link</span> add veth1 <span class="built_in">type</span> veth peer name eth0 netns ns1</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> eth0 up</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> lo up</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip addr add 3.3.3.3/24 dev eth0</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up dev veth1</span><br><span class="line">ip <span class="built_in">link</span> add br1 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> br1 up</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> veth1 master br1</span><br><span class="line">ip <span class="built_in">link</span> add vxlan100 <span class="built_in">type</span> vxlan <span class="built_in">id</span> 100 dstport 4789 <span class="built_in">local</span> 192.168.33.15 nolearning</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> vxlan100 master br1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up vxlan100</span><br></pre></td></tr></table></figure>
+
+<p>在创建VXLAN设备时指定了<code>nolearning</code>来禁用源地址学习。在Host2中修改相应IP同样进行配置:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.ip_forward=1</span><br><span class="line">ip netns add ns1</span><br><span class="line">ip <span class="built_in">link</span> add veth1 <span class="built_in">type</span> veth peer name eth0 netns ns1</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> eth0 up</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> lo up</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip addr add 3.3.3.4/24 dev eth0</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up dev veth1</span><br><span class="line">ip <span class="built_in">link</span> add br1 <span class="built_in">type</span> bridge</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> br1 up</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> veth1 master br1</span><br><span class="line">ip <span class="built_in">link</span> add vxlan100 <span class="built_in">type</span> vxlan <span class="built_in">id</span> 100 dstport 4789 <span class="built_in">local</span> 192.168.33.16 nolearning</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> vxlan100 master br1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up vxlan100</span><br></pre></td></tr></table></figure>
+
+<p>在Host1的<code>ns1</code>中访问Host2中的<code>3.3.3.4</code>, 此时无法连通:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">From 3.3.3.3 icmp_seq=1 Destination Host Unreachable</span><br><span class="line">From 3.3.3.3 icmp_seq=2 Destination Host Unreachable</span><br><span class="line"></span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1027ms</span><br><span class="line">pipe 2</span><br></pre></td></tr></table></figure>
+
+<p>原因在于，Host1的<code>3.3.3.3</code>接口需要先发送ARP广播包查询<code>3.3.3.4</code>的MAC地址。 ARP广播包到达接口<code>vxlan100</code>之后，根据FDB表项无法找到VTEP地址,因而ARP广播包无法发出。</p>
+<p>我们在两个Host上分别查看两个虚拟网卡的MAC地址:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ip link</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">2: eth0@if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000</span><br><span class="line">    link/ether 26:c1:ad:8d:00:73 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-bionic:/home/vagrant/workspace# ip netns exec ns1 ip link</span><br><span class="line">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000</span><br><span class="line">    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00</span><br><span class="line">2: eth0@if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000</span><br><span class="line">    link/ether e2:ca:8e:f0:7d:79 brd ff:ff:ff:ff:ff:ff link-netnsid 0</span><br></pre></td></tr></table></figure>
+
+<p>然后在Host1上手动增加VXLAN FDB表项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 192.168.33.16</span><br><span class="line">bridge fdb append e2:ca:8e:f0:7d:79 dev vxlan100 dst 192.168.33.16</span><br></pre></td></tr></table></figure>
+
+<p>全零表项表示没有匹配的MAC地址时，就发送到该表项中的VTEP, 用于处理BUM流量。<br>对于Host2中的虚拟接口的MAC地址，则直接发送到VTEP:192.168.33.16。</p>
+<p>查看VXLAN设备vxlan100的FDB表项，两条表项都已成功添加而且永不老化(permanent):</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# bridge fdb show brport vxlan100</span><br><span class="line">aa:f2:de:f2:01:73 vlan 1 master br1 permanent</span><br><span class="line">aa:f2:de:f2:01:73 master br1 permanent</span><br><span class="line">00:00:00:00:00:00 dst 192.168.33.16 self permanent</span><br><span class="line">e2:ca:8e:f0:7d:79 dst 192.168.33.16 self permanent</span><br></pre></td></tr></table></figure>
+
+<p>同样在Host2上增加FDB表项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 192.168.33.15</span><br><span class="line">bridge fdb append 26:c1:ad:8d:00:73 dev vxlan100 dst 192.168.33.15</span><br></pre></td></tr></table></figure>
+
+<p>之后再次从Host1测试ping访问, 此时访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=1 ttl=64 time=1.30 ms</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=2 ttl=64 time=1.21 ms</span><br><span class="line"></span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1002ms</span><br><span class="line">rtt min/avg/max/mdev = 1.213/1.256/1.300/0.043 ms</span><br></pre></td></tr></table></figure>
+
+<p>Host1的虚拟接口<code>3.3.3.3</code>在ping访问Host2上的<code>3.3.3.4</code>时，需要先获得<code>3.3.3.4</code>对应的MAC地址，它会发送ARP广播请求。在大规模VXLAN环境中，这种ARP广播的消耗也很巨大，即我们开头所说的问题二。如果我们能获取MAC所在的VTEP，则可由VXLAN设备实现ARP代答，将ARP广播范围控制在本地，避免ARP广播请求发送到整个VXLAN网络环境中。Linux VXLAN设备支持通过<code>proxy</code>参数开启ARP代答。</p>
+<p>在Host1上执行如下命令，重新创建VXLAN接口、开启ARP代答并重新添加FDB表项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> del vxlan100</span><br><span class="line">ip <span class="built_in">link</span> add vxlan100 <span class="built_in">type</span> vxlan <span class="built_in">id</span> 100 dstport 4789 <span class="built_in">local</span> 192.168.33.15 nolearning proxy</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> vxlan100 master br1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up vxlan100</span><br><span class="line">bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 192.168.33.16</span><br><span class="line">bridge fdb append e2:ca:8e:f0:7d:79 dev vxlan100 dst 192.168.33.16</span><br></pre></td></tr></table></figure>
+
+<p>接着添加<code>3.3.3.4</code>的ARP表项并查看:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip neighbor add 3.3.3.4 lladdr e2:ca:8e:f0:7d:79 dev vxlan100</span><br><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip neighbor show dev vxlan100</span><br><span class="line">3.3.3.4 lladdr e2:ca:8e:f0:7d:79 PERMANENT</span><br></pre></td></tr></table></figure>
+
+<p>同样在Host2上执行命令, 重新创建VXLAN接口、开启ARP代答并重新添加FDB表项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> del vxlan100</span><br><span class="line">ip <span class="built_in">link</span> add vxlan100 <span class="built_in">type</span> vxlan <span class="built_in">id</span> 100 dstport 4789 <span class="built_in">local</span> 192.168.33.16 nolearning proxy</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> vxlan100 master br1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up vxlan100</span><br><span class="line">bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 192.168.33.15</span><br><span class="line">bridge fdb append 26:c1:ad:8d:00:73 dev vxlan100 dst 192.168.33.15</span><br></pre></td></tr></table></figure>
+
+<p>也添加<code>3.3.3.3</code>的ARP表项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-bionic:/home/vagrant/workspace# ip neighbor add 3.3.3.3 lladdr 26:c1:ad:8d:00:73 dev vxlan100</span><br><span class="line">root@ubuntu-bionic:/home/vagrant/workspace# ip neighbor show dev vxlan100</span><br><span class="line">3.3.3.3 lladdr 26:c1:ad:8d:00:73 PERMANENT</span><br></pre></td></tr></table></figure>
+
+<p>此时再次从Host1测试ping, 访问成功:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ip neigh flush all</span><br><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=1 ttl=64 time=2.52 ms</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=2 ttl=64 time=1.01 ms</span><br><span class="line"></span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1002ms</span><br><span class="line">rtt min/avg/max/mdev = 1.012/1.765/2.519/0.753 ms</span><br></pre></td></tr></table></figure>
+
+<p>通过手动更新ARP和FDB表项可以实现VXLAN通信，但这些表项需要提前添加。为了支持更加灵活的维护ARP和FDB表，Linux的VXLAN设备还支持对于表项匹配MISS的消息通知。内核在发现在ARP或者FDB表项中找不到相应的表项，则可以通过NETLINK消息发送通知，用户态进程可以监听相应消息并补充所缺失的表项记录，从而实现动态的表项维护。VXLAN设备支持两种消息:</p>
+<ul>
+<li><p>L2MISS: VXLAN设备在FDB表中找不到目的MAC地址所属的VTEP IP地址。L2MISS消息的发送需要满足如下条件：</p>
+<ul>
+<li>目的MAC地址未知，即在FDB表中没有相应条项</li>
+<li>FDB表中没有全零表项</li>
+<li>目的MAC地址不是组播或多播地址</li>
+</ul>
+</li>
+<li><p>L3MISS: VXLAN设备在ARP表中找不到目的IP所对应的MAC地址</p>
+</li>
+</ul>
+<p>我们在Host1上删除<code>vxlan100</code>,重新添加开启<code>l2miss</code>和<code>l3miss</code>的<code>vxlan100</code>接口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> del vxlan100</span><br><span class="line">ip <span class="built_in">link</span> add vxlan100 <span class="built_in">type</span> vxlan  <span class="built_in">id</span> 100 dstport 4789 <span class="built_in">local</span> 192.168.33.15 nolearning proxy l2miss l3miss</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> vxlan100 master br1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up vxlan100</span><br></pre></td></tr></table></figure>
+
+<p>接着使用ip moniotr命令去监听消息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ip monitor all dev vxlan100</span><br></pre></td></tr></table></figure>
+
+<p>再次从Host1上去测试ping, 访问不通：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ip neigh flush all</span><br><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">From 3.3.3.3 icmp_seq=1 Destination Host Unreachable</span><br><span class="line">From 3.3.3.3 icmp_seq=2 Destination Host Unreachable</span><br><span class="line"></span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1027ms</span><br><span class="line">pipe 2</span><br></pre></td></tr></table></figure>
+
+<p>但我们从ip monitor收到了L3MISS的消息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[NEIGH]miss 3.3.3.4  STALE</span><br><span class="line">[NEIGH]miss 3.3.3.4  STALE</span><br><span class="line">[NEIGH]miss 3.3.3.4  STALE</span><br></pre></td></tr></table></figure>
+
+<p>我们手动添加上相应ARP表项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip neighbor replace 3.3.3.4 lladdr e2:ca:8e:f0:7d:79 dev vxlan100 nud reachable</span><br><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip neighbor show dev vxlan100</span><br><span class="line">3.3.3.4 lladdr e2:ca:8e:f0:7d:79 REACHABLE</span><br></pre></td></tr></table></figure>
+
+<p>我们这里添加了<code>nud reachable</code>， NUD表示: Neighbour Unreachability Detection, 意思是这个表项有过期时间，系统发现它无效后过一定时间会自动删除, 之后如果再次需要内核会再次发送L3MISS消息，这样我们就不用自己维护这些添加的表项了。</p>
+<p>此时再次从Host1上去ping, 依然不能连通:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">^C</span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 0 received, 100% packet loss, time 1025ms</span><br></pre></td></tr></table></figure>
+
+<p>但是从ip monitor能收到L2MISS消息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[NEIGH]miss lladdr e2:ca:8e:f0:7d:79 STALE</span><br><span class="line">[NEIGH]miss lladdr e2:ca:8e:f0:7d:79 STALE</span><br></pre></td></tr></table></figure>
+
+<p>接着，我们手动添加FDB表项:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bridge fdb append e2:ca:8e:f0:7d:79 dev vxlan100 dst 192.168.33.16</span><br></pre></td></tr></table></figure>
+
+<p>再次从Host1上ping，访问成功：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@ubuntu-focal:/home/vagrant/workspace# ip netns exec ns1 ping -c2 3.3.3.4</span><br><span class="line">PING 3.3.3.4 (3.3.3.4) 56(84) bytes of data.</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=1 ttl=64 time=2.81 ms</span><br><span class="line">64 bytes from 3.3.3.4: icmp_seq=2 ttl=64 time=1.19 ms</span><br><span class="line"></span><br><span class="line">--- 3.3.3.4 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1001ms</span><br><span class="line">rtt min/avg/max/mdev = 1.194/2.002/2.811/0.808 ms</span><br></pre></td></tr></table></figure>
+
+<p>基于这种动态更新机制，我们从集中的Controller或者某种存储处获取相应的信息，即可实现一般意义上的SDN架构，有效减少VXLAN网络中的BUM流量。Docker的libnetwork VXLAN模式以及Flannel的VXLAN模式都使用这种模式来实现Docker overlay网络, 后面再写文章具体分析。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://vincent.bernat.ch/en/blog/2017-vxlan-linux">https://vincent.bernat.ch/en/blog/2017-vxlan-linux</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/VXLAN/" rel="tag"># VXLAN</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/03/13/vault-introduction/" rel="prev" title="HashiCorp Vault介绍">
+      <i class="fa fa-chevron-left"></i> HashiCorp Vault介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/04/26/vxlan-evpn/" rel="next" title="基于BGP EVPN的VXLAN通信实践">
+      基于BGP EVPN的VXLAN通信实践 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

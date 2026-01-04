@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Linux进程在运行中异常中止或者崩溃，Linux会将进程当时的内存信息、寄存器信息、函数调用堆栈等信息存储到文件系统的一个文件中，这个过程叫做core dump, 生成的core文件可以使用gdb来分析诊断程序存在的问题。最近对core dump的生成过程及相应进程退出的过程有些疑惑。究竟是崩溃进程的内核task退出前生成core文件还是崩溃的task先退出之后kernel检测到进程崩溃后额外来">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux core dump过程分析">
+<meta property="og:url" content="http://just4coding.com/2021/10/31/core-dump/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Linux进程在运行中异常中止或者崩溃，Linux会将进程当时的内存信息、寄存器信息、函数调用堆栈等信息存储到文件系统的一个文件中，这个过程叫做core dump, 生成的core文件可以使用gdb来分析诊断程序存在的问题。最近对core dump的生成过程及相应进程退出的过程有些疑惑。究竟是崩溃进程的内核task退出前生成core文件还是崩溃的task先退出之后kernel检测到进程崩溃后额外来">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-10-31T10:26:39.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.496Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2021/10/31/core-dump/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Linux core dump过程分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/10/31/core-dump/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux core dump过程分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-10-31 18:26:39" itemprop="dateCreated datePublished" datetime="2021-10-31T18:26:39+08:00">2021-10-31</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Linux进程在运行中异常中止或者崩溃，Linux会将进程当时的内存信息、寄存器信息、函数调用堆栈等信息存储到文件系统的一个文件中，这个过程叫做<code>core dump</code>, 生成的<code>core</code>文件可以使用<code>gdb</code>来分析诊断程序存在的问题。最近对<code>core dump</code>的生成过程及相应进程退出的过程有些疑惑。究竟是崩溃进程的内核<code>task</code>退出前生成<code>core</code>文件还是崩溃的<code>task</code>先退出之后<code>kernel</code>检测到进程崩溃后额外来生成的呢？带着这个疑问去做些了实验和代码分析。</p>
+<p>默认情况下，<code>core dump</code>文件被命名为<code>core.pid</code>, 如<code>core.12345</code>。内核参数<code>/proc/sys/kernel/core_pattern</code>可以定义<code>core dump</code>文件名模板。具体模板参数可以参考<a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man5/core.5.html">文档</a>。但内核有个小巧特性，如果<code>core_pattern</code>的第一个字符为管道符:<code>|</code>, 内核会执行<code>|</code>之后的配置的可执行程序，并通过<code>pipe</code>将<code>core dump</code>内容传给这个用户态程序。</p>
+<p><a target="_blank" rel="noopener" href="http://abrt.readthedocs.org/en/latest/"><code>ABRT:Automated Bug Reporting Tool</code></a>服务收集应用崩溃的<code>core</code>文件就是使用这个机制，<code>abrt-ccpp</code>服务会将<code>core_pattern</code>设置为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">|/usr/libexec/abrt-hook-ccpp %s %c %p %u %g %t e %P %I %h</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>我们先编写一个运行即崩溃的简单程序, <code>bad.c</code>内容:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span> &#123;</span><br><span class="line">    <span class="type">char</span> *p = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="type">char</span> c = *p;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>修改当前<code>shell</code>的<code>coredump</code>文件大小为不限制:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">ulimit</span> -c unlimited</span><br></pre></td></tr></table></figure>
+<p>编译完运行程序，生成<code>coredump</code>文件，可以看到进程很快就退出了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]# gcc -g bad.c -o bad</span><br><span class="line">[root@default ~]# time ./bad</span><br><span class="line">Segmentation fault (core dumped)</span><br><span class="line"></span><br><span class="line">real	0m0.007s</span><br><span class="line">user	0m0.000s</span><br><span class="line">sys	0m0.006s</span><br></pre></td></tr></table></figure>
+
+<p><code>coredump helper</code>脚本<code>/root/core.dumper</code>内容如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line">/usr/bin/logger <span class="string">&quot;core.dumper: start sleeping 60 seconds&quot;</span></span><br><span class="line"><span class="built_in">sleep</span> 60</span><br><span class="line">/usr/bin/logger <span class="string">&quot;core.dumper: end&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>添加执行权限:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">chmod</span> a+x /root/core.dumper</span><br></pre></td></tr></table></figure>
+
+<p>修改<code>core_pattern</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># cat /proc/sys/kernel/core_pattern</span></span><br><span class="line">core</span><br><span class="line">[root@default ~]<span class="comment"># echo &#x27;|/root/core.dumper&#x27; &gt; /proc/sys/kernel/core_pattern</span></span><br><span class="line">[root@default ~]<span class="comment"># cat /proc/sys/kernel/core_pattern</span></span><br><span class="line">|/root/core.dumper</span><br></pre></td></tr></table></figure>
+
+<p>再次运行异常程序, 可以看到程序<code>60</code>秒之后才退出返回:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># time ./bad</span></span><br><span class="line">Segmentation fault (core dumped)</span><br><span class="line"></span><br><span class="line">real	1m0.034s</span><br><span class="line">user	0m0.003s</span><br><span class="line">sys	0m0.006s</span><br></pre></td></tr></table></figure>
+
+<p>从另一个<code>shell</code>查看<code>bad</code>进程, <code>bad</code>进程一直存在:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># ps aux |grep bad</span></span><br><span class="line">root      5932  0.0  0.0   4212   348 pts/0    S+   03:53   0:00 ./bad</span><br><span class="line">root      6030  0.0  0.1  12528   972 pts/1    R+   03:53   0:00 grep --color=auto bad</span><br></pre></td></tr></table></figure>
+<p>再查看该进程的函数调用堆栈:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># cat /proc/5932/stack</span></span><br><span class="line">[&lt;ffffffff9a656730&gt;] pipe_wait+0x70/0xc0</span><br><span class="line">[&lt;ffffffff9a6569d9&gt;] pipe_write+0x1f9/0x540</span><br><span class="line">[&lt;ffffffff9a64c663&gt;] do_sync_write+0x93/0xe0</span><br><span class="line">[&lt;ffffffff9a6b80c8&gt;] dump_write+0x58/0x70</span><br><span class="line">[&lt;ffffffff9a6b31df&gt;] elf_core_dump+0x84f/0x960</span><br><span class="line">[&lt;ffffffff9a6b9117&gt;] do_coredump+0x827/0xac0</span><br><span class="line">[&lt;ffffffff9a4b3ae5&gt;] get_signal_to_deliver+0x1c5/0x5e0</span><br><span class="line">[&lt;ffffffff9a42c527&gt;] do_signal+0x57/0x6f0</span><br><span class="line">[&lt;ffffffff9a42cc32&gt;] do_notify_resume+0x72/0xc0</span><br><span class="line">[&lt;ffffffff9ab8957c&gt;] retint_signal+0x48/0x8c</span><br><span class="line">[&lt;ffffffffffffffff&gt;] 0xffffffffffffffff</span><br></pre></td></tr></table></figure>
+
+<p>可以看到该进程在等待<code>pipe</code>写端返回，确定是进程在退出前生成<code>core dump</code>文件。</p>
+<p>下面在来从内核代码看具体过程，这里参考的是<code>CentOS</code>的<code>kernel-3.10.0-1160.el7</code>的源码，信号处理的逻辑与CPU架构相关，这里参考<code>x86</code>架构实现。</p>
+<p>上边的异常程序执行时访问空指针会产生<code>SIGSEGV</code>信号，Linux内核会把信号放入<code>task</code>的信号队列中，在内核态返回用户态时调用<code>do_notify_resume</code>函数(<code>arch/x86/kernel/signal.c</code>)来处理进程收到的信号:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * notification of userspace execution resumption</span></span><br><span class="line"><span class="comment"> * - triggered by the TIF_WORK_MASK flags</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">do_notify_resume</span><span class="params">(<span class="keyword">struct</span> pt_regs *regs, <span class="type">void</span> *unused, __u32 thread_info_flags)</span></span><br><span class="line">&#123;</span><br><span class="line">    user_exit();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (thread_info_flags &amp; _TIF_UPROBE)</span><br><span class="line">        uprobe_notify_resume(regs);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (thread_info_flags &amp; _TIF_PATCH_PENDING)</span><br><span class="line">        klp_update_patch_state(current);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* deal with pending signal delivery */</span></span><br><span class="line">    <span class="keyword">if</span> (thread_info_flags &amp; _TIF_SIGPENDING)</span><br><span class="line">        do_signal(regs);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (thread_info_flags &amp; _TIF_NOTIFY_RESUME) &#123;</span><br><span class="line">        clear_thread_flag(TIF_NOTIFY_RESUME);</span><br><span class="line">        tracehook_notify_resume(regs);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (thread_info_flags &amp; _TIF_USER_RETURN_NOTIFY)</span><br><span class="line">        fire_user_return_notifiers();</span><br><span class="line"></span><br><span class="line">    user_enter();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>_TIF_SIGPENDING</code>表示有信号需要处理, 调用<code>do_signal</code>来处理:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Note that &#x27;init&#x27; is a special process: it doesn&#x27;t get signals it doesn&#x27;t</span></span><br><span class="line"><span class="comment"> * want to handle. Thus you cannot kill init even with a SIGKILL even by</span></span><br><span class="line"><span class="comment"> * mistake.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">do_signal</span><span class="params">(<span class="keyword">struct</span> pt_regs *regs)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">ksignal</span> <span class="title">ksig</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (get_signal(&amp;ksig)) &#123;</span><br><span class="line">        <span class="comment">/* Whee! Actually deliver the signal.  */</span></span><br><span class="line">        handle_signal(&amp;ksig, regs);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Did we come from a system call? */</span></span><br><span class="line">    <span class="keyword">if</span> (syscall_get_nr(current, regs) &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">/* Restart the system call - no handlers present */</span></span><br><span class="line">        <span class="keyword">switch</span> (syscall_get_error(current, regs)) &#123;</span><br><span class="line">        <span class="keyword">case</span> -ERESTARTNOHAND:</span><br><span class="line">        <span class="keyword">case</span> -ERESTARTSYS:</span><br><span class="line">        <span class="keyword">case</span> -ERESTARTNOINTR:</span><br><span class="line">            regs-&gt;ax = regs-&gt;orig_ax;</span><br><span class="line">            regs-&gt;ip -= <span class="number">2</span>;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">case</span> -ERESTART_RESTARTBLOCK:</span><br><span class="line">            regs-&gt;ax = NR_restart_syscall;</span><br><span class="line">            regs-&gt;ip -= <span class="number">2</span>;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If there&#x27;s no signal to deliver, we just put the saved sigmask</span></span><br><span class="line"><span class="comment">     * back.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    restore_saved_sigmask();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中<code>get_signal</code>是一个宏, 会调用<code>get_signal_to_delicer</code>来处理信号:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Eventually that&#x27;ll replace get_signal_to_deliver(); macro for now,</span></span><br><span class="line"><span class="comment"> * to avoid nastiness with include order.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> get_signal(ksig)                    \</span></span><br><span class="line"><span class="meta">(&#123;                              \</span></span><br><span class="line"><span class="meta">    struct ksignal *p = (ksig);             \</span></span><br><span class="line"><span class="meta">    p-&gt;sig = get_signal_to_deliver(&amp;p-&gt;info, &amp;p-&gt;ka,    \</span></span><br><span class="line"><span class="meta">                    signal_pt_regs(), NULL);\</span></span><br><span class="line"><span class="meta">    p-&gt;sig &gt; 0;                     \</span></span><br><span class="line"><span class="meta">&#125;)</span></span><br></pre></td></tr></table></figure>
+<p><code>get_signal_to_deliver</code>是一个比较长的函数, 会循环处理进程所接受到的信号:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">k_sigaction</span> *<span class="title">ka</span>;</span></span><br><span class="line">    ...</span><br><span class="line">    signr = dequeue_signal(current, &amp;current-&gt;blocked, info);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!signr)</span><br><span class="line">        <span class="keyword">break</span>; <span class="comment">/* will return 0 */</span></span><br><span class="line">    ...</span><br><span class="line">    ka = &amp;sighand-&gt;action[signr<span class="number">-1</span>];</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Trace actually delivered signals. */</span></span><br><span class="line">    trace_signal_deliver(signr, info, ka);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ka-&gt;sa.sa_handler == SIG_IGN) <span class="comment">/* Do nothing.  */</span></span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line">    <span class="keyword">if</span> (ka-&gt;sa.sa_handler != SIG_DFL) &#123;</span><br><span class="line">        <span class="comment">/* Run the handler.  */</span></span><br><span class="line">        *return_ka = *ka;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (ka-&gt;sa.sa_flags &amp; SA_ONESHOT)</span><br><span class="line">            ka-&gt;sa.sa_handler = SIG_DFL;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">break</span>; <span class="comment">/* will return non-zero &quot;signr&quot; value */</span></span><br><span class="line">    &#125;</span><br><span class="line">    ...    </span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Anything else is fatal, maybe with a core dump.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    current-&gt;flags |= PF_SIGNALED;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (sig_kernel_coredump(signr)) &#123;</span><br><span class="line">        <span class="keyword">if</span> (print_fatal_signals)</span><br><span class="line">            print_fatal_signal(info-&gt;si_signo);</span><br><span class="line">        proc_coredump_connector(current);</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * If it was able to dump core, this kills all</span></span><br><span class="line"><span class="comment">         * other threads in the group and synchronizes with</span></span><br><span class="line"><span class="comment">         * their demise.  If we lost the race with another</span></span><br><span class="line"><span class="comment">         * thread getting here, it set group_exit_code</span></span><br><span class="line"><span class="comment">         * first and our do_group_exit call below will use</span></span><br><span class="line"><span class="comment">         * that value and ignore the one we pass it.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        do_coredump(info);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Death signals, no core dump.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    do_group_exit(info-&gt;si_signo);</span><br><span class="line">    <span class="comment">/* NOTREACHED */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>函数检查信号是否应该忽略、交由用户态程序处理，或者停止所有线程等条件，最后调用<code>sig_kernel_coredump</code>检测是否应该生成<code>coredump</code>文件:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> sig_kernel_coredump(sig) \</span></span><br><span class="line"><span class="meta">    (((sig) &lt; SIGRTMIN) &amp;&amp; siginmask(sig, SIG_KERNEL_COREDUMP_MASK))</span></span><br></pre></td></tr></table></figure>
+<p>而符合这个条件的信号有以下这些:</p>
+<ul>
+<li>SIGQUIT</li>
+<li>SIGILL</li>
+<li>SIGTRAP</li>
+<li>SIGABRT</li>
+<li>SIGGFPE</li>
+<li>SIGSEGV</li>
+<li>SIGBUS</li>
+<li>SIGSYS</li>
+<li>SIGXCPU</li>
+<li>SIGXFSZ</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> SIG_KERNEL_COREDUMP_MASK (\</span></span><br><span class="line"><span class="meta">        rt_sigmask(SIGQUIT)   |  rt_sigmask(SIGILL)    | \</span></span><br><span class="line"><span class="meta">    rt_sigmask(SIGTRAP)   |  rt_sigmask(SIGABRT)   | \</span></span><br><span class="line"><span class="meta">        rt_sigmask(SIGFPE)    |  rt_sigmask(SIGSEGV)   | \</span></span><br><span class="line"><span class="meta">    rt_sigmask(SIGBUS)    |  rt_sigmask(SIGSYS)    | \</span></span><br><span class="line"><span class="meta">        rt_sigmask(SIGXCPU)   |  rt_sigmask(SIGXFSZ)   | \</span></span><br><span class="line"><span class="meta">    SIGEMT_MASK                    )</span></span><br></pre></td></tr></table></figure>
+
+<p>我们的进程收到了<code>SIGSEGV</code>信号，因而会调用<code>do_coredump</code>函数(<code>fs/coredump.c</code>)生成<code>coredump</code>文件。<code>do_coredump</code>会调用<code>rlimit</code>获取进程的<code>core</code>文件大小限制:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">coredump_params</span> <span class="title">cprm</span> =</span> &#123;</span><br><span class="line">    .siginfo = siginfo,</span><br><span class="line">    .regs = signal_pt_regs(),</span><br><span class="line">    .limit = rlimit(RLIMIT_CORE),</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * We must use the same mm-&gt;flags while dumping core to avoid</span></span><br><span class="line"><span class="comment">     * inconsistency of bit flags, since this flag is not protected</span></span><br><span class="line"><span class="comment">     * by any locks.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    .mm_flags = mm-&gt;flags,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>之后会检测当前进程的加载器是否有<code>core_dump</code>指针:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">binfmt = mm-&gt;binfmt;</span><br><span class="line"><span class="keyword">if</span> (!binfmt || !binfmt-&gt;core_dump)</span><br><span class="line">    <span class="keyword">goto</span> fail;</span><br></pre></td></tr></table></figure>
+
+<p>我们的进程在管理符模式因特殊原因不允许产生<code>core</code>文件，可以通过在内核模块中修改<code>binfmt-&gt;core_dump</code>为<code>NULL</code>来实现。</p>
+<p>继续代码分析，之后会调用<code>format_corename</code>来获取<code>coredump</code>文件名相关参数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* format_corename will inspect the pattern parameter, and output a</span></span><br><span class="line"><span class="comment"> * name into corename, which must have space for at least</span></span><br><span class="line"><span class="comment"> * CORENAME_MAX_SIZE bytes plus one byte for the zero terminator.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">format_corename</span><span class="params">(<span class="keyword">struct</span> core_name *cn, <span class="keyword">struct</span> coredump_params *cprm)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">cred</span> *<span class="title">cred</span> =</span> current_cred();</span><br><span class="line">    <span class="type">const</span> <span class="type">char</span> *pat_ptr = core_pattern;</span><br><span class="line">    <span class="type">int</span> ispipe = (*pat_ptr == <span class="string">&#x27;|&#x27;</span>);</span><br><span class="line">    ...</span><br><span class="line">out:</span><br><span class="line">    <span class="keyword">return</span> ispipe;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到管理符<code>|</code>就是在这里判断的。</p>
+<p>之后根据<code>ispipe</code>进行不同的分支处理:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ispipe = format_corename(&amp;cn, &amp;cprm);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (ispipe) &#123;</span><br><span class="line">    <span class="comment">//处理</span></span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们看<code>ispipe</code>为<code>1</code>的分支:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (ispipe) &#123;</span><br><span class="line">    <span class="type">int</span> dump_count;</span><br><span class="line">    <span class="type">char</span> **helper_argv;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">subprocess_info</span> *<span class="title">sub_info</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ispipe &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;format_corename failed\n&quot;</span>);</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;Aborting core\n&quot;</span>);</span><br><span class="line">        <span class="keyword">goto</span> fail_corename;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cprm.limit == <span class="number">1</span>) &#123;</span><br><span class="line">        <span class="comment">/* See umh_pipe_setup() which sets RLIMIT_CORE = 1.</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * Normally core limits are irrelevant to pipes, since</span></span><br><span class="line"><span class="comment">         * we&#x27;re not writing to the file system, but we use</span></span><br><span class="line"><span class="comment">         * cprm.limit of 1 here as a speacial value, this is a</span></span><br><span class="line"><span class="comment">         * consistent way to catch recursive crashes.</span></span><br><span class="line"><span class="comment">         * We can still crash if the core_pattern binary sets</span></span><br><span class="line"><span class="comment">         * RLIM_CORE = !1, but it runs as root, and can do</span></span><br><span class="line"><span class="comment">         * lots of stupid things.</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * Note that we use task_tgid_vnr here to grab the pid</span></span><br><span class="line"><span class="comment">         * of the process group leader.  That way we get the</span></span><br><span class="line"><span class="comment">         * right pid if a thread in a multi-threaded</span></span><br><span class="line"><span class="comment">         * core_pattern process dies.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        printk(KERN_WARNING</span><br><span class="line">            <span class="string">&quot;Process %d(%s) has RLIMIT_CORE set to 1\n&quot;</span>,</span><br><span class="line">            task_tgid_vnr(current), current-&gt;comm);</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;Aborting core\n&quot;</span>);</span><br><span class="line">        <span class="keyword">goto</span> fail_unlock;</span><br><span class="line">    &#125;</span><br><span class="line">    cprm.limit = RLIM_INFINITY;</span><br><span class="line"></span><br><span class="line">    dump_count = atomic_inc_return(&amp;core_dump_count);</span><br><span class="line">    <span class="keyword">if</span> (core_pipe_limit &amp;&amp; (core_pipe_limit &lt; dump_count)) &#123;</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;Pid %d(%s) over core_pipe_limit\n&quot;</span>,</span><br><span class="line">               task_tgid_vnr(current), current-&gt;comm);</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;Skipping core dump\n&quot;</span>);</span><br><span class="line">        <span class="keyword">goto</span> fail_dropcount;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    helper_argv = argv_split(GFP_KERNEL, cn.corename+<span class="number">1</span>, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="keyword">if</span> (!helper_argv) &#123;</span><br><span class="line">        printk(KERN_WARNING <span class="string">&quot;%s failed to allocate memory\n&quot;</span>,</span><br><span class="line">               __func__);</span><br><span class="line">        <span class="keyword">goto</span> fail_dropcount;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    retval = -ENOMEM;</span><br><span class="line">    sub_info = call_usermodehelper_setup(helper_argv[<span class="number">0</span>],</span><br><span class="line">                    helper_argv, <span class="literal">NULL</span>, GFP_KERNEL,</span><br><span class="line">                    umh_pipe_setup, <span class="literal">NULL</span>, &amp;cprm);</span><br><span class="line">    <span class="keyword">if</span> (sub_info)</span><br><span class="line">        retval = call_usermodehelper_exec(sub_info,</span><br><span class="line">                          UMH_WAIT_EXEC);</span><br><span class="line"></span><br><span class="line">    argv_free(helper_argv);</span><br><span class="line">    <span class="keyword">if</span> (retval) &#123;</span><br><span class="line">        printk(KERN_INFO <span class="string">&quot;Core dump to %s pipe failed\n&quot;</span>,</span><br><span class="line">               cn.corename);</span><br><span class="line">        <span class="keyword">goto</span> close_fail;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>当<code>cprm.limit</code>为<code>1</code>时，会跳过调用用户态<code>coredump helper</code>执行。上边提到在配置<code>coredump helper</code>情况下我们的进程强制不允许生成<code>core</code>，也可以在进程中调用<code>setrlimit</code>来设置<code>RLIMIT_CORE</code>为<code>1</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">rlimit</span> <span class="title">rlimit</span>;</span></span><br><span class="line">rlimit.rlim_cur = <span class="number">1</span>;</span><br><span class="line">rlimit.rlim_max = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">if</span> (setrlimit(RLIMIT_CORE, &amp;rlimit) != <span class="number">0</span>) &#123;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>需要注意的是，不能使用<code>ulimit</code>命令来设置的原因是因为<code>ulimit -c</code>设置的单位为<code>block</code>, 为<code>1024</code>字节。执行<code>ulimit -c 1</code>, 进程的<code>RLIMIT_CORE</code>实际为<code>1024</code>。</p>
+<p>这种方式不舒服的点在于在更低版本的内核(比如：<code>2.6.32</code>)判断条件是<code>RLIMIT_CORE</code>为<code>0</code>。为了兼容性需要在不同版本内核上使用不同的值。</p>
+<p>继续看代码，处理完条件检查和参数解析之后，调用<code>call_usermodehelper_setup</code>构造内核<code>work_struct</code>去执行用户态程序:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sub_info = call_usermodehelper_setup(helper_argv[<span class="number">0</span>],</span><br><span class="line">                helper_argv, <span class="literal">NULL</span>, GFP_KERNEL,</span><br><span class="line">                umh_pipe_setup, <span class="literal">NULL</span>, &amp;cprm);</span><br></pre></td></tr></table></figure>
+<p>之后调用<code>call_usermodehelper_exec</code>将创建的<code>work_struct</code>放入系统队列, 等待<code>work_struct</code>关联的函数<code>__call_usermodehelper</code>完成:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">queue_work(system_unbound_wq, &amp;sub_info-&gt;work);</span><br><span class="line"><span class="keyword">if</span> (wait == UMH_NO_WAIT)    <span class="comment">/* task has freed sub_info */</span></span><br><span class="line">    <span class="keyword">goto</span> unlock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (wait &amp; UMH_KILLABLE) &#123;</span><br><span class="line">    retval = wait_for_completion_killable(&amp;done);</span><br><span class="line">    <span class="keyword">if</span> (!retval)</span><br><span class="line">        <span class="keyword">goto</span> wait_done;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* umh_complete() will see NULL and free sub_info */</span></span><br><span class="line">    <span class="keyword">if</span> (xchg(&amp;sub_info-&gt;complete, <span class="literal">NULL</span>))</span><br><span class="line">        <span class="keyword">goto</span> unlock;</span><br><span class="line">    <span class="comment">/* fallthrough, umh_complete() was already called */</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">wait_for_completion(&amp;done);</span><br></pre></td></tr></table></figure>
+
+<p>因为<code>call_usermodehelper_exec</code>函数中传入的<code>wait</code>参数为<code>UMH_WAIT_EXEC</code>，<code>__call_usermodehelper</code>会调用<code>kernel_thread</code>去启动一个内核进程去执行<code>call_helper</code>, 之后调用<code>umh_complete</code>令<code>call_usermodehelper_exec</code>中的<code>wait_for_completion(&amp;done)</code>返回:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* This is run by khelper thread  */</span></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> __call_usermodehelper(<span class="keyword">struct</span> work_struct *work)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">subprocess_info</span> *<span class="title">sub_info</span> =</span></span><br><span class="line">        container_of(work, <span class="keyword">struct</span> subprocess_info, work);</span><br><span class="line">    <span class="type">int</span> wait = sub_info-&gt;wait &amp; ~UMH_KILLABLE;</span><br><span class="line">    <span class="type">pid_t</span> pid;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* CLONE_VFORK: wait until the usermode helper has execve&#x27;d</span></span><br><span class="line"><span class="comment">     * successfully We need the data structures to stay around</span></span><br><span class="line"><span class="comment">     * until that is done.  */</span></span><br><span class="line">    <span class="keyword">if</span> (wait == UMH_WAIT_PROC)</span><br><span class="line">        pid = kernel_thread(wait_for_helper, sub_info,</span><br><span class="line">                    CLONE_FS | CLONE_FILES | SIGCHLD);</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        pid = kernel_thread(call_helper, sub_info,</span><br><span class="line">                    CLONE_VFORK | SIGCHLD);</span><br><span class="line">        <span class="comment">/* Worker thread stopped blocking khelper thread. */</span></span><br><span class="line">        kmod_thread_locker = <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (wait) &#123;</span><br><span class="line">    <span class="keyword">case</span> UMH_NO_WAIT:</span><br><span class="line">        call_usermodehelper_freeinfo(sub_info);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">case</span> UMH_WAIT_PROC:</span><br><span class="line">        <span class="keyword">if</span> (pid &gt; <span class="number">0</span>)</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="comment">/* FALLTHROUGH */</span></span><br><span class="line">    <span class="keyword">case</span> UMH_WAIT_EXEC:</span><br><span class="line">        <span class="keyword">if</span> (pid &lt; <span class="number">0</span>)</span><br><span class="line">            sub_info-&gt;retval = pid;</span><br><span class="line">        umh_complete(sub_info);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>call_helper</code>最终会调用到<code>____call_usermodehelper</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (sub_info-&gt;init) &#123;</span><br><span class="line">    retval = sub_info-&gt;init(sub_info, new);</span><br><span class="line">    <span class="keyword">if</span> (retval) &#123;</span><br><span class="line">        abort_creds(new);</span><br><span class="line">        <span class="keyword">goto</span> fail;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">commit_creds(new);</span><br><span class="line"></span><br><span class="line">retval = do_execve(getname_kernel(sub_info-&gt;path),</span><br><span class="line">           (<span class="type">const</span> <span class="type">char</span> __user *<span class="type">const</span> __user *)sub_info-&gt;argv,</span><br><span class="line">           (<span class="type">const</span> <span class="type">char</span> __user *<span class="type">const</span> __user *)sub_info-&gt;envp);</span><br><span class="line"><span class="keyword">if</span> (!retval)</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>在调用<code>do_execve</code>执行用户态进程前会先调用<code>call_usermodehelper_setup</code>通过<code>sub_info-&gt;init</code>传入的<code>umh_pipe_setup</code>函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * umh_pipe_setup</span></span><br><span class="line"><span class="comment"> * helper function to customize the process used</span></span><br><span class="line"><span class="comment"> * to collect the core in userspace.  Specifically</span></span><br><span class="line"><span class="comment"> * it sets up a pipe and installs it as fd 0 (stdin)</span></span><br><span class="line"><span class="comment"> * for the process.  Returns 0 on success, or</span></span><br><span class="line"><span class="comment"> * PTR_ERR on failure.</span></span><br><span class="line"><span class="comment"> * Note that it also sets the core limit to 1.  This</span></span><br><span class="line"><span class="comment"> * is a special value that we use to trap recursive</span></span><br><span class="line"><span class="comment"> * core dumps</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">umh_pipe_setup</span><span class="params">(<span class="keyword">struct</span> subprocess_info *info, <span class="keyword">struct</span> cred *new)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">file</span> *<span class="title">files</span>[2];</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">coredump_params</span> *<span class="title">cp</span> =</span> (<span class="keyword">struct</span> coredump_params *)info-&gt;data;</span><br><span class="line">    <span class="type">int</span> err = create_pipe_files(files, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (err)</span><br><span class="line">        <span class="keyword">return</span> err;</span><br><span class="line"></span><br><span class="line">    cp-&gt;file = files[<span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">    err = replace_fd(<span class="number">0</span>, files[<span class="number">0</span>], <span class="number">0</span>);</span><br><span class="line">    fput(files[<span class="number">0</span>]);</span><br><span class="line">    <span class="comment">/* and disallow core files too */</span></span><br><span class="line">    current-&gt;signal-&gt;rlim[RLIMIT_CORE] = (<span class="keyword">struct</span> rlimit)&#123;<span class="number">1</span>, <span class="number">1</span>&#125;;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> err;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个函数会创建<code>pipe</code>结构, 在参数里保存<code>pipe</code>写端<code>fd</code>，然后用<code>fd：0</code>保存<code>pipe</code>读端，这样运行的用户态程序能从<code>fd:0</code>获取到<code>coredump</code>内容。之后设置当前<code>task</code>的<code>RLIMIT_CORE</code>为<code>&#123;1, 1&#125;</code>, 避免<code>coredump helper</code>也有异常形成<code>coredump</code>从而造成死循环不停递归调用<code>coredump helper</code>。</p>
+<p>最后会调用<code>binfmt-&gt;core_dump</code>生成<code>coredump</code>文件内容，写入到<code>cprm-&gt;file</code>中。在<code>ispipe</code>为<code>1</code>的情况下，<code>cprm-&gt;file</code>为之前创建的<code>pipe</code>写端:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">    <span class="comment">/* get us an unshared descriptor table; almost always a no-op */</span></span><br><span class="line">    retval = unshare_files(&amp;displaced);</span><br><span class="line">    <span class="keyword">if</span> (retval)</span><br><span class="line">        <span class="keyword">goto</span> close_fail;</span><br><span class="line">    <span class="keyword">if</span> (displaced)</span><br><span class="line">        put_files_struct(displaced);</span><br><span class="line">    <span class="keyword">if</span> (!dump_interrupted()) &#123;</span><br><span class="line">        file_start_write(cprm.file);</span><br><span class="line">        core_dumped = binfmt-&gt;core_dump(&amp;cprm);</span><br><span class="line">        file_end_write(cprm.file);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (ispipe &amp;&amp; core_pipe_limit)</span><br><span class="line">        wait_for_dump_helpers(cprm.file);</span><br><span class="line">close_fail:</span><br><span class="line">    <span class="keyword">if</span> (cprm.file)</span><br><span class="line">        filp_close(cprm.file, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+
+<p>因而用户态程序能从标准输入<code>fd:0</code>获取到<code>coredump</code>文件内容。由于现在版本的内核的递归<code>coredump</code>的判断标准为<code>RLIMIT_CORE</code>为<code>1</code>, 也就是当使用<code>coredump helper</code>的情况下，即使设置了<code>ulimit -c 0</code>,依然会执行<code>coredump helper</code>。</p>
+<p>还有一点需要注意，上边我们实验中<code>bad</code>进程会等到<code>coredump helper</code>进程退出。但实际上，内核并不会等待<code>coredump helper</code>执行完成。<code>core_dump</code>函数完成后，就会执行到<code>filp_close</code>关闭<code>pipe</code>写端。我们上边的<code>bad</code>进程一直在是因为我们的<code>coredump helper</code>没有读<code>pipe</code>, 因而内核内写<code>pipe</code>会阻塞。</p>
+<p>我们重改一下<code>coredump helper</code>的来验证一下。因为<code>bash</code>不方便读写二进制数据，我们用<code>perl</code>来从标准输入读取<code>coredump</code>内容, <code>/root/core.dumper</code>源码修改为:</p>
+<figure class="highlight perl"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/perl</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">use</span> strict;</span><br><span class="line"></span><br><span class="line"><span class="keyword">my</span> $core_name = <span class="string">&quot;/root/pipecore.&quot;</span> . $ARGV[<span class="number">0</span>];</span><br><span class="line"><span class="keyword">open</span>(<span class="keyword">my</span> $outfh, <span class="string">&#x27;+&gt;&#x27;</span>, $core_name) <span class="keyword">or</span> <span class="keyword">die</span> <span class="string">&quot;open file failed: $!&quot;</span>;</span><br><span class="line"><span class="keyword">binmode</span>($outfh);</span><br><span class="line"></span><br><span class="line"><span class="keyword">my</span> $n = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">my</span> $buffer;</span><br><span class="line"><span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    $n = <span class="keyword">read</span>(STDIN, $buffer, <span class="number">4096</span>);</span><br><span class="line">    <span class="keyword">last</span> <span class="keyword">if</span> ($n == <span class="number">0</span> <span class="keyword">or</span> $n &lt; <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">print</span> $outfh $buffer;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">close</span>($outfh);</span><br><span class="line"></span><br><span class="line"><span class="keyword">sleep</span>(<span class="number">60</span>);</span><br></pre></td></tr></table></figure>
+<p>修改<code>core_pattern</code>参数将进程号传递给<code>core.dumper</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">&quot;|/root/core.dumper %p&quot;</span> &gt; /proc/sys/kernel/core_pattern</span><br></pre></td></tr></table></figure>
+
+<p>之后执行两次异常程序，可以看到都很快返回:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># time ./bad</span></span><br><span class="line">Segmentation fault (core dumped)</span><br><span class="line"></span><br><span class="line">real	0m0.019s</span><br><span class="line">user	0m0.001s</span><br><span class="line">sys	0m0.003s</span><br><span class="line">[root@default ~]<span class="comment"># time ./bad</span></span><br><span class="line">Segmentation fault (core dumped)</span><br><span class="line"></span><br><span class="line">real	0m0.017s</span><br><span class="line">user	0m0.000s</span><br><span class="line">sys	0m0.011s</span><br></pre></td></tr></table></figure>
+
+<p>查看运行的<code>perl</code>进程, 可以看到两个<code>perl</code>进程在运行:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># ps aux |grep perl</span></span><br><span class="line">root      5689  0.0  0.2  26132  2132 ?        S    09:17   0:00 /usr/bin/perl /root/core.dumper 5688</span><br><span class="line">root      5700  0.0  0.2  26132  2132 ?        S    09:17   0:00 /usr/bin/perl /root/core.dumper 5699</span><br><span class="line">root      5705  0.0  0.1  12528   976 pts/0    R+   09:17   0:00 grep --color=auto perl</span><br></pre></td></tr></table></figure>
+
+<p>查看生成的<code>core</code>文件的进程号，正与<code>perl</code>进程的参数匹配:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># ls -l pipecore.*</span></span><br><span class="line">-rw-rw-rw-. 1 root root 245760 Oct 31 09:17 pipecore.5688</span><br><span class="line">-rw-rw-rw-. 1 root root 245760 Oct 31 09:17 pipecore.5699</span><br></pre></td></tr></table></figure>
+
+<p>查看两个进程的函数调用堆栈, 全部在运行<code>sleep</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># cat /proc/5689/stack</span></span><br><span class="line">[&lt;ffffffff9a4cb53b&gt;] hrtimer_nanosleep+0xbb/0x180</span><br><span class="line">[&lt;ffffffff9a4cb696&gt;] SyS_nanosleep+0x96/0xb0</span><br><span class="line">[&lt;ffffffff9ab92ed2&gt;] system_call_fastpath+0x25/0x2a</span><br><span class="line">[&lt;ffffffffffffffff&gt;] 0xffffffffffffffff</span><br><span class="line">[root@default ~]<span class="comment"># cat /proc/5700/stack</span></span><br><span class="line">[&lt;ffffffff9a4cb53b&gt;] hrtimer_nanosleep+0xbb/0x180</span><br><span class="line">[&lt;ffffffff9a4cb696&gt;] SyS_nanosleep+0x96/0xb0</span><br><span class="line">[&lt;ffffffff9ab92ed2&gt;] system_call_fastpath+0x25/0x2a</span><br><span class="line">[&lt;ffffffffffffffff&gt;] 0xffffffffffffffff</span><br></pre></td></tr></table></figure>
+<p>用<code>gdb</code>检验一下生成的<code>core</code>文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># gdb bad pipecore.5688</span></span><br><span class="line">GNU gdb (GDB) Red Hat Enterprise Linux 7.6.1-119.el7</span><br><span class="line">Copyright (C) 2013 Free Software Foundation, Inc.</span><br><span class="line">License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;</span><br><span class="line">This is free software: you are free to change and redistribute it.</span><br><span class="line">There is NO WARRANTY, to the extent permitted by law.  Type <span class="string">&quot;show copying&quot;</span></span><br><span class="line">and <span class="string">&quot;show warranty&quot;</span> <span class="keyword">for</span> details.</span><br><span class="line">This GDB was configured as <span class="string">&quot;x86_64-redhat-linux-gnu&quot;</span>.</span><br><span class="line">For bug reporting instructions, please see:</span><br><span class="line">&lt;http://www.gnu.org/software/gdb/bugs/&gt;...</span><br><span class="line">Reading symbols from /root/bad...done.</span><br><span class="line">[New LWP 5688]</span><br><span class="line">Core was generated by `./bad<span class="string">&#x27;.</span></span><br><span class="line"><span class="string">Program terminated with signal 11, Segmentation fault.</span></span><br><span class="line"><span class="string">#0  0x0000000000400504 in main (argc=1, argv=0x7fff56990d58) at bad.c:5</span></span><br><span class="line"><span class="string">5	    char c = *p;</span></span><br><span class="line"><span class="string">Missing separate debuginfos, use: debuginfo-install glibc-2.17-307.el7.1.x86_64</span></span><br><span class="line"><span class="string">(gdb)</span></span><br></pre></td></tr></table></figure>
+<p>文件正确，正常显示了崩溃的位置。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man5/core.5.html">https://man7.org/linux/man-pages/man5/core.5.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://rachelbythebay.com/w/2018/04/29/core/">https://rachelbythebay.com/w/2018/04/29/core/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.bbsmax.com/A/l1dyZlRqze/">https://www.bbsmax.com/A/l1dyZlRqze/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/10/17/security-boot/" rel="prev" title="Security Boot开启下CentOS8内核模块签名及加载">
+      <i class="fa fa-chevron-left"></i> Security Boot开启下CentOS8内核模块签名及加载
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/11/03/flannel/" rel="next" title="Kubernetes flannel网络分析">
+      Kubernetes flannel网络分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

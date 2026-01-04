@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="我们在CentOS服务器上使用IPTABLES来禁止PING访问。但为了允许从CentOS服务器上主动向外发起的PING的响应包能够正常流入，我们使用了iptables的状态机制，允许RELATED和ESTABLISHED状态的数据包通过。 我们首先配置上允许相关状态下的ICMP数据包通过的规则: 1234567891011[root@localhost vagrant]# iptables -A">
+<meta property="og:type" content="article">
+<meta property="og:title" content="IPTABLES未有效阻断Windows环境下PING访问的问题分析">
+<meta property="og:url" content="http://just4coding.com/2017/09/09/ping/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="我们在CentOS服务器上使用IPTABLES来禁止PING访问。但为了允许从CentOS服务器上主动向外发起的PING的响应包能够正常流入，我们使用了iptables的状态机制，允许RELATED和ESTABLISHED状态的数据包通过。 我们首先配置上允许相关状态下的ICMP数据包通过的规则: 1234567891011[root@localhost vagrant]# iptables -A">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-09-09/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-09-09/2.png">
+<meta property="article:published_time" content="2017-09-08T16:45:11.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.484Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-09-09/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/09/09/ping/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>IPTABLES未有效阻断Windows环境下PING访问的问题分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/09/09/ping/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          IPTABLES未有效阻断Windows环境下PING访问的问题分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-09-09 00:45:11" itemprop="dateCreated datePublished" datetime="2017-09-09T00:45:11+08:00">2017-09-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>我们在CentOS服务器上使用IPTABLES来禁止PING访问。但为了允许从CentOS服务器上主动向外发起的PING的响应包能够正常流入，我们使用了iptables的状态机制，允许RELATED和ESTABLISHED状态的数据包通过。</p>
+<p>我们首先配置上允许相关状态下的ICMP数据包通过的规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost vagrant]# iptables -A INPUT -p icmp -m state --state RELATED,ESTABLISHED -j ACCEPT</span><br><span class="line">[root@localhost vagrant]# iptables -nL</span><br><span class="line">Chain INPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line">ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED</span><br><span class="line"></span><br><span class="line">Chain FORWARD (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line"></span><br><span class="line">Chain OUTPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>此时在Windows命令控制台上启动PING来进行测试:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ping -t 10.95.48.11</span><br></pre></td></tr></table></figure>
+<p>此时访问成功。</p>
+<p>在CentOS服务器上添加禁止ICMP数据包的规则:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost vagrant]# iptables -A INPUT -p icmp -j DROP</span><br><span class="line">[root@localhost vagrant]# iptables -nL</span><br><span class="line">Chain INPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line">ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED</span><br><span class="line">DROP       icmp --  0.0.0.0/0            0.0.0.0/0</span><br><span class="line"></span><br><span class="line">Chain FORWARD (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br><span class="line"></span><br><span class="line">Chain OUTPUT (policy ACCEPT)</span><br><span class="line">target     prot opt source               destination</span><br></pre></td></tr></table></figure>
+
+<p>这时，一直在运行的PING并没有被阻断，这是因为之前的ICMP会话状态已经建立，因而允许数据包通过。然而我们关掉之前的PING，再重新启动，发现竟然还是没有被阻断。这时，理论上应该是一个新的ICMP会话了，为什么PING还是成功了呢？</p>
+<p>我们猜测应该是再次PING时重用了之前未过期的表项而被放行了。IPTABLES的conntrack模块使用ICMP协议中<code>Type</code>, <code>code</code>和<code>ID</code>三个字段来构建会话状态。</p>
+<p>我们可以从<code>/proc/net/nf_conntrack</code>查看连接状态表:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost vagrant]# cat /proc/net/nf_conntrack</span><br><span class="line">…</span><br><span class="line">ipv4     2 icmp     1 29 src=10.95.48.17 dst=10.95.48.11 type=8 code=0 id=14347 src=10.95.48.11 dst=10.95.48.17 type=0 code=0 id=14347 mark=0 zone=0 use=2</span><br></pre></td></tr></table></figure>
+
+<p>接着，我们在Windows环境下使用wireshark来抓包分析发出的PING包。</p>
+<p>我们调用两次PING命令, 每次发送两个ICMP请求，如图:</p>
+<img src="/images/2017-09-09/1.png" class="">
+
+<p>Wireshark抓包结果如图:</p>
+<img src="/images/2017-09-09/2.png" class="">
+
+<p>尽管多次调用了PING命令，但ICMP数据包中的ID一直都没有发生变化。这样在CentOS服务器端就会一直复用之前的状态记录而被直接放行了。</p>
+<p>CentOS默认的ICMP状态过期时间为30秒，于是我们在关闭了PING命令30秒之后再重新调用，发现终于可以正常阻断了。</p>
+<p>我们又用另一台CentOS服务器做为客户端按同样步骤来PING该CentOS服务器，则没有出现不能正常阻断的情况。</p>
+<p>ICMP的<a target="_blank" rel="noopener" href="https://tools.ietf.org/html/rfc792">RFC792</a>，对于Echo消息描述如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">The data received in the echo message must be returned in the echo</span><br><span class="line">reply message.</span><br><span class="line"></span><br><span class="line">The identifier and sequence number may be used by the echo sender</span><br><span class="line">to aid in matching the replies with the echo requests.  For</span><br><span class="line">example, the identifier might be used like a port in TCP or UDP to</span><br><span class="line">identify a session, and the sequence number might be incremented</span><br><span class="line">on each echo request sent.  The echoer returns these same values</span><br><span class="line">in the echo reply.</span><br></pre></td></tr></table></figure>
+<p>从描述可以知道，ICMP的ID可以像TCP或UDP的端口一样用于标识会话。我们把PING关闭再重启应该是另一个独立的会话，理论上应该更换一个ID值，而Windows上的PING的实现并不是特别规范。</p>
+<p>Linux下的PING实现是在<code>iputils</code>工具包中, 我们来看源码文件<code>ping.c</code>下的<code>ping4_send_probe</code>函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * pinger --</span></span><br><span class="line"><span class="comment"> *     Compose and transmit an ICMP ECHO REQUEST packet.  The IP packet</span></span><br><span class="line"><span class="comment"> * will be added on by the kernel.  The ID field is our UNIX process ID,</span></span><br><span class="line"><span class="comment"> * and the sequence number is an ascending integer.  The first 8 bytes</span></span><br><span class="line"><span class="comment"> * of the data portion are used to hold a UNIX &quot;timeval&quot; struct in VAX</span></span><br><span class="line"><span class="comment"> * byte-order, to compute the round-trip time.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">int</span> <span class="title function_">ping4_send_probe</span><span class="params">(socket_st *sock, <span class="type">void</span> *packet, <span class="type">unsigned</span> packet_size)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">icmphdr</span> *<span class="title">icp</span>;</span></span><br><span class="line">    <span class="type">int</span> cc;</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    icp = (<span class="keyword">struct</span> icmphdr *)packet;</span><br><span class="line">    icp-&gt;type = ICMP_ECHO;</span><br><span class="line">    icp-&gt;code = <span class="number">0</span>;</span><br><span class="line">    icp-&gt;checksum = <span class="number">0</span>;</span><br><span class="line">    icp-&gt;un.echo.sequence = htons(ntransmitted+<span class="number">1</span>);</span><br><span class="line">    icp-&gt;un.echo.id = ident;            <span class="comment">/* ID */</span></span><br><span class="line"></span><br><span class="line">    rcvd_clear(ntransmitted+<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">…</span><br></pre></td></tr></table></figure>
+<p>而<code>ident</code>定义在<code>ping_common.c</code>中:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (sock-&gt;socktype == SOCK_RAW)</span><br><span class="line">    ident = htons(getpid() &amp; <span class="number">0xFFFF</span>);</span><br></pre></td></tr></table></figure>
+<p>可以看到，Linux下的PING实现中ICMP的ID取值为当前进程号，因而每次调用PING时，ID都会发生变化，因而不会复用之前的状态记录。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/08/26/tarantool/" rel="prev" title="Tarantool介绍">
+      <i class="fa fa-chevron-left"></i> Tarantool介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/09/14/ansible/" rel="next" title="Ansible入门">
+      Ansible入门 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="根据XEP-0199, XMPP客户端和服务器都可以在XML流上发送应用层PING请求。因为XMPP依赖底层的TCP连接，有可能TCP连接意外中断，而上层的XMPP并不知晓，从而影响消息传递。通过发送应用层PING请求可以来确认对端的连接可用性。 以服务器发给客户端为例，协议如下： 发送的PING请求： 123&lt;iq from&#x3D;&amp;#x27;capulet.lit&amp;#x27; to&#x3D;&amp;#x27">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ejabberd中XMPP协议PING实现">
+<meta property="og:url" content="http://just4coding.com/2014/11/24/ejabberd-ping/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="根据XEP-0199, XMPP客户端和服务器都可以在XML流上发送应用层PING请求。因为XMPP依赖底层的TCP连接，有可能TCP连接意外中断，而上层的XMPP并不知晓，从而影响消息传递。通过发送应用层PING请求可以来确认对端的连接可用性。 以服务器发给客户端为例，协议如下： 发送的PING请求： 123&lt;iq from&#x3D;&amp;#x27;capulet.lit&amp;#x27; to&#x3D;&amp;#x27">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-24T10:09:43.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.468Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/11/24/ejabberd-ping/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ejabberd中XMPP协议PING实现 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/24/ejabberd-ping/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ejabberd中XMPP协议PING实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-24 18:09:43" itemprop="dateCreated datePublished" datetime="2014-11-24T18:09:43+08:00">2014-11-24</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/XMPP/" itemprop="url" rel="index">
+                    <span itemprop="name">XMPP</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>根据<a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0199.html">XEP-0199</a>, XMPP客户端和服务器都可以在XML流上发送应用层PING请求。因为XMPP依赖底层的TCP连接，有可能TCP连接意外中断，而上层的XMPP并不知晓，从而影响消息传递。通过发送应用层PING请求可以来确认对端的连接可用性。</p>
+<p>以服务器发给客户端为例，协议如下：</p>
+<p>发送的PING请求：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;get&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">ping</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>如果对端支持PING请求，则返回对应的”PONG”回应。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;result&#x27;</span>/&gt;</span></span><br></pre></td></tr></table></figure>
+<p>如果对端不支持则返回<service-unavailable/>错误。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span> <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span> <span class="attr">id</span>=<span class="string">&#x27;s2c1&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;error&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">ping</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">error</span> <span class="attr">type</span>=<span class="string">&#x27;cancel&#x27;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">service-unavailable</span> <span class="attr">xmlns</span>=<span class="string">&#x27;urn:ietf:params:xml:ns:xmpp-stanzas&#x27;</span>/&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">error</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>ejabberd中PING功能实现位于mod_ping.erl。它主要支持3个配置：</p>
+<ul>
+<li><strong>send_pings</strong>: <em>true|false</em></li>
+</ul>
+<p>如果这个选项设置为true, 当客户端在给定时间间隔内没有活动，则向客户端发送一个ping请求。</p>
+<ul>
+<li><strong>ping_interval</strong>: <em>Seconds</em></li>
+</ul>
+<p>设置上述send_pings选项中客户端没有活动的时间间隔。</p>
+<ul>
+<li><strong>timeout_action</strong>: <em>none|kill</em></li>
+</ul>
+<p>表示当PING请求发出32秒后，ejabberd依然没有收到PING响应，服务端如何处理。none表示什么也不做，kill表示关闭客户端连接。</p>
+<p>当ejabberd启动时会调用mod_ping:start&#x2F;2。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start</span><span class="params">(Host, Opts)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    PingSpec = &#123;Proc, &#123;?MODULE, start_link, [Host, Opts]&#125;,</span><br><span class="line">                transient, <span class="number">2000</span>, worker, [?MODULE]&#125;,</span><br><span class="line">    supervisor:start_child(?SUPERVISOR, PingSpec).</span><br></pre></td></tr></table></figure>
+<p>start函数调用supervisor:start_child&#x2F;2为每个支持的host创建一个负责该host的worker进程。</p>
+<p>进程树模型如下:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">+------------+</span><br><span class="line">|ejabberd_sup|</span><br><span class="line">+-----+------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------+</span><br><span class="line">      +---&gt;|Other processes...|</span><br><span class="line">      |    +------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(im.just4coding.com)|</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(localhost)         |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      |</span><br><span class="line">      |    +------------------------+</span><br><span class="line">      +---&gt;|ping(Other host)        |</span><br><span class="line">           +------------------------+</span><br></pre></td></tr></table></figure>
+<p>每个worker是一个gen_server进程，进程调用init函数进行初始化。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">init</span><span class="params">([Host, Opts])</span> -&gt;</span></span><br><span class="line">    SendPings = gen_mod:get_opt(send_pings, Opts, ?DEFAULT_SEND_PINGS),</span><br><span class="line">    PingInterval = gen_mod:get_opt(ping_interval, Opts, ?DEFAULT_PING_INTERVAL),</span><br><span class="line">    TimeoutAction = gen_mod:get_opt(timeout_action, Opts, none),</span><br><span class="line">    IQDisc = gen_mod:get_opt(iqdisc, Opts, no_queue),</span><br><span class="line">    mod_disco:register_feature(Host, ?NS_PING),</span><br><span class="line">    gen_iq_handler:add_iq_handler(ejabberd_sm, Host, ?NS_PING,</span><br><span class="line">                                  ?MODULE, iq_ping, IQDisc),</span><br><span class="line">    gen_iq_handler:add_iq_handler(ejabberd_local, Host, ?NS_PING,</span><br><span class="line">                                  ?MODULE, iq_ping, IQDisc),</span><br><span class="line">    <span class="keyword">case</span> SendPings <span class="keyword">of</span></span><br><span class="line">    <span class="literal">true</span> -&gt;</span><br><span class="line">        <span class="comment">%% Ping requests are sent to all entities, whether they</span></span><br><span class="line">        <span class="comment">%% announce &#x27;urn:xmpp:ping&#x27; in their caps or not</span></span><br><span class="line">        ejabberd_hooks:add(sm_register_connection_hook, Host,</span><br><span class="line">                           ?MODULE, user_online, <span class="number">100</span>),</span><br><span class="line">        ejabberd_hooks:add(sm_remove_connection_hook, Host,</span><br><span class="line">                           ?MODULE, user_offline, <span class="number">100</span>),</span><br><span class="line">        ejabberd_hooks:add(user_send_packet, Host,</span><br><span class="line">                           ?MODULE, user_send, <span class="number">100</span>);</span><br><span class="line">    _ -&gt;</span><br><span class="line">        ok</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;ok, #state&#123;host = Host,</span><br><span class="line">                send_pings = SendPings,</span><br><span class="line">                ping_interval = PingInterval,</span><br><span class="line">                timeout_action = TimeoutAction,</span><br><span class="line">                timers = ?DICT:new()&#125;&#125;.</span><br></pre></td></tr></table></figure>
+<ul>
+<li><p>首先获取相关配置</p>
+</li>
+<li><p>接着调用mod_disco:register_feature注册PING功能的XMLNS。这样当客户端请求”Service Discovery”信息时，ejabberd返回的特征中会包括”urn:xmpp:ping”。</p>
+</li>
+</ul>
+<p>ServiceDiscovery请求:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">type</span>=<span class="string">&#x27;get&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">from</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">to</span>=<span class="string">&#x27;capulet.lit&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">id</span>=<span class="string">&#x27;disco1&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">query</span> <span class="attr">xmlns</span>=<span class="string">&#x27;http://jabber.org/protocol/disco#info&#x27;</span>/&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>ServiceDiscovery响应:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">iq</span> <span class="attr">type</span>=<span class="string">&#x27;result&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">from</span>=<span class="string">&#x27;capulet.lit&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">to</span>=<span class="string">&#x27;juliet@capulet.lit/balcony&#x27;</span></span></span><br><span class="line"><span class="tag">    <span class="attr">id</span>=<span class="string">&#x27;disco1&#x27;</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">query</span> <span class="attr">xmlns</span>=<span class="string">&#x27;http://jabber.org/protocol/disco#info&#x27;</span>&gt;</span></span><br><span class="line">    ...</span><br><span class="line">    <span class="tag">&lt;<span class="name">feature</span> <span class="attr">var</span>=<span class="string">&#x27;urn:xmpp:ping&#x27;</span>/&gt;</span></span><br><span class="line">    ...</span><br><span class="line">  <span class="tag">&lt;/<span class="name">query</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">iq</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>ServiceDiscovery相关信息参考<a target="_blank" rel="noopener" href="http://xmpp.org/extensions/xep-0030.html">XEP-0030</a>。</p>
+<ul>
+<li><p>接下来，注册IQ处理器，令XMLNS为”urn:xmpp:ping”的IQ请求由函数iq_ping处理。iq_ping简单地返回相应响应或者错误。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">iq_ping</span><span class="params">(_From, _To, #iq&#123;type = Type, sub_el = SubEl&#125; = IQ)</span> -&gt;</span></span><br><span class="line">    <span class="keyword">case</span> &#123;Type, SubEl&#125; <span class="keyword">of</span></span><br><span class="line">        &#123;get, &#123;xmlelement, <span class="string">&quot;ping&quot;</span>, _, _&#125;&#125; -&gt;</span><br><span class="line">            IQ#iq&#123;type = result, sub_el = []&#125;;</span><br><span class="line">        _ -&gt;</span><br><span class="line">            IQ#iq&#123;type = error, sub_el = [SubEl, ?ERR_FEATURE_NOT_IMPLEMENTED]&#125;</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>如果send_pings配置为true, mod_ping在ejabberd中注册n以下3个hook函数:</p>
+</li>
+<li><p><code>sm_register_connection_hook</code>: 它在客户端完成登录验证，建立session信息时调用。</p>
+</li>
+</ul>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">open_session</span><span class="params">(SID, User, Server, Resource, Info)</span> -&gt;</span></span><br><span class="line">    set_session(SID, User, Server, Resource, undefined, Info),</span><br><span class="line">    mnesia:dirty_update_counter(session_counter,</span><br><span class="line">                jlib:nameprep(Server), <span class="number">1</span>),</span><br><span class="line">    check_for_sessions_to_replace(User, Server, Resource),</span><br><span class="line">    JID = jlib:make_jid(User, Server, Resource),</span><br><span class="line">    ejabberd_hooks:run(sm_register_connection_hook, JID#jid.lserver,</span><br><span class="line">               [SID, JID, Info]).</span><br></pre></td></tr></table></figure>
+<ul>
+<li><code>sm_remove_connection_hook</code>: 在用户退出,关闭session时调用。<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">close_session</span><span class="params">(SID, User, Server, Resource)</span> -&gt;</span></span><br><span class="line">    Info = <span class="keyword">case</span> mnesia:dirty_read(&#123;session, SID&#125;) <span class="keyword">of</span></span><br><span class="line">    [] -&gt; [];</span><br><span class="line">    [#session&#123;info=I&#125;] -&gt; I</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    F = <span class="keyword">fun</span>() -&gt;</span><br><span class="line">        mnesia:delete(&#123;session, SID&#125;),</span><br><span class="line">        mnesia:dirty_update_counter(session_counter,</span><br><span class="line">                        jlib:nameprep(Server), -<span class="number">1</span>)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    mnesia:sync_dirty(F),</span><br><span class="line">    JID = jlib:make_jid(User, Server, Resource),</span><br><span class="line">    ejabberd_hooks:run(sm_remove_connection_hook, JID#jid.lserver,</span><br><span class="line">               [SID, JID, Info]).</span><br></pre></td></tr></table></figure></li>
+<li><code>user_send_packet</code>: 在C2S进程收到客户端发送的消息时被调用。</li>
+</ul>
+<p><code>sm_register_connection_hook</code>的hook函数<code>user_online</code>和<code>user_send_packet</code>的hook函数<code>user_send</code>都会调用start_ping函数。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">start_ping</span><span class="params">(Host, JID)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    gen_server:cast(Proc, &#123;start_ping, JID&#125;).</span><br></pre></td></tr></table></figure>
+<p>start_ping向该HOST的worker进程发送一个{start_ping, JID}消息。worker进程调用handle_cast进行处理:</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;start_ping, JID&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = add_timer(JID, State#state.ping_interval, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
+<p>handle_cast调用add_timer为该客户端创建一个timer。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">add_timer</span><span class="params">(JID, Interval, Timers)</span> -&gt;</span></span><br><span class="line">    LJID = jlib:jid_tolower(JID),</span><br><span class="line">    NewTimers = <span class="keyword">case</span> ?DICT:find(LJID, Timers) <span class="keyword">of</span></span><br><span class="line">            &#123;ok, OldTRef&#125; -&gt;</span><br><span class="line">            cancel_timer(OldTRef),</span><br><span class="line">            ?DICT:erase(LJID, Timers);</span><br><span class="line">            _ -&gt;</span><br><span class="line">            Timers</span><br><span class="line">        <span class="keyword">end</span>,</span><br><span class="line">    TRef = erlang:start_timer(Interval * <span class="number">1000</span>, self(), &#123;ping, JID&#125;),</span><br><span class="line">    ?DICT:store(LJID, TRef, NewTimers).</span><br></pre></td></tr></table></figure>
+<p>由于用户每次发送消息时都会调用add_timer函数，因而add_timer中需要检查之前是否已经存在timer。如果存在，则先取消旧的timer, 再创建新的Timer。</p>
+<p>当timer超时后，即客户若干时间内没有活动，进程收到{ping, JID}消息，此时ejabberd应向客户端发送PING消息。进程调用handle_info处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_info</span><span class="params">(&#123;timeout, _TRef, &#123;ping, JID&#125;&#125;, State)</span> -&gt;</span></span><br><span class="line">    IQ = #iq&#123;type = get,</span><br><span class="line">             sub_el = [&#123;xmlelement, <span class="string">&quot;ping&quot;</span>, [&#123;<span class="string">&quot;xmlns&quot;</span>, ?NS_PING&#125;], []&#125;]&#125;,</span><br><span class="line">    Pid = self(),</span><br><span class="line">    F = <span class="keyword">fun</span>(Response) -&gt;</span><br><span class="line">        gen_server:cast(Pid, &#123;iq_pong, JID, Response&#125;)</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    From = jlib:make_jid(<span class="string">&quot;&quot;</span>, State#state.host, <span class="string">&quot;&quot;</span>),</span><br><span class="line">    ejabberd_local:route_iq(From, JID, IQ, F),</span><br><span class="line">    Timers = add_timer(JID, State#state.ping_interval, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
+<p>handle_info创建IQ消息后，设置回调函数F，调用ejabberd_local:route_iq&#x2F;4消息IQ消息发送给客户端。当收到该IQ消息的响应或者超过32秒依然没有收到客户端的响应，回调函数F将会被调用。如果响应超时，Response为timeout，F将向进程发送{iq_pong, JID, timeout}消息。进程调用handle_cast处理。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;iq_pong, JID, timeout&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = del_timer(JID, State#state.timers),</span><br><span class="line">    ejabberd_hooks:run(user_ping_timeout, State#state.host, [JID]),</span><br><span class="line">    <span class="keyword">case</span> State#state.timeout_action <span class="keyword">of</span></span><br><span class="line">    kill -&gt;</span><br><span class="line">        #jid&#123;user = User, server = Server, resource = Resource&#125; = JID,</span><br><span class="line">        <span class="keyword">case</span> ejabberd_sm:get_session_pid(User, Server, Resource) <span class="keyword">of</span></span><br><span class="line">        Pid <span class="keyword">when</span> is_pid(Pid) -&gt;</span><br><span class="line">            ejabberd_c2s:stop(Pid);</span><br><span class="line">        _ -&gt;</span><br><span class="line">            ok</span><br><span class="line">        <span class="keyword">end</span>;</span><br><span class="line">    _ -&gt;</span><br><span class="line">        ok</span><br><span class="line">    <span class="keyword">end</span>,</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
+<p>如果timeout_action设置为kill, 则调用ejabberd_c2s:stop关闭相应的客户端连接。</p>
+<p>因为在<code>sm_remove_connection_hook</code>注册了hook函数<code>user_offline</code>, 当用户退出时会调用stop_ping函数，向worker进程发送{stop_ping, JID}消息。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">stop_ping</span><span class="params">(Host, JID)</span> -&gt;</span></span><br><span class="line">    Proc = gen_mod:get_module_proc(Host, ?MODULE),</span><br><span class="line">    gen_server:cast(Proc, &#123;stop_ping, JID&#125;).</span><br></pre></td></tr></table></figure>
+<p>worker进程调用del_timer函数将该客户端的timer删除。</p>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">handle_cast</span><span class="params">(&#123;stop_ping, JID&#125;, State)</span> -&gt;</span></span><br><span class="line">    Timers = del_timer(JID, State#state.timers),</span><br><span class="line">    &#123;noreply, State#state&#123;timers = Timers&#125;&#125;;</span><br></pre></td></tr></table></figure>
+<figure class="highlight erlang"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="title">del_timer</span><span class="params">(JID, Timers)</span> -&gt;</span></span><br><span class="line">    LJID = jlib:jid_tolower(JID),</span><br><span class="line">    <span class="keyword">case</span> ?DICT:find(LJID, Timers) <span class="keyword">of</span></span><br><span class="line">        &#123;ok, TRef&#125; -&gt;</span><br><span class="line">        cancel_timer(TRef),</span><br><span class="line">        ?DICT:erase(LJID, Timers);</span><br><span class="line">        _ -&gt;</span><br><span class="line">        Timers</span><br><span class="line">    <span class="keyword">end</span>.</span><br></pre></td></tr></table></figure>
+<p>模块及进程停止的逻辑与模块和进程初始化的逻辑相反，本文略过。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/18/nginx-response-sending/" rel="prev" title="NGINX发送响应分析">
+      <i class="fa fa-chevron-left"></i> NGINX发送响应分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/02/ejabberd-service/" rel="next" title="ejabberd中Jabber组件协议实现">
+      ejabberd中Jabber组件协议实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="twemproxy(https:&#x2F;&#x2F;github.com&#x2F;twitter&#x2F;twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。 twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而">
+<meta property="og:type" content="article">
+<meta property="og:title" content="twemproxy实现分析">
+<meta property="og:url" content="http://just4coding.com/2016/01/20/twemproxy/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="twemproxy(https:&#x2F;&#x2F;github.com&#x2F;twitter&#x2F;twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。 twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2016-01-19T16:36:43.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.474Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2016/01/20/twemproxy/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>twemproxy实现分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/01/20/twemproxy/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          twemproxy实现分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-01-20 00:36:43" itemprop="dateCreated datePublished" datetime="2016-01-20T00:36:43+08:00">2016-01-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Twemproxy/" itemprop="url" rel="index">
+                    <span itemprop="name">Twemproxy</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>twemproxy(<a target="_blank" rel="noopener" href="https://github.com/twitter/twemproxy)%E6%98%AFTwitter%E5%BC%80%E6%BA%90%E7%9A%84Redis%E5%92%8CMemcached%E4%BB%A3%E7%90%86%E7%A8%8B%E5%BA%8F%EF%BC%8C%E5%AE%83%E5%8F%AF%E4%BB%A5%E5%B0%86%E5%A4%9A%E4%B8%AA%E5%90%8E%E7%AB%AFserver%E7%BB%84%E7%BB%87%E6%88%90%E4%B8%80%E4%B8%AAServerPool">https://github.com/twitter/twemproxy)是Twitter开源的Redis和Memcached代理程序，它可以将多个后端server组织成一个ServerPool</a>, 基于请求的Key从Pool中选取一个server实例进行操作，从而实现分片存储。</p>
+<p>twemproxy采用事件驱动处理网络数据收发。程序启动后会单独创建一个线程来处理stats请求，而主线程进入事件循环处理访问所有ServerPool的Redis或Memcached请求。</p>
+<span id="more"></span>
+<p>下面分析一下请求的处理过程:</p>
+<p>客户端建立到ServerPool的TCP连接后，该ServerPool的监听fd的读事件被触发，回调函数proxy_recv()调用proxy_accept()来处理请求。</p>
+<p>首先，调用accept()接受连接:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sd = accept(p-&gt;sd, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+
+<p>接着调用conn_get()为该连接分配一个conn结构。conn结构既用于表示客户端到twemproxy的连接(client connection)，也用于表示twemproxy到后端server的连接(server connection)，因而该结构针对两种不同类型的连接用函数指针来指向不同的回调函数来完成不同操作。</p>
+<p>对于client connection, 用于接收和发送请求的函数指针为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">conn-&gt;recv = msg_recv;</span><br><span class="line">conn-&gt;recv_next = req_recv_next;</span><br><span class="line">conn-&gt;recv_done = req_recv_done;</span><br><span class="line"></span><br><span class="line">conn-&gt;send = msg_send;</span><br><span class="line">conn-&gt;send_next = rsp_send_next;</span><br><span class="line">conn-&gt;send_done = rsp_send_done;</span><br></pre></td></tr></table></figure>
+<p>而对于server connection, 这些函数指针则指向:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">conn-&gt;recv = msg_recv;</span><br><span class="line">conn-&gt;recv_next = rsp_recv_next;</span><br><span class="line">conn-&gt;recv_done = rsp_recv_done;</span><br><span class="line"></span><br><span class="line">conn-&gt;send = msg_send;</span><br><span class="line">conn-&gt;send_next = req_send_next;</span><br><span class="line">conn-&gt;send_done = req_send_done;</span><br></pre></td></tr></table></figure>
+<p>之后，将接受的client connection的fd设置成非阻塞并注册到事件循环中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">status = nc_set_nonblocking(c-&gt;sd);</span><br><span class="line">...</span><br><span class="line">status = event_add_conn(ctx-&gt;evb, c);</span><br></pre></td></tr></table></figure>
+<p>当客户端发送的Redis或Memcached请求到达后，client connection的读事件被触发，conn-&gt;recv指向的msg_recv()被调用，最终会调用msg_recv_chain()。该函数读取请求数据并调用msg_parse()解析请求。当解析出一个完整请求后，conn-&gt;recv_done指向的req_recv_done()函数被调用。</p>
+<p>该函数的简化逻辑为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (req_filter(ctx, conn, msg)) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">req_forward(ctx, conn, msg);</span><br></pre></td></tr></table></figure>
+<p>req_filter()用于判断是否需要将请求转发到后端。比如，Redis的PING请求，twemproxy直接回复PONG，无需转发到后端server。</p>
+<p>无论是client connection还是server connection，都有两个队列:</p>
+<ul>
+<li>incoming queue: 存储待处理的请求</li>
+<li>outstanding queue: 存储等待处理完成的请求</li>
+</ul>
+<p>接来来看req_forward()。<br>req_forward()将上述解析出的请求放入client connection的outstanding queue中，</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">c_conn-&gt;enqueue_outq(ctx, c_conn, msg);</span><br></pre></td></tr></table></figure>
+<p>然后调用server_pool_conn()来选取一个server connection,</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">kpos = array_get(msg-&gt;keys, <span class="number">0</span>);</span><br><span class="line">key = kpos-&gt;start;</span><br><span class="line">keylen = (<span class="type">uint32_t</span>)(kpos-&gt;end - kpos-&gt;start);</span><br><span class="line"></span><br><span class="line">s_conn = server_pool_conn(ctx, c_conn-&gt;owner, key, keylen);</span><br></pre></td></tr></table></figure>
+<p>server_pool_conn()函数会调用到server_pool_idx(), 该函数会根据配置的分发模式来选取server:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">switch</span> (pool-&gt;dist_type) &#123;</span><br><span class="line"><span class="keyword">case</span> DIST_KETAMA:</span><br><span class="line">    hash = server_pool_hash(pool, key, keylen);</span><br><span class="line">    idx = ketama_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, hash);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> DIST_MODULA:</span><br><span class="line">    hash = server_pool_hash(pool, key, keylen);</span><br><span class="line">    idx = modula_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, hash);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">case</span> DIST_RANDOM:</span><br><span class="line">    idx = random_dispatch(pool-&gt;continuum, pool-&gt;ncontinuum, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">default</span>:</span><br><span class="line">    NOT_REACHED();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>之后，将解析后的请求同时也放入server connection的incoming queue中，并触发server connection的写事件。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">s_conn-&gt;enqueue_inq(ctx, s_conn, msg);</span><br></pre></td></tr></table></figure>
+<p>server connection写事件的回调函数msg_send()会将incoming queue中的请求发送到选定的后端server，发送完成后调用req_send_done():</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* dequeue the message (request) from server inq */</span></span><br><span class="line">conn-&gt;dequeue_inq(ctx, conn, msg);</span><br><span class="line"></span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * noreply request instructs the server not to send any response. So,</span></span><br><span class="line"><span class="comment"> * enqueue message (request) in server outq, if response is expected.</span></span><br><span class="line"><span class="comment"> * Otherwise, free the noreply request</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">if</span> (!msg-&gt;noreply) &#123;</span><br><span class="line">    conn-&gt;enqueue_outq(ctx, conn, msg);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    req_put(msg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该函数会将请求从server connection的incoming queue中取出并放入outstanding queue中。<br>至此，请求转发完成。</p>
+<p>请求的响应到达后，server connection的读事件被触发，调用msg_recv()完成数据读取及解析。解析到完整响应后，rsp_recv_done()被调用。<br>rsp_recv_done()简化逻辑与req_recv_done很相似:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (rsp_filter(ctx, conn, msg)) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">rsp_forward(ctx, conn, msg);</span><br></pre></td></tr></table></figure>
+<p>rsp_filter判断响应是否无需返回给客户端。比如，Redis的AUTH请求是由twemproxy自己发出的，这样的请求swallow被置为1，无需返回响应给客户端:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (pmsg-&gt;swallow) &#123;</span><br><span class="line">    conn-&gt;swallow_msg(conn, pmsg, msg);</span><br><span class="line"></span><br><span class="line">    conn-&gt;dequeue_outq(ctx, conn, pmsg);</span><br><span class="line">    pmsg-&gt;done = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    rsp_put(msg);</span><br><span class="line">    req_put(pmsg);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>rsp_forward()取出outstanding queue的第一个请求，它即为当前响应对应的请求，将二者建立对应关系, 并触发client connection的写事件。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">pmsg = TAILQ_FIRST(&amp;s_conn-&gt;omsg_q);</span><br><span class="line">ASSERT(pmsg != <span class="literal">NULL</span> &amp;&amp; pmsg-&gt;peer == <span class="literal">NULL</span>);</span><br><span class="line">ASSERT(pmsg-&gt;request &amp;&amp; !pmsg-&gt;done);</span><br><span class="line"></span><br><span class="line">s_conn-&gt;dequeue_outq(ctx, s_conn, pmsg);</span><br><span class="line">pmsg-&gt;done = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* establish msg &lt;-&gt; pmsg (response &lt;-&gt; request) link */</span></span><br><span class="line">pmsg-&gt;peer = msg;</span><br><span class="line">msg-&gt;peer = pmsg;</span><br></pre></td></tr></table></figure>
+<p>client connection的写事件回调将响应发送给客户端，发送完之后调用rsp_send_done(), 该函数将请求从client connection的outstanding queue队列中取出。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">conn-&gt;dequeue_outq(ctx, conn, pmsg);</span><br></pre></td></tr></table></figure>
+<p>至此，一个请求处理过程就结束了。</p>
+<p>对于Redis的MGET之类的请求，还涉及将原始请求分拆成对多个server的多个请求，并将多个响应组合成一个响应回复给客户端。本文对此不详述。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2015/12/03/redis-cidr/" rel="prev" title="扩展Redis命令支持CIDR查询">
+      <i class="fa fa-chevron-left"></i> 扩展Redis命令支持CIDR查询
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2016/05/03/thrift/" rel="next" title="Thrift介绍">
+      Thrift介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

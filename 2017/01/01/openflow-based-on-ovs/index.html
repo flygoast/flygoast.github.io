@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Open vSwitch提供了OpenFlow命令行工具: ovs-ofctl， 用法及流表语法等细节参考: ovs-ofctl(8)。 本文将通过简单的PING实验来展示OVS上的OpenFlow操作，实验环境宿主机为CentOS7。 创建虚拟交换机: 1ovs-vsctl add-br br-int 创建TAP设备: 12ip tuntap add tap0 mode tapip tuntap">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Open vSwitch上OpenFlow流表操作示例">
+<meta property="og:url" content="http://just4coding.com/2017/01/01/openflow-based-on-ovs/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="Open vSwitch提供了OpenFlow命令行工具: ovs-ofctl， 用法及流表语法等细节参考: ovs-ofctl(8)。 本文将通过简单的PING实验来展示OVS上的OpenFlow操作，实验环境宿主机为CentOS7。 创建虚拟交换机: 1ovs-vsctl add-br br-int 创建TAP设备: 12ip tuntap add tap0 mode tapip tuntap">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/5.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-01-01/6.png">
+<meta property="article:published_time" content="2017-01-01T15:07:38.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.478Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-01-01/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/01/01/openflow-based-on-ovs/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Open vSwitch上OpenFlow流表操作示例 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/01/01/openflow-based-on-ovs/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Open vSwitch上OpenFlow流表操作示例
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-01-01 23:07:38" itemprop="dateCreated datePublished" datetime="2017-01-01T23:07:38+08:00">2017-01-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Open vSwitch提供了OpenFlow命令行工具: ovs-ofctl， 用法及流表语法等细节参考: ovs-ofctl(8)。</p>
+<p>本文将通过简单的PING实验来展示OVS上的OpenFlow操作，实验环境宿主机为CentOS7。</p>
+<p>创建虚拟交换机:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br-int</span><br></pre></td></tr></table></figure>
+<p>创建TAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip tuntap add tap0 mode tap</span><br><span class="line">ip tuntap add tap1 mode tap</span><br></pre></td></tr></table></figure>
+<p>将设备连接到虚拟交换机:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port br-int tap0</span><br><span class="line">ovs-vsctl add-port br-int tap1</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>启动TAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up tap0</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up tap1</span><br></pre></td></tr></table></figure>
+<p>基于Cirros镜像启动Guest:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">qemu-system-x86_64 cirros-0.3.4-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :0 -device virtio-net-pci,netdev=net0,mac=52:4b:14:90:74:46 -netdev tap,<span class="built_in">id</span>=net0,ifname=tap0,script=no,downscript=no -name vm0 --daemonize</span><br><span class="line">qemu-system-x86_64 cirros-0.3.4-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :1 -device virtio-net-pci,netdev=net0,mac=2e:f4:42:c1:87:62 -netdev tap,<span class="built_in">id</span>=net0,ifname=tap1,script=no,downscript=no -name vm1 --daemonize</span><br></pre></td></tr></table></figure>
+<p>VNC登录Guest，分别配置IP，VM0为192.168.10.100，VM1为192.168.10.101。</p>
+<p>在VM0上PING虚拟机VM1，PING成功, 如图:</p>
+<img src="/images/2017-01-01/1.png" class="">
+
+<p>在宿主机上查看Port信息, 确认虚拟机对应的PortID:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl show  br-int</span></span><br><span class="line">OFPT_FEATURES_REPLY (xid=0x2): dpid:00001237b7e50f43</span><br><span class="line">n_tables:254, n_buffers:256</span><br><span class="line">capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP</span><br><span class="line">actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst</span><br><span class="line">1(tap0): addr:52:4b:14:90:74:46</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">2(tap1): addr:2e:f4:42:c1:87:62</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">LOCAL(br-int): addr:c2:72:e4:46:ba:49</span><br><span class="line">     config:     PORT_DOWN</span><br><span class="line">     state:      LINK_DOWN</span><br><span class="line">     speed: 0 Mbps now, 0 Mbps max</span><br><span class="line">OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0</span><br></pre></td></tr></table></figure>
+<p>查看流表信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl dump-flows br-int</span></span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x0, duration=1911.756s, table=0, n_packets=10, n_bytes=756, idle_age=153, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+<p>流表0中有一条流，actions为NORMAL，就是按普通交换机处理数据包。</p>
+<p>我们添加一条流，将来自VM0对应Port的数据包全部丢弃:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl add-flow br-int &quot;priority=10,in_port=1,actions=drop&quot; </span></span><br><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl dump-flows br-int</span></span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x0, duration=2.497s, table=0, n_packets=0, n_bytes=0, idle_age=2, priority=10,in_port=1 actions=drop</span><br><span class="line">cookie=0x0, duration=2302.086s, table=0, n_packets=10, n_bytes=756, idle_age=544, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+<p>再次从VM0上PING虚拟机VM1，PING失败，如图:</p>
+<img src="/images/2017-01-01/2.png" class="">
+
+<p>再来删除添加的流:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl del-flows br-int in_port=1</span></span><br><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl dump-flows br-int</span></span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x0, duration=2657.126s, table=0, n_packets=10, n_bytes=756, idle_age=899, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+<p>再次进行PING, PING恢复成功:</p>
+<img src="/images/2017-01-01/3.png" class="">
+
+<p>接下来我们展示基于OpenFlow流表完成将PING数据包引流至中间网络设备(如防火墙)的操作。</p>
+<p>上述PING操作正常的数据包流向如图:</p>
+<img src="/images/2017-01-01/4.png" class="">
+
+<p>OVS虚拟交换机基于2层MAC学习机制对数据包进行转发。添加引流逻辑后的数据包流向如图:</p>
+<img src="/images/2017-01-01/5.png" class="">
+
+<p>VM0发出的PING请求包到达虚拟交换机后，交换机根据流表将数据包转发至vFW的入口Port。vFW对数据包完成自身过滤逻辑后，将数据包从出口Port送到交换机。交换机再根据MAC地址转发至VM1。VM1做出响应，将数据包送达交换机。交换机根据流表将响应包转发至vFW的入口Port，vFW过滤数据包，将数据包从出口Port发送到交换机，交换机再根据目标MAC地址转发到VM0，完成PING的请求响应逻辑。</p>
+<p>下面来看具体操作:</p>
+<p>在上述基础上添加两个TAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip tuntap add tap2 mode tap</span><br><span class="line">ip tuntap add tap3 mode tap</span><br></pre></td></tr></table></figure>
+<p>将设备连接到虚拟交换机:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port br-int tap2</span><br><span class="line">ovs-vsctl add-port br-int tap3</span><br></pre></td></tr></table></figure>
+<p>启动TAP设备:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up tap2</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up tap3</span><br></pre></td></tr></table></figure>
+<p>查看Port信息, 确认Port对应的MAC地址:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl show br-int</span></span><br><span class="line">OFPT_FEATURES_REPLY (xid=0x2): dpid:0000c272e446ba49</span><br><span class="line">n_tables:254, n_buffers:256</span><br><span class="line">capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP</span><br><span class="line">actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst</span><br><span class="line">1(tap0): addr:52:4b:14:90:74:46</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">2(tap1): addr:2e:f4:42:c1:87:62</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">3(tap2): addr:0a:9e:a5:55:ef:93</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">4(tap3): addr:f6:94:31:9d:bf:e7</span><br><span class="line">     config:     0</span><br><span class="line">     state:      0</span><br><span class="line">     current:    10MB-FD COPPER</span><br><span class="line">     speed: 10 Mbps now, 0 Mbps max</span><br><span class="line">LOCAL(br-int): addr:c2:72:e4:46:ba:49</span><br><span class="line">     config:     PORT_DOWN</span><br><span class="line">     state:      LINK_DOWN</span><br><span class="line">     speed: 0 Mbps now, 0 Mbps max</span><br><span class="line">OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0</span><br></pre></td></tr></table></figure>
+
+<p>这里我使用标准Linux配置成HUB模式来模拟vFW设备。</p>
+<p>使用QEMU启动虚拟机:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qemu-system-x86_64 CentOS7.img -smp 2,cores=2 -m 2G -vnc :2 -device virtio-net-pci,netdev=net0,mac=0a:9e:a5:55:ef:93 -netdev tap,<span class="built_in">id</span>=net0,ifname=tap2,script=no,downscript=no -device virtio-net-pci,netdev=net1,mac=f6:94:31:9d:bf:e7 -netdev tap,<span class="built_in">id</span>=net1,ifname=tap3,script=no,downscript=no -name vFW --daemonize</span><br></pre></td></tr></table></figure>
+
+<p>VNC登录vFW后，将Linux配置成Hub模式。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">brctl addbr hub0</span><br><span class="line">brctl addif hub0 eth0</span><br><span class="line">brctl addif hub0 eth1</span><br><span class="line">brctl setageing hub0 0</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> up hub0</span><br></pre></td></tr></table></figure>
+
+<p>在宿主机上添加流，令PORT3只能做为vFW的入口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=9, in_port=3, actions=drop&quot;</span> </span><br></pre></td></tr></table></figure>
+<p>将vFW的出口Port的ICMP数据包按目标MAC地址转发, 丢弃其他协议数据包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=8, in_port=4, icmp,dl_dst=52:4b:14:90:74:46,actions=output:1&quot;</span> </span><br><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=8, in_port=4, icmp,dl_dst=2e:f4:42:c1:87:62,actions=output:2&quot;</span> </span><br><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=7, in_port=4, actions=drop&quot;</span> </span><br></pre></td></tr></table></figure>
+<p>将ICMP数据包引流至vFW的入口Port：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=6, icmp, actions=output:3&quot;</span> </span><br></pre></td></tr></table></figure>
+
+<p>查看此时流表:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@compute1 ~]<span class="comment"># ovs-ofctl dump-flows br-int</span></span><br><span class="line">NXST_FLOW reply (xid=0x4):</span><br><span class="line">cookie=0x10, duration=8197.204s, table=0, n_packets=218309, n_bytes=9168978, idle_age=8097, priority=9,in_port=3 actions=drop</span><br><span class="line">cookie=0x10, duration=8097.560s, table=0, n_packets=747, n_bytes=31934, idle_age=7732, priority=7,in_port=4 actions=drop</span><br><span class="line">cookie=0x10, duration=8148.358s, table=0, n_packets=165, n_bytes=16170, idle_age=7725, priority=8,icmp,in_port=4,dl_dst=52:4b:14:90:74:46 actions=output:1</span><br><span class="line">cookie=0x10, duration=7731.811s, table=0, n_packets=7, n_bytes=686, idle_age=7725, priority=8,icmp,in_port=4,dl_dst=2e:f4:42:c1:87:62 actions=output:2</span><br><span class="line">cookie=0x10, duration=8060.145s, table=0, n_packets=340, n_bytes=33320, idle_age=7725, priority=6,icmp actions=output:3</span><br><span class="line">cookie=0x0, duration=37097.453s, table=0, n_packets=2755382, n_bytes=116368116, idle_age=7740, priority=0 actions=NORMAL</span><br></pre></td></tr></table></figure>
+
+<p>此时，再次从VM0发起PING请求，请求可以成功。</p>
+<p>删除转发至VM1的流，开始出现丢包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl del-flows br-int <span class="string">&quot;in_port=4,dl_dst=2e:f4:42:c1:87:62&quot;</span> </span><br></pre></td></tr></table></figure>
+<p>再次添加后，请求再次成功。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-ofctl add-flow br-int <span class="string">&quot;cookie=0x10, priority=8, in_port=4, icmp,dl_dst=2e:f4:42:c1:87:62,actions=output:2&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>结果截图如下, 可以看其中seq为6-13的请求包没有收到回应。</p>
+<img src="/images/2017-01-01/6.png" class="">
+
+<p>本文简单展示了OVS的OpenFlow流表操作，通过自定义流表我们可以完成非常复杂而强大的功能。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2016/12/31/introducing-openflow/" rel="prev" title="SDN和OpenFlow介绍">
+      <i class="fa fa-chevron-left"></i> SDN和OpenFlow介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/01/07/all-in-one-neutron/" rel="next" title="RDO安装all-in-one模式OpenStack虚拟网络架构分析">
+      RDO安装all-in-one模式OpenStack虚拟网络架构分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

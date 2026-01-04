@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="身份验证是很多C&#x2F;S模式应用协议的通用需求，为了避免每个协议都单独实现一套验证逻辑，SASL(Simple Authentication and Secure Layer)被提出了, 它定位成为基于可靠连接的应用协议提供身份验证和数据安全服务的通用框架。SASL定义了通用的身份验证信息交换的流程, 并且包含一系列验证机制。这些验证机制完成具体的身份验证逻辑。这样，SASL就成为了一个将应">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SASL与身份验证">
+<meta property="og:url" content="http://just4coding.com/2014/11/06/sasl/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="身份验证是很多C&#x2F;S模式应用协议的通用需求，为了避免每个协议都单独实现一套验证逻辑，SASL(Simple Authentication and Secure Layer)被提出了, 它定位成为基于可靠连接的应用协议提供身份验证和数据安全服务的通用框架。SASL定义了通用的身份验证信息交换的流程, 并且包含一系列验证机制。这些验证机制完成具体的身份验证逻辑。这样，SASL就成为了一个将应">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-05T17:40:44.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.467Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/11/06/sasl/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>SASL与身份验证 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/06/sasl/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          SASL与身份验证
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-06 01:40:44" itemprop="dateCreated datePublished" datetime="2014-11-06T01:40:44+08:00">2014-11-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>身份验证是很多C&#x2F;S模式应用协议的通用需求，为了避免每个协议都单独实现一套验证逻辑，SASL(Simple Authentication and Secure Layer)被提出了, 它定位成为基于可靠连接的应用协议提供身份验证和数据安全服务的通用框架。SASL定义了通用的身份验证信息交换的流程, 并且包含一系列验证机制。这些验证机制完成具体的身份验证逻辑。这样，SASL就成为了一个将应用协议和验证机制相连接的抽象层，如下图所示。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">-------------------------------------------------------------</span><br><span class="line"></span><br><span class="line">      +----+   +----+    +----+   +-------------------+</span><br><span class="line">      |SMTP|   |LDAP|    |XMPP|   |Other protocols ...|</span><br><span class="line">      +--+-+   +--+-+    +--+-+   +--+----------------+</span><br><span class="line">         |        |         |        |</span><br><span class="line">         |        |         |        |</span><br><span class="line">   ------+--------+---------+--------+------------------</span><br><span class="line">                 SASL abstraction layer</span><br><span class="line">   ------+--------+---------+--------+------------------</span><br><span class="line">         |        |         |        |</span><br><span class="line">         |        |         |        |</span><br><span class="line">   +-----+--+  +--+---+  +--+--+  +--+-----------------+</span><br><span class="line">   |EXTERNAL|  |GSSAPI|  |PLAIN|  |Other machanisms ...|</span><br><span class="line">   +--------+  +------+  +-----+  +--------------------+</span><br><span class="line"></span><br><span class="line">-------------------------------------------------------------</span><br></pre></td></tr></table></figure>
+<p>任何应用协议都可以使用任何验证机制，而具体使用哪个机制则由应用协议的客户端和服务器进行协商。</p>
+<p>分别以”C:”和”S:”代表客户端和服务端，SASL规定的验证信息交换的基本流程为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">C: 请求验证交换</span><br><span class="line">S: 最初的挑战码</span><br><span class="line">C: 最初的响应消息</span><br><span class="line">&lt;额外的挑战码/响应消息&gt;</span><br><span class="line">S: 身份验证结果</span><br></pre></td></tr></table></figure>
+<p>根据机制不同，流程略有差异。</p>
+<p>具体应用哪个机制进行身份验证由使用SASL的应用协议来协商。服务器向客户端通告服务器所支持的机制, 客户端从中选择一个它支持且最合适的机制并通知服务器，请求开始身份验证。接下来便是上述的一系列Chalenges&#x2F;Responses信息交换。这些信息载体的形式由应用协议指定。最终服务器发送回身份验证的结果。</p>
+<p>SASL机制注册由IANA维护:<br><a target="_blank" rel="noopener" href="http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml">http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml</a></p>
+<p>下面说明几个具体的SASL机制：</p>
+<ul>
+<li>EXTERNAL:</li>
+</ul>
+<p>EXTERNAL机制允许客户端请求服务器使用其他途径获取的验证信息来验证该客户端。如通过TLS获取的验证信息。以ACAP(Application Configuration Access Protocol)协议来举例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">S: * ACAP (SASL &quot;DIGEST-MD5&quot;)</span><br><span class="line">C: a001 STARTTLS</span><br><span class="line">S: a001 OK &quot;Begin TLS negotiation now&quot;</span><br><span class="line">&lt;TLS negotiation, further commands are under TLS layer&gt;</span><br><span class="line">S: * ACAP (SASL &quot;DIGEST-MD5&quot; &quot;EXTERNAL&quot;)</span><br><span class="line">C: a002 AUTHENTICATE &quot;EXTERNAL&quot;</span><br><span class="line">S: + &quot;&quot;</span><br><span class="line">C: + &quot;&quot;</span><br><span class="line">S: a002 OK &quot;Authenticated&quot;</span><br></pre></td></tr></table></figure>
+
+<p>在TLS安全层建立后，服务端通告它支持DIGEST-MD5和EXTERNAL机制，客户端选择使用EXTERNAL机制，并且不使用其他授权实体。服务器使用外部信息验证通过后，返回成功的响应。</p>
+<ul>
+<li>PLAIN</li>
+</ul>
+<p>PLAIN机制只需要传递一条消息，这个消息由授权实体，验证实体和密码三部分组成。如下图所示:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">authzid&lt;NUL&gt;authcid&lt;NUL&gt;passwd</span><br></pre></td></tr></table></figure>
+<p>授权实体authzid为可选的。如果提供了它，身份验证通过后，如果权限允许，将以authzid身份进行操作。如果权限不允许，则服务器返回授权失败。由于PLAIN机制直接传递密码本身，因而不应该在没有私密性保护的连接上使用。<br>同样以ACAP协议举例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">S: * ACAP (SASL &quot;CRAM-MD5&quot;) (STARTTLS)</span><br><span class="line">C: a001 STARTTLS</span><br><span class="line">S: a001 OK &quot;Begin TLS negotiation now&quot;</span><br><span class="line">&lt;TLS negotiation, further commands are under TLS layer&gt;</span><br><span class="line">S: * ACAP (SASL &quot;CRAM-MD5&quot; &quot;PLAIN&quot;)</span><br><span class="line">C: a002 AUTHENTICATE &quot;PLAIN&quot; &#123;20+&#125;</span><br><span class="line">C: Ursel&lt;NUL&gt;Kurt&lt;NUL&gt;xipj3plmq</span><br><span class="line">S: a002 NO &quot;Not authorized to requested authorization identity&quot;</span><br></pre></td></tr></table></figure>
+<p>TLS安全层建立后，服务器通告它支持CRAM-MD5和PLAIN机制，客户端选择PLAIN机制，并发送身份验证消息，服务器返回授权失败，即Kurt身份验证通过，但不能以Ursel的身份进行操作。</p>
+<ul>
+<li>SCRAM-SHA-1</li>
+</ul>
+<p>SCRAM是一系统机制的统称，具体机制名称后缀上算法所使用的HASH函数。我们以SCRAM-SHA-1举例，它使用SHA-1哈希函数。PLAIN机制在网络上传输的是密码本身，因而只应该用在TLS等安全层之上。SCRAM机制则没有这个限制。</p>
+<p>下面的例子略去机制协商的过程, 用户名为”user”, 密码为”pencil”:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">C: n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL</span><br><span class="line">S: r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92, i=4096</span><br><span class="line">C: c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts=</span><br><span class="line">S: v=rmF9pqV8S7suAoZWja4dJRkFsKQ=</span><br></pre></td></tr></table></figure>
+
+<p>SCRAM机制的消息由多个属性构成，每个属性为”a&#x3D;xxx”的形式，而且属性有顺序要求。</p>
+<p>客户端发送的首条消息包括了以下内容：</p>
+<ol>
+<li>一个GS2头，它包括一个字符，只能为”n”, “y”, “p”，是通道绑定的标识，和一个授权实体（例子中没有提供，因而为”,,”,当需要指定时使用属性a, 如”a&#x3D;dummy”）。</li>
+<li>属性n, 表示身份验证的用户名。</li>
+<li>属性r, 表示客户端nonce, 一个随机的可打印字符串(不能包括”,”)。</li>
+</ol>
+<p>我们把后两部分称为client_first_message_bare, 后面算法中要使用它。</p>
+<p>然后服务器回应首条消息。属性r为客户端NONCE拼接上服务器的随机NONCE值，属性s为使用BASE64编码后的用户密码的salt值，属性i为迭代次数。在后面介绍的算法中可以看到具体用途。这条消息我们称为server_first_message, 后面算法需要使用它。</p>
+<p>接着，客户端发送末条消息。属性c为使用BASE64编码的GS2头及通道绑定数据。例子中的”biws”解码后为”n,,”, 即客户端首条消息的第一部分，属性r与服务器回应的属性r必须相同。属性p为使用BASE64编码的客户端证明信息(ClientProof)。它由客户端使用后面介绍的算法计算得到。我们把前两个属性称为client_final_message_without_proof, 后面算法要使用它。</p>
+<p>服务端验证客户端发送的NONCE值和证明信息(ClientProof)，如果提供了授权实体，则也需要验证是否可以授权给该实体，然后发送服务端末条消息。属性v为服务器签名(ServerSignature)。客户端通过比较计算得到的和从服务端所收到的签名是否相同来对服务器进行身份验证。如果服务器验证失败，将回应属性e, 它可以用来诊断错误原因。</p>
+<p>下面介绍客户端和服务器签名的具体算法：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">SaltedPassword := Hi(Normalize(password), salt, i)</span><br><span class="line">ClientKey := HMAC(SaltedPassword, &quot;Client Key&quot;)</span><br><span class="line">StoredKey := H(ClientKey)</span><br><span class="line">AuthMessage := client-first-message-bare + &quot;,&quot; + server-first-message + &quot;,&quot; + client-final-message-without-proof</span><br><span class="line">ClientSignature := HMAC(StoredKey, AuthMessage)</span><br><span class="line">ClientProof := ClientKey XOR ClientSignature</span><br><span class="line">ServerKey := HMAC(SaltedPassword, &quot;Server Key&quot;)</span><br><span class="line">ServerSignature := HMAC(ServerKey, AuthMessage)</span><br></pre></td></tr></table></figure>
+
+<p>其中HMAC原型为HMAC(key, str), Hi函数算法为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Hi(str, salt, i):</span><br><span class="line"></span><br><span class="line">U1 := HMAC(str, salt + INT(1))</span><br><span class="line">U2 := HMAC(str, U1)</span><br><span class="line">...</span><br><span class="line">Ui-1 := HMAC(str, Ui-2)</span><br><span class="line">Ui := HMAC(str, Ui-1)</span><br><span class="line">Hi := U1 XOR U2 XOR ... XOR Ui</span><br></pre></td></tr></table></figure>
+
+<p>用PHP实现该算法来验证上述例子:</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">hi</span>(<span class="params"><span class="variable">$str</span>, <span class="variable">$salt</span>, <span class="variable">$i</span></span>) </span>&#123;</span><br><span class="line">    <span class="variable">$int1</span> = <span class="string">&quot;\0\0\0\1&quot;</span>;</span><br><span class="line">    <span class="variable">$ui</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="variable">$salt</span> . <span class="variable">$int1</span>, <span class="variable">$str</span>, <span class="literal">true</span>);</span><br><span class="line">    <span class="variable">$result</span> = <span class="variable">$ui</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="variable">$k</span> = <span class="number">1</span>; <span class="variable">$k</span> &lt; <span class="variable">$i</span>; <span class="variable">$k</span>++) &#123;</span><br><span class="line">        <span class="variable">$ui</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="variable">$ui</span>, <span class="variable">$str</span>, <span class="literal">true</span>);</span><br><span class="line">        <span class="variable">$result</span> = <span class="variable">$result</span> ^ <span class="variable">$ui</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="variable">$result</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="variable">$password</span> = <span class="string">&quot;pencil&quot;</span>;</span><br><span class="line"><span class="variable">$salt</span> = <span class="title function_ invoke__">base64_decode</span>(<span class="string">&#x27;QSXCR+Q6sek8bf92&#x27;</span>);</span><br><span class="line"><span class="variable">$i</span> = <span class="number">4096</span>;</span><br><span class="line"><span class="variable">$client_first_message_bare</span> = <span class="string">&#x27;n=user,r=fyko+d2lbbFgONRv9qkxdawL&#x27;</span>;</span><br><span class="line"><span class="variable">$server_first_message</span> = <span class="string">&#x27;r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096&#x27;</span>;</span><br><span class="line"><span class="variable">$client_final_message_without_proof</span> = <span class="string">&#x27;c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j&#x27;</span>;</span><br><span class="line"></span><br><span class="line"><span class="variable">$salted_password</span> = <span class="title function_ invoke__">hi</span>(<span class="variable">$password</span>, <span class="variable">$salt</span>, <span class="variable">$i</span>);</span><br><span class="line"><span class="variable">$client_key</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="string">&quot;Client Key&quot;</span>, <span class="variable">$salted_password</span>, <span class="literal">true</span>);</span><br><span class="line"><span class="variable">$stored_key</span> = <span class="title function_ invoke__">sha1</span>(<span class="variable">$client_key</span>, <span class="literal">true</span>);</span><br><span class="line"><span class="variable">$auth_message</span> = <span class="variable">$client_first_message_bare</span> . <span class="string">&quot;,&quot;</span></span><br><span class="line">                . <span class="variable">$server_first_message</span> . <span class="string">&quot;,&quot;</span></span><br><span class="line">                . <span class="variable">$client_final_message_without_proof</span>;</span><br><span class="line"><span class="variable">$client_signature</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="variable">$auth_message</span>, <span class="variable">$stored_key</span>, <span class="literal">true</span>);</span><br><span class="line"><span class="variable">$client_proof</span> = <span class="variable">$client_key</span> ^ <span class="variable">$client_signature</span>;</span><br><span class="line"></span><br><span class="line"><span class="variable">$server_key</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="string">&quot;Server Key&quot;</span>, <span class="variable">$salted_password</span>, <span class="literal">true</span>);</span><br><span class="line"><span class="variable">$server_signature</span> = <span class="title function_ invoke__">hash_hmac</span>(<span class="string">&quot;sha1&quot;</span>, <span class="variable">$auth_message</span>, <span class="variable">$server_key</span>, <span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;p=&quot;</span> . <span class="title function_ invoke__">base64_encode</span>(<span class="variable">$client_proof</span>) . <span class="string">&quot;\n&quot;</span>;</span><br><span class="line"><span class="keyword">echo</span> <span class="string">&quot;v=&quot;</span> . <span class="title function_ invoke__">base64_encode</span>(<span class="variable">$server_signature</span>) . <span class="string">&quot;\n&quot;</span>;</span><br><span class="line"><span class="meta">?&gt;</span></span><br></pre></td></tr></table></figure>
+<p>输出结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts=</span><br><span class="line">v=rmF9pqV8S7suAoZWja4dJRkFsKQ=</span><br></pre></td></tr></table></figure>
+
+<p>与上述例子中值相符。</p>
+<p>在实际项目中，一般不需要自己来实现这些验证算法。C语言可直接使用CyrusSASL库或GNU的libgsasl。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/01/ejabberd-stanza-processing/" rel="prev" title="ejabberd消息处理流程分析">
+      <i class="fa fa-chevron-left"></i> ejabberd消息处理流程分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/11/14/ejabberd-login/" rel="next" title="ejabberd登录验证流程分析">
+      ejabberd登录验证流程分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

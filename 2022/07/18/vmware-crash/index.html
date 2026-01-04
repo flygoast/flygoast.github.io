@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在一些业务环境的VMware Guest虚拟机上安装我们的内核模块后，偶尔虚拟机会变成无响应的状态。重启后登录系统查看，处于无响应状态的那段时间在&#x2F;var&#x2F;log&#x2F;messages中却没有任何信息，完全没有分析问题原因的头绪。 经过调研，找到两种方法可以帮助排查定位这类系统失去响应的问题，分别是:  发送NMI: Non-Maskable Interupt给虚拟机 VMware内存快照">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VMware Guest虚拟机失去响应的排查方法">
+<meta property="og:url" content="http://just4coding.com/2022/07/18/vmware-crash/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在一些业务环境的VMware Guest虚拟机上安装我们的内核模块后，偶尔虚拟机会变成无响应的状态。重启后登录系统查看，处于无响应状态的那段时间在&#x2F;var&#x2F;log&#x2F;messages中却没有任何信息，完全没有分析问题原因的头绪。 经过调研，找到两种方法可以帮助排查定位这类系统失去响应的问题，分别是:  发送NMI: Non-Maskable Interupt给虚拟机 VMware内存快照">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2022-07-18/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2022-07-18/2.png">
+<meta property="article:published_time" content="2022-07-18T13:38:48.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.501Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Virtualization">
+<meta property="article:tag" content="Crash">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2022-07-18/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2022/07/18/vmware-crash/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>VMware Guest虚拟机失去响应的排查方法 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/07/18/vmware-crash/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          VMware Guest虚拟机失去响应的排查方法
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-07-18 21:38:48" itemprop="dateCreated datePublished" datetime="2022-07-18T21:38:48+08:00">2022-07-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在一些业务环境的VMware <code>Guest</code>虚拟机上安装我们的内核模块后，偶尔虚拟机会变成无响应的状态。重启后登录系统查看，处于无响应状态的那段时间在<code>/var/log/messages</code>中却没有任何信息，完全没有分析问题原因的头绪。</p>
+<p>经过调研，找到两种方法可以帮助排查定位这类系统失去响应的问题，分别是:</p>
+<ul>
+<li>发送<code>NMI: Non-Maskable Interupt</code>给虚拟机</li>
+<li>VMware内存快照</li>
+</ul>
+<span id="more"></span>
+
+<h4 id="发送NMI给虚拟机"><a href="#发送NMI给虚拟机" class="headerlink" title="发送NMI给虚拟机"></a>发送NMI给虚拟机</h4><p><code>NMI</code>是不可屏蔽的硬件中断。在虚拟化环境中，<code>Hypervisor</code>可以向<code>Guest</code>虚拟机发送<code>NMI</code>中断。<code>Guest</code>虚拟机收到<code>NMI</code>后产生<code>dump</code>文件, 继而从<code>dump</code>文件中分析系统状态。</p>
+<p>只是<code>Linux</code>系统对于<code>NMI</code>中断的默认处理行为是发送到<code>stdout</code>，并不会<code>panic</code>并产生<code>dump</code>文件。为了在接收到<code>NMI</code>时产生<code>dump</code>文件，我们需要在<code>Guest</code>的<code>Linux</code>系统中完成这些配置:</p>
+<ul>
+<li><p>安装<code>kexec-tools</code>, 并启动<code>kdump</code>服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">systemctl start kdump.service</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>配置<code>sysctl</code>参数，令<code>Linux</code>系统接收到<code>NMI</code>时<code>panic</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w kernel.panic_on_unrecovered_nmi=1</span><br><span class="line">sysctl -w kernel.unknown_nmi_panic=1</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>在<code>VCenter</code>的<code>GUI</code>界面中, 可以在相应<code>Guest</code>虚拟机的<code>导出系统日志</code>操作中向虚拟机发送<code>NMI</code>, 如图:</p>
+<img src="/images/2022-07-18/1.png" class="">
+
+<p>这种方式对<code>VCenter</code>登录帐号的管理权限有所要求。</p>
+<p>在相应的<code>ESXi</code>主机上也可以通过命令行向虚拟机发送<code>NMI</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vm-support -a HungVM:Send_NMI_To_Guest --vm=/vmfs/volumes/Path/of/VMname.vmx</span><br></pre></td></tr></table></figure>
+
+<p>可以参考官方KB:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2149185">https://kb.vmware.com/s/article/2149185</a></li>
+</ul>
+<p>如果是<code>RHEV</code>和<code>oVirt</code>环境, 可以使用<code>virsh</code>命令发送<code>NMI</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">virsh inject-nmi guest1</span><br></pre></td></tr></table></figure>
+
+<p>具体可以参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
+</ul>
+<h4 id="内存快照"><a href="#内存快照" class="headerlink" title="内存快照"></a>内存快照</h4><p>另外一种方法就是基于VMware的快照。VMware官方提供了一个工具可以将快照文件转换成<code>crash</code>工具可以读取的<code>dump</code>文件。</p>
+<p>工具使用说明:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2003941">https://kb.vmware.com/s/article/2003941</a></li>
+</ul>
+<p>工具下载地址:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://flings.vmware.com/vmss2core">https://flings.vmware.com/vmss2core</a></li>
+</ul>
+<p>但经过尝试，发现转换完成的<code>dump</code>文件使用<code>crash</code>并不能正常读取。</p>
+<p>和<code>Redhat</code>这篇<code>KB</code>上描述的错误一致:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/3622951">https://access.redhat.com/solutions/3622951</a></li>
+</ul>
+<p><code>crash</code>无法读取的根本原因是从<code>7.5</code>版本开始，<code>RHEL</code>内核默认启用了<code>KASLR</code>特性:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Starting 7.5, RHEL kernels feature KASLR (Kernel Address Space Linear Randomization) enabled by default. KASLR is a security feature that enables the kernel to relocate itself to a random location on each boot, making writing exploits that depend on local resources significantly harder.</span><br><span class="line"></span><br><span class="line">The side effect of this feature is debugging tools like crash may encounter some trouble trying to open vmcores from KASLR-enabled kernels.</span><br><span class="line"></span><br><span class="line">For more information about this, please refer to this article.</span><br></pre></td></tr></table></figure>
+
+<p>可以参考这里:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/articles/3402021">https://access.redhat.com/articles/3402021</a></li>
+</ul>
+<p>但它也提到，<code>crash</code>可以直接读取VMware的快照文件，步骤如下:</p>
+<ul>
+<li>复制<code>ESXi</code>主机上<code>Guest</code>所在目录下的<code>.vmss</code>&#x2F;<code>.vmsn</code>和<code>.vmem</code>文件到一个目录</li>
+<li>保持文件名称不变</li>
+<li>使用<code>crash</code>工具打开<code>.vmsn</code>&#x2F;<code>.vmss</code>文件，<code>crash</code>会自动加载相应的<code>.vmem</code>文件</li>
+</ul>
+<p>如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># crash &lt;NAME&gt;.vmsn  /cores/retrace/repos/kernel/x86_64/usr/lib/debug/lib/modules/&lt;kernel version&gt;/vmlinux</span></span><br></pre></td></tr></table></figure>
+
+<p>不过在生成快照时，需要注意勾选<code>包括虚拟机的内存</code>:</p>
+<img src="/images/2022-07-18/2.png" class="">
+
+<p>有时侯系统可能会连<code>NMI</code>也无法响应，这种场景下就只能使用快照方式。但快照方式本身需要从<code>ESXi</code>主机上获取快照文件，也不是很方便。总之各有利弊，看情况选择使用哪种方法。</p>
+<p>因为使用<code>crash</code>工具分析<code>dump</code>文件，需要对应内核版本的<code>debuginfo</code>包。有时我们拿到<code>dump</code>文件，却不知道内核版本。我们可以从<code>dump</code>文件中直接查找字符串来搜索, 如:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost centos76-Snapshot1]<span class="comment"># strings vmss.core  |grep -i &#x27;BOOT_IMAGE&#x27;</span></span><br><span class="line">BOOT_IMAGE=/vmlinuz-3.10.0-957.el7.x86_64 root=/dev/mapper/centos-root ro crashkernel=auto rd.lvm.lv=centos/root rd.lvm.lv=centos/swap rhgb quiet LANG=en_US.UTF-8</span><br><span class="line">$(<span class="built_in">cat</span> /proc/cmdline| grep <span class="string">&quot;BOOT_IMAGE&quot;</span> | <span class="built_in">cut</span> -d<span class="string">&#x27; &#x27;</span> -f1)</span><br><span class="line">KDUMP_BOOTDIR=<span class="string">&quot;/boot&quot;</span>$(<span class="built_in">dirname</span> <span class="variable">$BOOT_IMAGE</span>)</span><br><span class="line">BOOT_IMAGE</span><br></pre></td></tr></table></figure>
+
+<h4 id="参考"><a href="#参考" class="headerlink" title="参考:"></a>参考:</h4><ul>
+<li><a target="_blank" rel="noopener" href="https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)">https://support.delphix.com/Continuous_Data_Engine_(formerly_Virtualization_Engine)/Platforms/How_to_Generate_a_non-maskable_interrupt_in_VMware_ESX__(KBA1129)</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi">https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/virtualization_deployment_and_administration_guide/sect-generic_commands-injecting_nmi</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/1015180">https://kb.vmware.com/s/article/1015180</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2149185">https://kb.vmware.com/s/article/2149185</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/67438">https://kb.vmware.com/s/article/67438</a></li>
+<li><a target="_blank" rel="noopener" href="https://kb.vmware.com/s/article/2003941">https://kb.vmware.com/s/article/2003941</a></li>
+<li><a target="_blank" rel="noopener" href="https://flings.vmware.com/vmss2core">https://flings.vmware.com/vmss2core</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/articles/3587631">https://access.redhat.com/articles/3587631</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/210063">https://access.redhat.com/solutions/210063</a></li>
+<li><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/3622951">https://access.redhat.com/solutions/3622951</a></li>
+<li><a target="_blank" rel="noopener" href="https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html">https://knowledge.broadcom.com/external/article/181598/how-to-convert-a-vmware-virtual-machine.html</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Virtualization/" rel="tag"># Virtualization</a>
+              <a href="/tags/Crash/" rel="tag"># Crash</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/06/25/nf-ct-deliver-cached-events/" rel="prev" title="nf_ct_deliver_cached_events崩溃分析">
+      <i class="fa fa-chevron-left"></i> nf_ct_deliver_cached_events崩溃分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/08/05/tc/" rel="next" title="Linux流量控制(Traffic Control)介绍">
+      Linux流量控制(Traffic Control)介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%8F%91%E9%80%81NMI%E7%BB%99%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="nav-number">1.</span> <span class="nav-text">发送NMI给虚拟机</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%86%85%E5%AD%98%E5%BF%AB%E7%85%A7"><span class="nav-number">2.</span> <span class="nav-text">内存快照</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%8F%82%E8%80%83"><span class="nav-number">3.</span> <span class="nav-text">参考:</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="udev机制是Linux kernel的设备管理机制. 当内核检测到设备插拔后, 会发送事件给用户态的udevd进程. 用户态udevd进程根据事件信息匹配不同规则从而进行不同的处理逻辑. 在CentOS7中使用的是systemd中实现的udevd进程. udev规则文件的扩展名为.rules, 主要位于两个目录:  &#x2F;etc&#x2F;udev&#x2F;rules.d&#x2F;: 自定义规则 &#x2F;usr&#x2F;lib&#x2F;udev&#x2F;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="udev机制简介">
+<meta property="og:url" content="http://just4coding.com/2022/11/30/udev/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="udev机制是Linux kernel的设备管理机制. 当内核检测到设备插拔后, 会发送事件给用户态的udevd进程. 用户态udevd进程根据事件信息匹配不同规则从而进行不同的处理逻辑. 在CentOS7中使用的是systemd中实现的udevd进程. udev规则文件的扩展名为.rules, 主要位于两个目录:  &#x2F;etc&#x2F;udev&#x2F;rules.d&#x2F;: 自定义规则 &#x2F;usr&#x2F;lib&#x2F;udev&#x2F;">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-11-30T12:12:26.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.505Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="udev">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2022/11/30/udev/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>udev机制简介 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/11/30/udev/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          udev机制简介
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-11-30 20:12:26" itemprop="dateCreated datePublished" datetime="2022-11-30T20:12:26+08:00">2022-11-30</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>udev</code>机制是<code>Linux kernel</code>的设备管理机制. 当内核检测到设备插拔后, 会发送事件给用户态的<code>udevd</code>进程. 用户态<code>udevd</code>进程根据事件信息匹配不同规则从而进行不同的处理逻辑.</p>
+<p>在<code>CentOS7</code>中使用的是<code>systemd</code>中实现的<code>udevd</code>进程. <code>udev</code>规则文件的扩展名为<code>.rules</code>, 主要位于两个目录:</p>
+<ul>
+<li><code>/etc/udev/rules.d/</code>: 自定义规则</li>
+<li><code>/usr/lib/udev/rules.d/</code>: 系统自带规则</li>
+</ul>
+<p><code>udev</code>规则是以规则文件名按字母顺序进行匹配处理的, 一般文件名中会带有数字前缀, 如:<code>50-udev-default.rules</code>. 处理顺序与规则放在哪个目录下无关, 但如果不同目录下规则文件同名, <code>/etc/udev/rules.d</code>下的文件会覆盖<code>/usr/lib/udev/rules.d/</code>下的文件.</p>
+<span id="more"></span>
+
+<p>规则语法本身不是很复杂, 每条规则由一系列<code>key/value</code>对儿组成, 这些<code>key/value</code>对儿可以分为<code>匹配</code>和<code>赋值</code>两种. 当规则中所有的<code>匹配</code>都满足时, <code>赋值</code>部分的行为被调用. 每条规则至少要有一个<code>匹配</code>和一个<code>赋值</code>.</p>
+<p>以下面规则举例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KERNEL==&quot;hdb&quot;, NAME=&quot;my_spare_disk&quot;</span><br></pre></td></tr></table></figure>
+
+<p><code>匹配</code>部分<code>KERNEL==&quot;hdb&quot;</code>表示设备的内核名称为<code>hdb</code>, <code>赋值</code>部分<code>NAME=&quot;my_spare_disk&quot;</code>表示用<code>my_spare_disk</code>作为设备节点的名称.</p>
+<p>具体语法可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://man.archlinux.org/man/udev.7">https://man.archlinux.org/man/udev.7</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.reactivated.net/writing_udev_rules.html#syntax">http://www.reactivated.net/writing_udev_rules.html#syntax</a></li>
+</ul>
+<p>下面也一个实际例子来说明一下. 在我们的业务场景中需要自动监测虚拟机网络接口的创建和删除, 因为虚拟网卡也是内核中的设备文件, 因而可以通过<code>udev</code>规则来检测设备的创建和删除.</p>
+<p>在计算节点上, 虚拟机的网络接口位于目录<code>/sys/class/net</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">CNA:~ <span class="comment"># ls -l /sys/class/net/</span></span><br><span class="line">total 0</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 arping-bond5 -&gt; ../../devices/virtual/net/arping-bond5</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 bond5 -&gt; ../../devices/virtual/net/bond5</span><br><span class="line">-rw-r--r-- 1 root root 4096 Oct 31 20:29 bonding_masters</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 br1 -&gt; ../../devices/virtual/net/br1</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 br-bond5 -&gt; ../../devices/virtual/net/br-bond5</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 eth0 -&gt; ../../devices/pci0000:ae/0000:ae:00.0/0000:af:00.0/net/eth0</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 eth1 -&gt; ../../devices/pci0000:ae/0000:ae:00.0/0000:af:00.1/net/eth1</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 eth2 -&gt; ../../devices/pci0000:ae/0000:ae:00.0/0000:af:00.2/net/eth2</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 eth3 -&gt; ../../devices/pci0000:ae/0000:ae:00.0/0000:af:00.3/net/eth3</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 lo -&gt; ../../devices/virtual/net/lo</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 Mgnt-0 -&gt; ../../devices/virtual/net/Mgnt-0</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 ovs-system -&gt; ../../devices/virtual/net/ovs-system</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 tap00000001.0 -&gt; ../../devices/virtual/net/tap00000001.0</span><br><span class="line">lrwxrwxrwx 1 root root    0 Nov 30 02:38 tap00000002.0 -&gt; ../../devices/virtual/net/tap00000002.0</span><br></pre></td></tr></table></figure>
+<p>其中<code>tap00000001.0</code>和<code>tap00000002.0</code>是虚拟机的网络接口.</p>
+<p>可以通过<code>udevadm info</code>命令来查看可以匹配的条件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">CNA:~ <span class="comment"># udevadm info -ap /sys/class/net/tap00000001.0</span></span><br><span class="line"></span><br><span class="line">Udevadm info starts with the device specified by the devpath and <span class="keyword">then</span></span><br><span class="line">walks up the chain of parent devices. It prints <span class="keyword">for</span> every device</span><br><span class="line">found, all possible attributes <span class="keyword">in</span> the udev rules key format.</span><br><span class="line">A rule to match, can be composed by the attributes of the device</span><br><span class="line">and the attributes from one single parent device.</span><br><span class="line"></span><br><span class="line">  looking at device <span class="string">&#x27;/devices/virtual/net/tap00000001.0&#x27;</span>:</span><br><span class="line">    KERNEL==<span class="string">&quot;tap00000001.0&quot;</span></span><br><span class="line">    SUBSYSTEM==<span class="string">&quot;net&quot;</span></span><br><span class="line">    DRIVER==<span class="string">&quot;&quot;</span></span><br><span class="line">    ATTR&#123;dormant&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;ifalias&#125;==<span class="string">&quot;&quot;</span></span><br><span class="line">    ATTR&#123;address&#125;==<span class="string">&quot;fe:6e:d4:89:ce:92&quot;</span></span><br><span class="line">    ATTR&#123;tun_flags&#125;==<span class="string">&quot;0x5102&quot;</span></span><br><span class="line">    ATTR&#123;broadcast&#125;==<span class="string">&quot;ff:ff:ff:ff:ff:ff&quot;</span></span><br><span class="line">    ATTR&#123;flags&#125;==<span class="string">&quot;0x1103&quot;</span></span><br><span class="line">    ATTR&#123;carrier&#125;==<span class="string">&quot;1&quot;</span></span><br><span class="line">    ATTR&#123;iflink&#125;==<span class="string">&quot;14&quot;</span></span><br><span class="line">    ATTR&#123;addr_assign_type&#125;==<span class="string">&quot;3&quot;</span></span><br><span class="line">    ATTR&#123;carrier_up_count&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;owner&#125;==<span class="string">&quot;-1&quot;</span></span><br><span class="line">    ATTR&#123;mtu&#125;==<span class="string">&quot;1500&quot;</span></span><br><span class="line">    ATTR&#123;addr_len&#125;==<span class="string">&quot;6&quot;</span></span><br><span class="line">    ATTR&#123;carrier_changes&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;ifindex&#125;==<span class="string">&quot;14&quot;</span></span><br><span class="line">    ATTR&#123;gro_flush_timeout&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;netdev_group&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;proto_down&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;group&#125;==<span class="string">&quot;-1&quot;</span></span><br><span class="line">    ATTR&#123;duplex&#125;==<span class="string">&quot;full&quot;</span></span><br><span class="line">    ATTR&#123;speed&#125;==<span class="string">&quot;10&quot;</span></span><br><span class="line">    ATTR&#123;link_mode&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;dev_id&#125;==<span class="string">&quot;0x0&quot;</span></span><br><span class="line">    ATTR&#123;operstate&#125;==<span class="string">&quot;unknown&quot;</span></span><br><span class="line">    ATTR&#123;dev_port&#125;==<span class="string">&quot;0&quot;</span></span><br><span class="line">    ATTR&#123;tx_queue_len&#125;==<span class="string">&quot;5000&quot;</span></span><br><span class="line">    ATTR&#123;<span class="built_in">type</span>&#125;==<span class="string">&quot;1&quot;</span></span><br><span class="line">    ATTR&#123;carrier_down_count&#125;==<span class="string">&quot;0&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>根据返回结果, 我们可以使用<code>SUBSYSTEM</code>和<code>KERNEL</code>两个关键字来匹配设备事件, 使用<code>RUN</code>关键字来运行外部程序.</p>
+<p>首先, 编写需要调用的脚本:<code>vnic_hook.sh</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">&quot;ARGS: <span class="variable">$@</span>&quot;</span> &gt;&gt; /tmp/vnic_hook.log</span><br></pre></td></tr></table></figure>
+
+<p>为了简要说明, 我们只是简单地输出所有传入的参数到<code>/tmp/vnic_hook.log</code>中.</p>
+<p>接着, 创建规则文件<code>/etc/udev/rules.d/60-vnic.rules</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SUBSYSTEM==&quot;net&quot;, KERNEL==&quot;tap0000*&quot;, RUN+=&quot;/root/vnic_hook.sh $env&#123;ACTION&#125; %k&quot;</span><br></pre></td></tr></table></figure>
+
+<p>规则中<code>RUN</code>关键字支持字符串替换, 其中<code>$env&#123;ACTION&#125;</code>表示事件行为, 如<code>add</code>, <code>remove</code>等, <code>%k</code>表示设备的内核名称, 细节参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://man.archlinux.org/man/udev.7">https://man.archlinux.org/man/udev.7</a></li>
+</ul>
+<p><code>udevd</code>会自动检测规则变化, 因而我们不需要重启<code>udevd</code>.</p>
+<p>可以使用<code>udevadm test</code>来检测规则是否正确:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">udevadm test /sys/class/net/tap00000002.0</span><br></pre></td></tr></table></figure>
+
+<p>一切准备完成后, 我们关闭虚拟机, 此时虚拟网卡<code>tap00000002.0</code>被删除, 从<code>/tmp/vnic_hook.log</code>中可以看到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ARGS: remove tap00000002.0</span><br></pre></td></tr></table></figure>
+
+<p>再次开启虚拟机, 从<code>/tmp/vnic_hook.log</code>中可以看到:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ARGS: add tap00000002.0</span><br></pre></td></tr></table></figure>
+
+<p>可以看到我们的脚本被正确执行了, 现在可以在脚本中实现具体业务逻辑了.</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://opensource.com/article/18/11/udev">https://opensource.com/article/18/11/udev</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.thegeekdiary.com/beginners-guide-to-udev-in-linux/">https://www.thegeekdiary.com/beginners-guide-to-udev-in-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="https://linuxconfig.org/tutorial-on-how-to-write-basic-udev-rules-in-linux">https://linuxconfig.org/tutorial-on-how-to-write-basic-udev-rules-in-linux</a></li>
+<li><a target="_blank" rel="noopener" href="https://man.archlinux.org/man/udev.7">https://man.archlinux.org/man/udev.7</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.reactivated.net/writing_udev_rules.html#syntax">http://www.reactivated.net/writing_udev_rules.html#syntax</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/udev/" rel="tag"># udev</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/22/nsxt-vdrport/" rel="prev" title="NSX-T东西向路由">
+      <i class="fa fa-chevron-left"></i> NSX-T东西向路由
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/02/15/ct-fix/" rel="next" title="nf_ct_deliver_cached_events崩溃修复或规避方案">
+      nf_ct_deliver_cached_events崩溃修复或规避方案 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

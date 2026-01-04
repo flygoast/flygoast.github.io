@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="计算机加电后，首先会执行刷在ROM&#x2F;NVRAM中的系统固件代码。系统固件(BIOS&#x2F;UEFI)完成自身的一系列工作(如硬件自检(POST: Power-On Self-Test)后，需要引导操作系统启动。固件可以从NVRAM中读取启动设备列表，按设备顺序尝试进行引导。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ISO启动原理及启动盘制作">
+<meta property="og:url" content="http://just4coding.com/2023/11/01/boot-iso/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="计算机加电后，首先会执行刷在ROM&#x2F;NVRAM中的系统固件代码。系统固件(BIOS&#x2F;UEFI)完成自身的一系列工作(如硬件自检(POST: Power-On Self-Test)后，需要引导操作系统启动。固件可以从NVRAM中读取启动设备列表，按设备顺序尝试进行引导。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2023-11-01/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-11-01/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-11-01/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2023-11-01/4.png">
+<meta property="article:published_time" content="2023-11-01T02:51:40.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.508Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="MISC">
+<meta property="article:tag" content="UEFI">
+<meta property="article:tag" content="BIOS">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2023-11-01/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2023/11/01/boot-iso/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ISO启动原理及启动盘制作 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/11/01/boot-iso/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ISO启动原理及启动盘制作
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-11-01 10:51:40" itemprop="dateCreated datePublished" datetime="2023-11-01T10:51:40+08:00">2023-11-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>计算机加电后，首先会执行刷在<code>ROM/NVRAM</code>中的系统固件代码。系统固件(<code>BIOS/UEFI</code>)完成自身的一系列工作(如硬件自检(<code>POST: Power-On Self-Test</code>)后，需要引导操作系统启动。固件可以从<code>NVRAM</code>中读取启动设备列表，按设备顺序尝试进行引导。</p>
+<span id="more"></span>
+
+<h4 id="BIOS"><a href="#BIOS" class="headerlink" title="BIOS"></a>BIOS</h4><p>对于磁盘介质来说，<code>BIOS</code>会尝试读取启动设备的第一个扇区(<code>512字节</code>)。如果这个扇区的最后两个字节是<code>0x55</code>和<code>0xAA</code>, 则表明该设备可以用于引导，否则继续尝试列表中的下个设备。这个扇区叫做<code>主引导记录(MBR: Master Boot Record)</code>。这512字节分为三部分:</p>
+<ul>
+<li>可执行代码, 446字节</li>
+<li>分区表，每个表项16字节，共64字节</li>
+<li>Magic number: 0x55和0xAA。</li>
+</ul>
+<p>分区表项结构如下:</p>
+<table>
+<thead>
+<tr>
+<th>BI</th>
+<th>Starting CHS</th>
+<th>PT</th>
+<th>Ending CHS</th>
+<th>Starting Sector</th>
+<th>Partition Size</th>
+</tr>
+</thead>
+</table>
+<ul>
+<li>BI: Boot Indicator, 1字节，如果是80，标记该分区是否含有操作系统启动代码</li>
+<li>Starting CHS: 3字节，指示分区起始位置，用柱片(Cylinder), 磁头(Head), 扇区(Sector)表示</li>
+<li>Partition Type Descriptor: 1字节，文件系统类型，如，<code>0x0B</code>表示<code>FAT32</code>，<code>0x07</code>表示<code>NTFS</code></li>
+<li>Ending CHS: 3字节，指示分区结尾位置</li>
+<li>Starting Sectro: 4字节，以<code>逻辑区块地址(LBA: Logical Block Address)</code>表示的起始扇区</li>
+<li>Partition Size: 4字节，表示分区大小</li>
+</ul>
+<p><code>MBR</code>的代码空间只有446字节，主要完成从分区表中查找可引导分区，并加载分区中的扇区并执行(可以直接加载内核，也可以链式加载分阶段的<code>bootloader</code>)，完成操作系统的加载。</p>
+<h4 id="UEFI"><a href="#UEFI" class="headerlink" title="UEFI"></a>UEFI</h4><p><code>UEFI: United Extensible Fireware Interface</code>的启动流程, 不依赖<code>BIOS</code>模式下固定的<code>启动扇区(boot sector)</code>，而是由实现在固件中的<code>boot manager</code>来寻找相应的启动项。一个设备要想支持从<code>UEFI</code>启动，需要具备<code>ESP: EFI system partition</code>，用来存储<code>UEFI</code>固件需要读取和加载的文件。它支持<code>MBR: Mater Boot Record</code>, <code>GPT: GUID Partition Table</code>和光盘上的<code>El Torito</code>卷。而在<code>ESP</code>上，<code>UEFI</code>支持的文件系统为: <code>FAT</code>。计算机启动时，<code>boot manager</code>从<code>ESP</code>中根据计算机架构在<code>FAT</code>格式文件系统中寻找目录<code>/EFI/BOOT/</code>下的相应的启动文件(不区分大小写)并执行它，文件名如下:</p>
+<table>
+<thead>
+<tr>
+<th>架构</th>
+<th>文件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>x86(32位)</td>
+<td>bootia32.efi</td>
+</tr>
+<tr>
+<td>x64(64位)</td>
+<td>bootx64.efi</td>
+</tr>
+<tr>
+<td>ARM(32位)</td>
+<td>bootarm.efi</td>
+</tr>
+<tr>
+<td>ARM(64位)</td>
+<td>bootaa64.efi</td>
+</tr>
+</tbody></table>
+<p>简单来说，<code>UEFI</code>固件本身中已经实现文件系统功能，它从支持的文件系统中直接加载相应的启动文件。</p>
+<h4 id="EL-Torito"><a href="#EL-Torito" class="headerlink" title="EL Torito"></a><code>EL Torito</code></h4><p>对于从<code>CD/DVD</code>等光学介质来说，和磁盘的启动分区结构有所不同。<code>El Torito</code>是<code>ISO 9660</code>文件系统的一个扩展规范，用于支持从<code>CD/DVD</code>等光盘介质引导计算机。<code>BIOS</code>固件会根据<code>El Torito</code>规格，从光盘中的引导扇区寻找引导机器码。<code>UEFI</code>支持<code>ISO 9660</code>文件系统及扩展<code>EL Torito</code>, 会从中寻找<code>ESP: EFI System Partition</code>及文件系统。</p>
+<p>了解了相应原理后，下面来从头制作一个支持从<code>BIOS</code>和<code>UEFI</code>两种固件来启动<code>Linux</code>内核的<code>ISO</code>。</p>
+<p>因为<code>CentOS</code>的<code>ISO</code>分别使用<code>isolinux</code>和<code>grub</code>两种<code>bootloader</code>，我们也使用它们来进行实验。</p>
+<p><code>isolinux</code>的官网:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://wiki.syslinux.org/">https://wiki.syslinux.org/</a></li>
+</ul>
+<p><code>GRUB</code>的官网:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.gnu.org/software/grub/">https://www.gnu.org/software/grub/</a></li>
+</ul>
+<h4 id="实验"><a href="#实验" class="headerlink" title="实验"></a>实验</h4><p>首先，创建工作目录<code>demoiso</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mkdir -p demoiso</span><br></pre></td></tr></table></figure>
+
+<p><code>BIOS</code>的启动，我们使用<code>isolinux</code>。<code>isolinux</code>实现了对<code>ISO9660</code>和<code>EL Torito</code>规范的支持。</p>
+<p>从官网下载<code>syslinux</code>并解压:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">wget https://mirrors.edge.kernel.org/pub/linux/utils/boot/syslinux/syslinux-6.03.tar.gz</span><br></pre></td></tr></table></figure>
+
+<p>将以下文件<code>copy</code>到<code>isolinux</code>:</p>
+<ul>
+<li><code>syslinux-6.03/bios/core/isolinux.bin</code></li>
+<li><code>syslinux-6.03/bios/com32/elflink/ldlinux/ldlinux.c32</code></li>
+<li><code>syslinux-6.03/bios/com32/libutil/libutil.c32</code></li>
+<li><code>syslinux-6.03/bios/com32/lib/libcom32.c32</code></li>
+<li><code>syslinux-6.03/bios/com32/menu/vesamenu.c32</code></li>
+</ul>
+<p>我们可以自己编译内核和制作<code>initrd</code>，为了简单，我直接使用<code>Slackware</code>官方编译好的<code>64</code>位内核和<code>initrd</code>。</p>
+<p>在<code>isolinux</code>目录下载内核和<code>initrd</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">wget --no-check-certificate -O vmlinuz https://mirrors.kernel.org/slackware/slackware64-current/kernels/huge.s/bzImage</span><br><span class="line">wget --no-check-certificate -O initrd.img https://mirrors.kernel.org/slackware/slackware64-current/isolinux/initrd.img</span><br></pre></td></tr></table></figure>
+
+<p>在<code>isolinux</code>下创建<code>isolinux.cfg</code>，内容如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">default vesamenu.c32</span><br><span class="line">timeout 600</span><br><span class="line"></span><br><span class="line">MENU clear</span><br><span class="line">MENU title DEMO ISO</span><br><span class="line">MENU vshift 2</span><br><span class="line">MENU rows 10</span><br><span class="line">MENU margin 8</span><br><span class="line">MENU helpmsgrow 19</span><br><span class="line">MENU tabmsgrow 15</span><br><span class="line">MENU autoboot Booting default in #s</span><br><span class="line"></span><br><span class="line">LABEL DEMO</span><br><span class="line">  menu label ^Slackware linux</span><br><span class="line">  KERNEL vmlinuz</span><br><span class="line">  INITRD initrd.img</span><br></pre></td></tr></table></figure>
+
+<p>文件准备完毕，开始制作<code>ISO</code>。在<code>demoiso</code>目录下执行:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xorriso -as mkisofs -o ../demoiso.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table ./</span><br></pre></td></tr></table></figure>
+
+<p>我们可以使用<code>dumpet</code>命令来查看<code>ISO</code>文件的启动信息:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[root@dev01v ~]<span class="comment"># dumpet -i ../demoiso-bios.iso</span></span><br><span class="line">Validation Entry:</span><br><span class="line">	Header Indicator: 0x01 (Validation Entry)</span><br><span class="line">	PlatformId: 0x00 (80x86)</span><br><span class="line">	ID: <span class="string">&quot;&quot;</span></span><br><span class="line">	Checksum: 0x55aa</span><br><span class="line">	Key bytes: 0x55aa</span><br><span class="line">Boot Catalog Default Entry:</span><br><span class="line">	Entry is bootable</span><br><span class="line">	Boot Media emulation <span class="built_in">type</span>: no emulation</span><br><span class="line">	Media load segment: 0x0 (0000:7c00)</span><br><span class="line">	System <span class="built_in">type</span>: 0 (0x00)</span><br><span class="line">	Load Sectors: 4 (0x0004)</span><br><span class="line">	Load LBA: 34 (0x00000022)</span><br></pre></td></tr></table></figure>
+<p>可以看到存在一条启动记录。</p>
+<p>在<code>BIOS</code>固件虚拟机上启动界面如图:</p>
+<img src="/images/2023-11-01/1.png" class="">
+
+<p>启动后成功进入<code>Slackware Linux</code>，如图:</p>
+<img src="/images/2023-11-01/2.png" class="">
+
+<p>接下来，处理<code>UEFI</code>支持。在<code>demoiso</code>目录下创建目录<code>EFI/BOOT</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> -p EFI/BOOT/</span><br></pre></td></tr></table></figure>
+
+<p>在<code>EFI/BOOT</code>目录下创建文件<code>grub.cfg</code>，内容如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">set default=&quot;0&quot;</span><br><span class="line"></span><br><span class="line">set timeout=60</span><br><span class="line"></span><br><span class="line">set root=(cd0)</span><br><span class="line"></span><br><span class="line">menuentry &#x27;Slackware Linux&#x27; &#123;</span><br><span class="line">    echo &#x27;Loading Slackware kernel ...&#x27;</span><br><span class="line">    linuxefi /isolinux/vmlinuz</span><br><span class="line">    initrdefi /isolinux/initrd.img</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">menuentry &#x27;Reboot&#x27; &#123;</span><br><span class="line">    echo &#x27;System rebooting ...&#x27;</span><br><span class="line">    reboot</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">menuentry &#x27;Halt&#x27; &#123;</span><br><span class="line">    echo &#x27;Halting system ...&#x27;</span><br><span class="line">    halt</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在<code>demoiso</code>目录下执行命令，生成<code>BOOTX64.EFI</code>文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">grub2-mkstandalone -o EFI/BOOT/BOOTX64.EFI -O x86_64-efi <span class="string">&quot;boot/grub/grub.cfg=EFI/BOOT/grub.cfg&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>demoiso</code>目录下创建目录<code>images</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> images</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>EFI</code>目录大小:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@dev03v demoiso]<span class="comment"># du -sh EFI/</span></span><br><span class="line">8.4M	EFI/</span><br></pre></td></tr></table></figure>
+
+<p>我们制作一个能包含下这个大小的<code>UEFI</code>能够识别的<code>ESP</code>分区镜像, 并将文件<code>BOOTX64.efi</code>复制到镜像中相应位置:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">dd</span> <span class="keyword">if</span>=/dev/zero of=images/efiboot.img bs=1M count=12</span><br><span class="line">mkfs.vfat images/efiboot.img</span><br><span class="line">mmd -i images/efiboot.img EFI EFI/BOOT</span><br><span class="line">mcopy -i images/efiboot.img EFI/BOOT/BOOTX64.EFI  ::EFI/BOOT/</span><br></pre></td></tr></table></figure>
+
+<p>接下来生成<code>BIOS</code>和<code>UEFI</code>都支持的<code>ISO</code>文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xorriso -as mkisofs -o ../demoiso-both.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e images/efiboot.img -no-emul-boot ./</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>dumpet</code>查看生成的<code>ISO</code>文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">[root@dev03v demoiso]<span class="comment"># dumpet -i ../demoiso-both.iso</span></span><br><span class="line">Validation Entry:</span><br><span class="line">	Header Indicator: 0x01 (Validation Entry)</span><br><span class="line">	PlatformId: 0x00 (80x86)</span><br><span class="line">	ID: <span class="string">&quot;&quot;</span></span><br><span class="line">	Checksum: 0x55aa</span><br><span class="line">	Key bytes: 0x55aa</span><br><span class="line">Boot Catalog Default Entry:</span><br><span class="line">	Entry is bootable</span><br><span class="line">	Boot Media emulation <span class="built_in">type</span>: no emulation</span><br><span class="line">	Media load segment: 0x0 (0000:7c00)</span><br><span class="line">	System <span class="built_in">type</span>: 0 (0x00)</span><br><span class="line">	Load Sectors: 4 (0x0004)</span><br><span class="line">	Load LBA: 6178 (0x00001822)</span><br><span class="line">Section Header Entry:</span><br><span class="line">	Header Indicator: 0x91 (Final Section Header Entry)</span><br><span class="line">	PlatformId: 0xef (EFI)</span><br><span class="line">	Section Entries: 1</span><br><span class="line">	ID: <span class="string">&quot;&quot;</span></span><br><span class="line">Boot Catalog Section Entry:</span><br><span class="line">	Entry is bootable</span><br><span class="line">	Boot Media emulation <span class="built_in">type</span>: no emulation</span><br><span class="line">	Media load address: 0 (0x0000)</span><br><span class="line">	System <span class="built_in">type</span>: 0 (0x00)</span><br><span class="line">	Load Sectors: 24576 (0x6000)</span><br><span class="line">	Load LBA: 34 (0x00000022)</span><br></pre></td></tr></table></figure>
+
+<p>可以看到有两个启动条目了。</p>
+<p>使用<code>UEFI</code>固件的虚拟机启动后，界面如下:</p>
+<img src="/images/2023-11-01/3.png" class="">
+
+<p>内核启动后可以从<code>sysfs</code>中读取到<code>UEFI</code>相关信息:</p>
+<img src="/images/2023-11-01/4.png" class="">
+
+<p>实际上，因为<code>ESP</code>分区是从<code>efiboot.img</code>来生成的，<code>EFI</code>目录可以忽略掉，为了令生成的<code>ISO</code>文件更小，可以排除<code>EFI</code>目录:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">xorriso -as mkisofs -o ../demoiso-both.iso -x EFI/ -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e images/efiboot.img -no-emul-boot ./</span><br></pre></td></tr></table></figure>
+
+<h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
+<li><p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/UEFI">https://en.wikipedia.org/wiki/UEFI</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://oofhours.com/2021/12/25/how-does-uefi-boot-from-a-cd/">https://oofhours.com/2021/12/25/how-does-uefi-boot-from-a-cd/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://uefi.org/specs/UEFI/2.10/13_Protocols_Media_Access.html">https://uefi.org/specs/UEFI/2.10/13_Protocols_Media_Access.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://oofhours.com/2019/09/02/geeking-out-with-uefi/">https://oofhours.com/2019/09/02/geeking-out-with-uefi/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://blog.cuicc.com/blog/2011/11/15/mbr-and-boot-loader/">https://blog.cuicc.com/blog/2011/11/15/mbr-and-boot-loader/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://joonas.fi/2021/02/uefi-pc-boot-process-and-uefi-with-qemu/">https://joonas.fi/2021/02/uefi-pc-boot-process-and-uefi-with-qemu/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.zengl.com/a/201406/160.html">https://www.zengl.com/a/201406/160.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://fossies.org/linux/xorriso/doc/boot_sectors.txt">https://fossies.org/linux/xorriso/doc/boot_sectors.txt</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://brinnatt.com/primary/%E7%AC%AC-14-%E7%AB%A0-%E5%BC%80%E6%9C%BA%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8Buefisystemd/">https://brinnatt.com/primary/%E7%AC%AC-14-%E7%AB%A0-%E5%BC%80%E6%9C%BA%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8Buefisystemd/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://communities.vmware.com/t5/VMware-Workstation-Pro/UEFI-workstation-firmware-and-badly-written-by-me-el-torito/td-p/1314187">https://communities.vmware.com/t5/VMware-Workstation-Pro/UEFI-workstation-firmware-and-badly-written-by-me-el-torito/td-p/1314187</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.makeuseof.com/types-of-syslinux-bootloaders/">https://www.makeuseof.com/types-of-syslinux-bootloaders/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/aWxvdmVseXc0/p/15553891.html">https://www.cnblogs.com/aWxvdmVseXc0/p/15553891.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://blog.csdn.net/charleyhuman/article/details/628472">https://blog.csdn.net/charleyhuman/article/details/628472</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://pdos.csail.mit.edu/6.828/2017/readings/boot-cdrom.pdf">https://pdos.csail.mit.edu/6.828/2017/readings/boot-cdrom.pdf</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/zszmhd/p/3595787.html">https://www.cnblogs.com/zszmhd/p/3595787.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.askpure.com/course_BJV4RJHV-WUG54YUW-1XTLSH5H-AXDT2X6I.html">https://www.askpure.com/course_BJV4RJHV-WUG54YUW-1XTLSH5H-AXDT2X6I.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://zdyxry.github.io/2019/12/01/Linux-%E5%BC%95%E5%AF%BC%E9%82%A3%E4%BA%9B%E4%BA%8B%E5%84%BF/">https://zdyxry.github.io/2019/12/01/Linux-%E5%BC%95%E5%AF%BC%E9%82%A3%E4%BA%9B%E4%BA%8B%E5%84%BF/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/47926853">https://zhuanlan.zhihu.com/p/47926853</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/ivandavidov/systemd-boot">https://github.com/ivandavidov/systemd-boot</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://tinylab.org/create-iso-for-i386-pc-board/">https://tinylab.org/create-iso-for-i386-pc-board/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://edoceo.com/sys/syslinux-vesa">https://edoceo.com/sys/syslinux-vesa</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://wiki.osdev.org/El-Torito">https://wiki.osdev.org/El-Torito</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://wiki.syslinux.org/wiki/index.php?title=Boot_Stages">https://wiki.syslinux.org/wiki/index.php?title=Boot_Stages</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/xcp-ng/xcp/tree/master/iso/7.4">https://github.com/xcp-ng/xcp/tree/master/iso/7.4</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/4842101">https://access.redhat.com/solutions/4842101</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/html/anaconda_customization_guide/sect-boot-menu-customization">https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/html/anaconda_customization_guide/sect-boot-menu-customization</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/pdf/anaconda_customization_guide/red_hat_enterprise_linux-7-anaconda_customization_guide-en-us.pdf">https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/pdf/anaconda_customization_guide/red_hat_enterprise_linux-7-anaconda_customization_guide-en-us.pdf</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/5711111">https://access.redhat.com/solutions/5711111</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/lpfuture/p/5703555.html">https://www.cnblogs.com/lpfuture/p/5703555.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/lpfuture/p/5704416.html">https://www.cnblogs.com/lpfuture/p/5704416.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://fedoraproject.org/wiki/Anaconda/Kickstart/KickstartingFedoraLiveInstallation">https://fedoraproject.org/wiki/Anaconda/Kickstart/KickstartingFedoraLiveInstallation</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://fedoraproject.org/wiki/LiveOS_image">https://fedoraproject.org/wiki/LiveOS_image</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://access.redhat.com/solutions/3417041">https://access.redhat.com/solutions/3417041</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/syzdek/efibootiso">https://github.com/syzdek/efibootiso</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="http://www.panticz.de/create-uefi-iso">http://www.panticz.de/create-uefi-iso</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.ruanyifeng.com/blog/2013/02/booting.html">https://www.ruanyifeng.com/blog/2013/02/booting.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.ruanyifeng.com/blog/2015/09/0x7c00.html">https://www.ruanyifeng.com/blog/2015/09/0x7c00.html</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://xuanxuanblingbling.github.io/ctf/pwn/2020/03/10/bios/">https://xuanxuanblingbling.github.io/ctf/pwn/2020/03/10/bios/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/81960137">https://zhuanlan.zhihu.com/p/81960137</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.bilibili.com/read/cv20851965/">https://www.bilibili.com/read/cv20851965/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.techtarget.com/whatis/definition/Unified-Extensible-Firmware-Interface-UEFI">https://www.techtarget.com/whatis/definition/Unified-Extensible-Firmware-Interface-UEFI</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.linuxdashen.com/linux%E7%94%A8%E6%88%B7%E7%9A%84uefi%E5%9B%BA%E4%BB%B6%E6%8C%87%E5%8D%97">https://www.linuxdashen.com/linux%E7%94%A8%E6%88%B7%E7%9A%84uefi%E5%9B%BA%E4%BB%B6%E6%8C%87%E5%8D%97</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/wiki/Software/systemd/systemd-boot/">https://www.freedesktop.org/wiki/Software/systemd/systemd-boot/</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://github.com/ivandavidov/systemd-boot">https://github.com/ivandavidov/systemd-boot</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="http://x86asm.net/articles/uefi-programming-first-steps/">http://x86asm.net/articles/uefi-programming-first-steps/</a></p>
+</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/MISC/" rel="tag"># MISC</a>
+              <a href="/tags/UEFI/" rel="tag"># UEFI</a>
+              <a href="/tags/BIOS/" rel="tag"># BIOS</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/10/19/openbox/" rel="prev" title="CentOS7配置Console界面运行openbox">
+      <i class="fa fa-chevron-left"></i> CentOS7配置Console界面运行openbox
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/12/01/lsm-hook/" rel="next" title="LSM模块动态Hook实现">
+      LSM模块动态Hook实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#BIOS"><span class="nav-number">1.</span> <span class="nav-text">BIOS</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#UEFI"><span class="nav-number">2.</span> <span class="nav-text">UEFI</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#EL-Torito"><span class="nav-number">3.</span> <span class="nav-text">EL Torito</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9E%E9%AA%8C"><span class="nav-number">4.</span> <span class="nav-text">实验</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%8F%82%E8%80%83"><span class="nav-number">5.</span> <span class="nav-text">参考</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="flashcache是Facebook开源的用SSD来缓存机械磁盘数据的Linux内核模块。 简单来说，Linux的I&#x2F;O栈层次结构可以表示为: token data1234567+----------------------------+| VFS(Virtual File System)   |+----------------------------+| Block I&#x2F;O Lay">
+<meta property="og:type" content="article">
+<meta property="og:title" content="flashcache简介及模块初始化">
+<meta property="og:url" content="http://just4coding.com/2014/12/17/flashcache-init/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="flashcache是Facebook开源的用SSD来缓存机械磁盘数据的Linux内核模块。 简单来说，Linux的I&#x2F;O栈层次结构可以表示为: token data1234567+----------------------------+| VFS(Virtual File System)   |+----------------------------+| Block I&#x2F;O Lay">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-17T09:48:16.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.472Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/17/flashcache-init/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>flashcache简介及模块初始化 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/17/flashcache-init/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          flashcache简介及模块初始化
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-17 17:48:16" itemprop="dateCreated datePublished" datetime="2014-12-17T17:48:16+08:00">2014-12-17</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Flashcache/" itemprop="url" rel="index">
+                    <span itemprop="name">Flashcache</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a target="_blank" rel="noopener" href="https://github.com/facebook/flashcache">flashcache</a>是Facebook开源的用SSD来缓存机械磁盘数据的Linux内核模块。</p>
+<p>简单来说，Linux的I&#x2F;O栈层次结构可以表示为:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">+----------------------------+</span><br><span class="line">| VFS(Virtual File System)   |</span><br><span class="line">+----------------------------+</span><br><span class="line">| Block I/O Layer            |</span><br><span class="line">+----------------------------+</span><br><span class="line">| Devices                    |</span><br><span class="line">+----------------------------+</span><br></pre></td></tr></table></figure>
+<p>文件系统I&#x2F;O操作传递给块设备，抽象块设备最终传递给真实的设备驱动，完成I&#x2F;O操作。Linux在块设备层实现了Device Mapper(DM)的映射机制。DM机制可以将一个或多个块设备再映射成一个虚拟块设备。具体的映射规则由mapping table来实现。到达虚拟块设备的I&#x2F;O请求，DM机制会根据映射表找到正确的目标设备，将请求放到目标设备的请求队列中，目标设备根据目标类型进行处理。结构图如下:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">         +---------------+</span><br><span class="line">         | Mapped Device |</span><br><span class="line">         +-------+-------+</span><br><span class="line">                 |</span><br><span class="line">                 v</span><br><span class="line">         +---------------+</span><br><span class="line">         | mapping table |</span><br><span class="line">         +--+---------+--+</span><br><span class="line">            |         |</span><br><span class="line">            |         |</span><br><span class="line">            v         v</span><br><span class="line">+---------------+  +-----------------+</span><br><span class="line">|Physical Device|  | Physical Device |</span><br><span class="line">+---------------+  +-----------------+</span><br></pre></td></tr></table></figure>
+<p>DM机制的映射目标类型可以通过内核模块进行扩展，flashcache就是通过定义一种名称为”flashcache”的映射目标类型来实现SSD做为机械磁盘的缓存。结构示意图如下:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">+---------------+</span><br><span class="line">| Mapped Device |</span><br><span class="line">+-------+-------+</span><br><span class="line">        |</span><br><span class="line">        v</span><br><span class="line">+---------------+</span><br><span class="line">| mapper table  |</span><br><span class="line">+-------+-------+</span><br><span class="line">        |</span><br><span class="line">        | flashcache</span><br><span class="line">        |</span><br><span class="line">    +---+---+</span><br><span class="line">    |       |</span><br><span class="line">    v       v</span><br><span class="line">+-----+  +------+</span><br><span class="line">| SSD |  | DISK |</span><br><span class="line">+-----+  +------+</span><br></pre></td></tr></table></figure>
+<p>flashcache做为缓存层，提供了三种写入模式：</p>
+<ul>
+<li>writeback</li>
+<li>writethrough</li>
+<li>writearound</li>
+</ul>
+<p>三种模式的区别如下图所示:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">writethrough  writearound  writeback</span><br><span class="line">     |            |           |</span><br><span class="line">-----|------------|-----------|------------</span><br><span class="line">     v            |           v       SSD</span><br><span class="line">-----|------------|------------------------</span><br><span class="line">     v            v                   DISK</span><br><span class="line">-------------------------------------------</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>writethrough：进行写操作时，会同时写入SSD和磁盘</li>
+<li>writearound: 进行写操作时，只对磁盘进行写操作</li>
+<li>writeback: 进行写操作时，只写入SSD，flashcache异步地将内容写入磁盘</li>
+</ul>
+<p>下面分析flashcache模块的初始化。</p>
+<p>flashcache内核模块的入口函数为flashcache_init。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">module_init(flashcache_init);</span><br></pre></td></tr></table></figure>
+<p>flashcache_init首先会对job相关的变量及结构进行初始化:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">r = flashcache_jobs_init();</span><br><span class="line"><span class="keyword">if</span> (r)</span><br><span class="line">    <span class="keyword">return</span> r;</span><br><span class="line"><span class="type">atomic_set</span>(&amp;nr_cache_jobs, <span class="number">0</span>);</span><br><span class="line"><span class="type">atomic_set</span>(&amp;nr_pending_jobs, <span class="number">0</span>);</span><br></pre></td></tr></table></figure>
+<p>flashcache_jobs_init会分配job操作所需的内存池，简化逻辑如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">flashcache_jobs_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    _job_cache = kmem_cache_create(<span class="string">&quot;kcached-jobs&quot;</span>,</span><br><span class="line">                                   <span class="keyword">sizeof</span>(<span class="keyword">struct</span> kcached_job),</span><br><span class="line">                                   __alignof__(<span class="keyword">struct</span> kcached_job),</span><br><span class="line">                                   <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    _job_pool = mempool_create(MIN_JOBS, mempool_alloc_slab,</span><br><span class="line">                               mempool_free_slab, _job_cache);</span><br><span class="line"></span><br><span class="line">    _pending_job_cache = kmem_cache_create(<span class="string">&quot;pending-jobs&quot;</span>,</span><br><span class="line">                           <span class="keyword">sizeof</span>(<span class="keyword">struct</span> pending_job),</span><br><span class="line">                           __alignof__(<span class="keyword">struct</span> pending_job),</span><br><span class="line">                           <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    _pending_job_pool = mempool_create(MIN_JOBS, mempool_alloc_slab,</span><br><span class="line">                       mempool_free_slab, _pending_job_cache);</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后，flashcache_init调用dm_io_client_create创建一个dm_io_client结构，它为块设备I&#x2F;O请求执行过程提供内存池。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flashcache_io_client = dm_io_client_create();</span><br></pre></td></tr></table></figure>
+<p>接着，flashcache_init调用dm_kcopyd_client_create创建了一个dm_kcopyd_client结构。kcopyd是一个内核进程，它用于异步地copy一个块设备的区域到一个或多个其他的块设备。dm_kcopyd_client用于向kcopyd提交任务。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flashcache_kcp_client = dm_kcopyd_client_create(<span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+<p>然后，初始化了一个内核工作队列，执行do_work去处理各种job, 本文略过。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INIT_WORK(&amp;_kcached_wq, do_work);</span><br></pre></td></tr></table></figure>
+<p>接着，注册flashcache的DM机制目标类型, 目标类型中具体回调本文略过。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">r = dm_register_target(&amp;flashcache_target);</span><br></pre></td></tr></table></figure>
+<p>再来看flashcache_init的最后部分:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">flashcache_module_procfs_init();</span><br><span class="line">flashcache_control = (<span class="keyword">struct</span> flashcache_control_s *)</span><br><span class="line">    kmalloc(<span class="keyword">sizeof</span>(<span class="keyword">struct</span> flashcache_control_s), GFP_KERNEL);</span><br><span class="line">flashcache_control-&gt;synch_flags = <span class="number">0</span>;</span><br><span class="line">register_reboot_notifier(&amp;flashcache_notifier);</span><br><span class="line"><span class="keyword">return</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>首先，调用flashcache_module_procfs_init创建”&#x2F;proc&#x2F;flashcache”目录及文件”&#x2F;proc&#x2F;flashcache&#x2F;flashcache_version”。<br>flachcache_module_procfs_init简化逻辑如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">flashcache_module_procfs_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> CONFIG_PROC_FS</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">proc_dir_entry</span> *<span class="title">entry</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (proc_mkdir(<span class="string">&quot;flashcache&quot;</span>, <span class="literal">NULL</span>)) &#123;</span><br><span class="line">        entry = create_proc_entry(<span class="string">&quot;flashcache/flashcache_version&quot;</span>, <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">        <span class="keyword">if</span> (entry)</span><br><span class="line">            entry-&gt;proc_fops =  &amp;flashcache_version_operations;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span> <span class="comment">/* CONFIG_PROC_FS */</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>最后，通过register_reboot_notifier注册函数flashcache_notify_reboot。这函数会在机器重启或关闭时被调用。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">notifier_block</span> <span class="title">flashcache_notifier</span> =</span> &#123;</span><br><span class="line">    .notifier_call  = flashcache_notify_reboot,</span><br><span class="line">    .next       = <span class="literal">NULL</span>,</span><br><span class="line">    .priority   = INT_MAX, <span class="comment">/* should be &gt; ssd pri&#x27;s and disk dev pri&#x27;s */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>至此，flashcache内核模块初始化完成，可以使用dmsetup指定flashcache目标类型创建虚拟块设备了。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/09/ejabberd-config/" rel="prev" title="ejabberd配置模块分析">
+      <i class="fa fa-chevron-left"></i> ejabberd配置模块分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2015/01/08/powerdns-packetcache/" rel="next" title="PowerDNS中PacketCache实现">
+      PowerDNS中PacketCache实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

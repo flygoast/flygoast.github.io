@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="我们的程序很多业务逻辑由Lua实现，为了防止业务逻辑被曝光，需要对Lua代码进行加密。 我们有两种思路：  自定义字节码: Lua库可以直接调用编译后生成的Lua字节码，因而我们可以将源码编译成字节码对外提供。但是因为Lua是开源的，可以通过工具将字节码反编译回源码。我们可以自定义字节码，加大反编译的难度。 将Lua源码文件加密，在Lua编译字节码前，对源码文件进行解密  本文主要介绍第二种思路的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Lua代码加密">
+<meta property="og:url" content="http://just4coding.com/2016/11/15/luajit-encrypt/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="我们的程序很多业务逻辑由Lua实现，为了防止业务逻辑被曝光，需要对Lua代码进行加密。 我们有两种思路：  自定义字节码: Lua库可以直接调用编译后生成的Lua字节码，因而我们可以将源码编译成字节码对外提供。但是因为Lua是开源的，可以通过工具将字节码反编译回源码。我们可以自定义字节码，加大反编译的难度。 将Lua源码文件加密，在Lua编译字节码前，对源码文件进行解密  本文主要介绍第二种思路的">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2016-11-15T15:31:43.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.476Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2016/11/15/luajit-encrypt/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Lua代码加密 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2016/11/15/luajit-encrypt/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Lua代码加密
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2016-11-15 23:31:43" itemprop="dateCreated datePublished" datetime="2016-11-15T23:31:43+08:00">2016-11-15</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Lua/" itemprop="url" rel="index">
+                    <span itemprop="name">Lua</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>我们的程序很多业务逻辑由Lua实现，为了防止业务逻辑被曝光，需要对Lua代码进行加密。</p>
+<p>我们有两种思路：</p>
+<ul>
+<li>自定义字节码: Lua库可以直接调用编译后生成的Lua字节码，因而我们可以将源码编译成字节码对外提供。但是因为Lua是开源的，可以通过工具将字节码反编译回源码。我们可以自定义字节码，加大反编译的难度。</li>
+<li>将Lua源码文件加密，在Lua编译字节码前，对源码文件进行解密</li>
+</ul>
+<p>本文主要介绍第二种思路的实现。<br>我们的程序使用LuaJIT来执行Lua代码，因而以LuaJIT来说明。</p>
+<span id="more"></span>
+<p>我们的C程序使用luaL_loadfile()函数来加载Lua源码。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">LUALIB_API <span class="type">int</span> <span class="title function_">luaL_loadfile</span><span class="params">(lua_State *L, <span class="type">const</span> <span class="type">char</span> *filename)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">return</span> luaL_loadfilex(L, filename, <span class="literal">NULL</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到luaL_loadfile是luaL_loadfilex()的简单封装，再来看luaL_loadfilex实现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">LUALIB_API <span class="type">int</span> <span class="title function_">luaL_loadfilex</span><span class="params">(lua_State *L, <span class="type">const</span> <span class="type">char</span> *filename,</span></span><br><span class="line"><span class="params">                            <span class="type">const</span> <span class="type">char</span> *mode)</span></span><br><span class="line">&#123;</span><br><span class="line">  FileReaderCtx ctx;</span><br><span class="line">  <span class="type">int</span> status;</span><br><span class="line">  <span class="type">const</span> <span class="type">char</span> *chunkname;</span><br><span class="line">  <span class="keyword">if</span> (filename) &#123;</span><br><span class="line">    ctx.fp = fopen(filename, <span class="string">&quot;rb&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (ctx.fp == <span class="literal">NULL</span>) &#123;</span><br><span class="line">      lua_pushfstring(L, <span class="string">&quot;cannot open %s: %s&quot;</span>, filename, strerror(errno));</span><br><span class="line">      <span class="keyword">return</span> LUA_ERRFILE;</span><br><span class="line">    &#125;</span><br><span class="line">    chunkname = lua_pushfstring(L, <span class="string">&quot;@%s&quot;</span>, filename);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    ctx.fp = <span class="built_in">stdin</span>;</span><br><span class="line">    chunkname = <span class="string">&quot;=stdin&quot;</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  status = lua_loadx(L, reader_file, &amp;ctx, chunkname, mode);</span><br><span class="line">  <span class="keyword">if</span> (ferror(ctx.fp)) &#123;</span><br><span class="line">    L-&gt;top -= filename ? <span class="number">2</span> : <span class="number">1</span>;</span><br><span class="line">    lua_pushfstring(L, <span class="string">&quot;cannot read %s: %s&quot;</span>, chunkname+<span class="number">1</span>, strerror(errno));</span><br><span class="line">    <span class="keyword">if</span> (filename)</span><br><span class="line">      fclose(ctx.fp);</span><br><span class="line">    <span class="keyword">return</span> LUA_ERRFILE;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (filename) &#123;</span><br><span class="line">    L-&gt;top--;</span><br><span class="line">    copyTV(L, L-&gt;top<span class="number">-1</span>, L-&gt;top);</span><br><span class="line">    fclose(ctx.fp);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> status;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>当从文件加载Lua代码时，luaL_loadfilex()调用fopen()打开文件，将文件流指针存储在ctx.fp中，再调用lua_loadx()编译Lua源码。</p>
+<p>我们可以在这里将源码文件进行解密，再打开解密后的文件，用解密后的文件流指针替换密文文件流指针，再调用lua_loadx()完成编译。我们使用一个特定文件头来标识密文文件。为了兼容未加密的文件，我们首先判断是否为密文文件。若不是，则直接将文件指针恢复到文件头。否则，调用decrypt_file()解密文件并打开解密后的文件，将文件指针存储于ctx.fp中。<br>修改后的源码为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line">LUALIB_API <span class="type">int</span> <span class="title function_">luaL_loadfilex</span><span class="params">(lua_State *L, <span class="type">const</span> <span class="type">char</span> *filename,</span></span><br><span class="line"><span class="params">			      <span class="type">const</span> <span class="type">char</span> *mode)</span></span><br><span class="line">&#123;</span><br><span class="line">  FileReaderCtx ctx;</span><br><span class="line">  <span class="type">int</span> status;</span><br><span class="line">  <span class="type">const</span> <span class="type">char</span> *chunkname;</span><br><span class="line">  <span class="type">char</span>        file_header[FILE_HEADER_LEN];</span><br><span class="line">  <span class="type">size_t</span>      sz;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (filename) &#123;</span><br><span class="line">    ctx.fp = fopen(filename, <span class="string">&quot;rb&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (ctx.fp == <span class="literal">NULL</span>) &#123;</span><br><span class="line">      lua_pushfstring(L, <span class="string">&quot;cannot open %s: %s&quot;</span>, filename, strerror(errno));</span><br><span class="line">      <span class="keyword">return</span> LUA_ERRFILE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* check file header */</span></span><br><span class="line">    sz = fread(file_header, <span class="number">1</span>, FILE_HEADER_LEN, ctx.fp);</span><br><span class="line">    <span class="keyword">if</span> (sz == FILE_HEADER_LEN) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">memcmp</span>(file_header, FILE_HEADER, FILE_HEADER_LEN - <span class="number">1</span>) == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">/* decrypt file */</span></span><br><span class="line">        ctx.fp = decrypt_file(ctx.fp);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    fseek(ctx.fp, <span class="number">0L</span>, SEEK_SET);</span><br><span class="line"></span><br><span class="line">    chunkname = lua_pushfstring(L, <span class="string">&quot;@%s&quot;</span>, filename);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    ctx.fp = <span class="built_in">stdin</span>;</span><br><span class="line">    chunkname = <span class="string">&quot;=stdin&quot;</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  status = lua_loadx(L, reader_file, &amp;ctx, chunkname, mode);</span><br><span class="line">  <span class="keyword">if</span> (ferror(ctx.fp)) &#123;</span><br><span class="line">    L-&gt;top -= filename ? <span class="number">2</span> : <span class="number">1</span>;</span><br><span class="line">    lua_pushfstring(L, <span class="string">&quot;cannot read %s: %s&quot;</span>, chunkname+<span class="number">1</span>, strerror(errno));</span><br><span class="line">    <span class="keyword">if</span> (filename)</span><br><span class="line">      fclose(ctx.fp);</span><br><span class="line">    <span class="keyword">return</span> LUA_ERRFILE;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (filename) &#123;</span><br><span class="line">    L-&gt;top--;</span><br><span class="line">    copyTV(L, L-&gt;top<span class="number">-1</span>, L-&gt;top);</span><br><span class="line">    fclose(ctx.fp);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> status;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>接着来看decrypt_file()实现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> FILE *<span class="title function_">decrypt_file</span><span class="params">(FILE *ofp)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">int</span>            fd, len;</span><br><span class="line">  <span class="type">size_t</span>         sz;</span><br><span class="line">  FILE          *fp;</span><br><span class="line">  <span class="type">unsigned</span> <span class="type">char</span> *buf, *obuf;</span><br><span class="line">  <span class="type">char</span>           file_temp[] = <span class="string">&quot;/tmp/luajit-XXXXXX&quot;</span>;</span><br><span class="line"></span><br><span class="line">  fp = <span class="literal">NULL</span>;</span><br><span class="line">  buf = <span class="literal">NULL</span>;</span><br><span class="line">  obuf = <span class="literal">NULL</span>;</span><br><span class="line">  fd = <span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">  fseek(ofp, <span class="number">0L</span>, SEEK_END);</span><br><span class="line">  sz = ftell(ofp);</span><br><span class="line"></span><br><span class="line">  obuf = <span class="built_in">malloc</span>(sz);</span><br><span class="line">  <span class="keyword">if</span> (obuf == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">goto</span> failed;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  fseek(ofp, <span class="number">0L</span>, SEEK_SET);</span><br><span class="line">  <span class="keyword">if</span> (fread(obuf, <span class="number">1</span>, sz, ofp) &lt; sz) &#123;</span><br><span class="line">    <span class="keyword">goto</span> failed;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  fclose(ofp);</span><br><span class="line">  ofp = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">  buf = blowfish_decrypt(obuf + FILE_HEADER_LEN,</span><br><span class="line">                         sz - FILE_HEADER_LEN,</span><br><span class="line">                         g_key,</span><br><span class="line">                         g_iv,</span><br><span class="line">                         &amp;len);</span><br><span class="line">  <span class="keyword">if</span> (buf == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">goto</span> failed;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">free</span>(obuf);</span><br><span class="line">  obuf = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">  fd = mkstemp(file_temp);</span><br><span class="line">  <span class="keyword">if</span> (fd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">goto</span> failed;</span><br><span class="line">  &#125;</span><br><span class="line">  unlink(file_temp);</span><br><span class="line"></span><br><span class="line">  fp = fdopen(fd, <span class="string">&quot;wb+&quot;</span>);</span><br><span class="line">  <span class="keyword">if</span> (fp == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">goto</span> failed;</span><br><span class="line">  &#125;</span><br><span class="line">  fwrite(buf, <span class="number">1</span>, len, fp);</span><br><span class="line">  <span class="built_in">free</span>(buf);</span><br><span class="line">  buf = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> fp;</span><br><span class="line"></span><br><span class="line">failed:</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (fp) &#123;</span><br><span class="line">    fclose(fp);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (ofp) &#123;</span><br><span class="line">    fclose(ofp);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (obuf) &#123;</span><br><span class="line">    <span class="built_in">free</span>(obuf);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (buf) &#123;</span><br><span class="line">    <span class="built_in">free</span>(buf);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>首先，调用解密函数将源码文件解密到内存BUFFER中。然后，调用mkstemp()创建一个临时文件，并调用unlink()将其删除，避免解密后的文件被其他用户或程序获取到，也避免留下没用的临时文件。之后，接着将解密出的内容写入临时文件，最后返回临时文件的文件指针，完成文件指针的替换。</p>
+<p>除了临时文件，也可以使用PIPE()来实现。将解密后的内容写入PIPE写端，调用fdopen()将PIPE读端构造成文件流指针返回。由于PIPE的大小有限制，一般为64K，不能处理大于64K的文件。因而我们采用临时文件的方法来实现。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2016/11/06/xenserver-kernel-module/" rel="prev" title="XenServer编译内核模块">
+      <i class="fa fa-chevron-left"></i> XenServer编译内核模块
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2016/12/04/virtualnetworkdevice/" rel="next" title="Linux虚拟网络设备">
+      Linux虚拟网络设备 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

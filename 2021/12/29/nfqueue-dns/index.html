@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在一台CentOS 7.0服务器(内核版本号:3.10.0-123.el7.x86_64)上安装我们的安全防护程序后，会出现curl访问网址超时5秒的情况。现象如下: 12345[root@localhost ~]# time curl -s www.baidu.com -o &#x2F;dev&#x2F;nullreal	0m5.120suser	0m0.002ssys	0m0.009s  通过strace分析程序">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NFQUEUE机制导致DNS请求5秒超时分析">
+<meta property="og:url" content="http://just4coding.com/2021/12/29/nfqueue-dns/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在一台CentOS 7.0服务器(内核版本号:3.10.0-123.el7.x86_64)上安装我们的安全防护程序后，会出现curl访问网址超时5秒的情况。现象如下: 12345[root@localhost ~]# time curl -s www.baidu.com -o &#x2F;dev&#x2F;nullreal	0m5.120suser	0m0.002ssys	0m0.009s  通过strace分析程序">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2021-12-29/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2021-12-29/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2021-12-29/3.png">
+<meta property="article:published_time" content="2021-12-29T07:14:56.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.498Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Nfqueue">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2021-12-29/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2021/12/29/nfqueue-dns/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NFQUEUE机制导致DNS请求5秒超时分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2021/12/29/nfqueue-dns/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NFQUEUE机制导致DNS请求5秒超时分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-12-29 15:14:56" itemprop="dateCreated datePublished" datetime="2021-12-29T15:14:56+08:00">2021-12-29</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在一台<code>CentOS 7.0</code>服务器(内核版本号:<code>3.10.0-123.el7.x86_64</code>)上安装我们的安全防护程序后，会出现<code>curl</code>访问网址超时5秒的情况。现象如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]<span class="comment"># time curl -s www.baidu.com -o /dev/null</span></span><br><span class="line"></span><br><span class="line">real	0m5.120s</span><br><span class="line">user	0m0.002s</span><br><span class="line">sys	0m0.009s</span><br></pre></td></tr></table></figure>
+
+<p>通过<code>strace</code>分析程序调用的过程:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">strace -f -tt -o curl.strace curl -s www.baidu.com -o /dev/null</span><br></pre></td></tr></table></figure>
+<p>从<code>strace</code>输出可以看到, 第一次<code>curl</code>调用<code>sendmmsg</code>同时发送了两个<code>DNS</code>数据包，分别是<code>A</code>记录和<code>AAAA</code>记录请求，但是只收到了<code>A</code>记录响应包:</p>
+<img src="/images/2021-12-29/1.png" class="">
+
+<p>然后等待5秒超时后，依次调用<code>sendto</code>和<code>recvfrom</code>串行处理两个<code>DNS</code>请求, 这次两个<code>DNS</code>响应全部收到后，继续向下执行:</p>
+<img src="/images/2021-12-29/2.png" class="">
+
+
+<p>而从抓包结果分析，<code>tcpdump</code>只能看到第一次同时发送的两个<code>DNS</code>请求中的<code>A</code>记录请求，<code>AAAA</code>记录请求数据包被内核协议栈丢弃了:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">17:04:24.772049 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:24.773693 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3/0/0 CNAME www.a.shifen.com., A 180.101.49.12, A 180.101.49.11 (90)</span><br><span class="line">17:04:29.776474 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 37081+ A? www.baidu.com. (31)</span><br><span class="line">17:04:29.778694 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 37081 3/0/0 CNAME www.a.shifen.com., A 180.101.49.11, A 180.101.49.12 (90)</span><br><span class="line">17:04:29.778925 IP 10.10.10.89.57416 &gt; 114.114.114.114.53: 42471+ AAAA? www.baidu.com. (31)</span><br><span class="line">17:04:29.780523 IP 114.114.114.114.53 &gt; 10.10.10.89.57416: 42471 1/1/0 CNAME www.a.shifen.com. (115)</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>在<code>Google</code>上搜索<code>DNS 5秒</code>有非常多关于类似现象的文章介绍，但基本都是在<code>Kubernetes</code>环境中发生。我们的环境只是普通的<code>CentOS</code>环境，为何也会发生呢？</p>
+<p><code>weave</code>公司的文章<a target="_blank" rel="noopener" href="https://www.weave.works/blog/racy-conntrack-and-dns-lookup-timeouts">Racy conntrack and DNS lookup timeouts</a>介绍了在较旧版本内核的<code>conntrack</code>模块中存在的BUG会导致UDP丢包。其中一种场景是当不同的线程通过相同的<code>socket</code>发送<code>UDP</code>数据包时，存在竞争条件两个数据包都会各自创建一个<code>conntrack</code>条目，但两个条目所包含的<code>tuple</code>信息是一致的，这种情况会导致丢包。</p>
+<p>从现象看，我们的场景丢包根因应该也是由于<code>conntrack</code>模块的BUG导致丢包，但我们的这种场景并不存在多个线程同时使用相同<code>socket</code>进行发送。我们的防护逻辑是内核模块通过<code>NFQUEUE</code>机制将数据包送到用户态，由用户态对数据包进行过滤裁决是否允许放行。因而我们怀疑是由于<code>NFQUEUE</code>机制导致<code>conntrack</code>模块这个已知BUG的触发。</p>
+<p>我们写一个简单的内核模块将<code>DNS</code>请求通过<code>NFQUEUE</code>送到用户态, 用户态程序直接放行, 这样来验证能否复现问题。<br>内核模块代码，<code>nfqdns.c</code>内容:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/module.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/init.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/skbuff.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/ip.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter_ipv4.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;net/udp.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">MODULE_LICENSE(<span class="string">&quot;GPL&quot;</span>);</span><br><span class="line">MODULE_DESCRIPTION(<span class="string">&quot;nfqdns&quot;</span>);</span><br><span class="line">MODULE_ALIAS(<span class="string">&quot;module nfqdns netfiler&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> nfqueue_no = <span class="number">0</span>;</span><br><span class="line">MODULE_PARM_DESC(<span class="built_in">queue</span>, <span class="string">&quot;nfquene number&quot;</span>);</span><br><span class="line">module_param(nfqueue_no, <span class="type">int</span>, <span class="number">0600</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">unsigned</span> <span class="type">int</span> <span class="title function_">nf_hook_out</span><span class="params">(<span class="type">const</span> <span class="keyword">struct</span> nf_hook_ops *ops,</span></span><br><span class="line"><span class="params">                   <span class="keyword">struct</span> sk_buff *sk,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *in,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> net_device *out,</span></span><br><span class="line"><span class="params">                   <span class="type">const</span> <span class="keyword">struct</span> nf_hook_state *state)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">udphdr</span> *<span class="title">udph</span> =</span> <span class="literal">NULL</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">iphdr</span> *<span class="title">iph</span> =</span> ip_hdr(sk);</span><br><span class="line"></span><br><span class="line">    u8 proto = iph-&gt;protocol;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (proto != IPPROTO_UDP) &#123;</span><br><span class="line">        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    udph = (<span class="keyword">struct</span> udphdr *) skb_transport_header(sk);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (htons(udph-&gt;dest) == <span class="number">53</span>) &#123;</span><br><span class="line">        printk(KERN_INFO <span class="string">&quot;[nfqdns]: %pI4:%d-&gt;%pI4:%d queued in [%d], skb: %p, ct: %p, tid: %d\n&quot;</span>,</span><br><span class="line">                &amp;iph-&gt;saddr, htons(udph-&gt;source), &amp;iph-&gt;daddr, htons(udph-&gt;dest), nfqueue_no,</span><br><span class="line">                sk, sk-&gt;nfct, htons(*(<span class="type">unsigned</span> <span class="type">short</span>*)(udph + <span class="number">1</span>)));</span><br><span class="line">        <span class="keyword">return</span> NF_QUEUE_NR(nfqueue_no);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">nf_hook_ops</span> <span class="title">nfhooks</span>[] =</span> &#123;</span><br><span class="line">&#123;</span><br><span class="line">    .hook = nf_hook_out,</span><br><span class="line">    .owner = THIS_MODULE,</span><br><span class="line">    .pf = NFPROTO_IPV4,</span><br><span class="line">    .hooknum = NF_INET_POST_ROUTING,</span><br><span class="line">    .priority = NF_IP_PRI_FIRST,</span><br><span class="line">&#125;,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> __init <span class="title function_">nfqdns_init</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    nf_register_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;nfqdns module init\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> __exit <span class="title function_">nfqdns_exit</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    nf_unregister_hooks(nfhooks, ARRAY_SIZE(nfhooks));</span><br><span class="line"></span><br><span class="line">    printk(KERN_INFO <span class="string">&quot;nfqdns module exit\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">module_init(nfqdns_init);</span><br><span class="line">module_exit(nfqdns_exit);</span><br></pre></td></tr></table></figure>
+
+<p>用户态程序<code>user.c</code>代码:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;assert.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;netinet/in.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/netfilter.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;libnetfilter_queue/libnetfilter_queue.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">cb</span><span class="params">(<span class="keyword">struct</span> nfq_q_handle *qh, <span class="keyword">struct</span> nfgenmsg *nfmsg,</span></span><br><span class="line"><span class="params">        <span class="keyword">struct</span> nfq_data *nfa, <span class="type">void</span> *data)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">u_int32_t</span> id = <span class="number">0</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfqnl_msg_packet_hdr</span> *<span class="title">ph</span>;</span></span><br><span class="line">    <span class="type">uint32_t</span>  m = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    ph = nfq_get_msg_packet_hdr(nfa);</span><br><span class="line">    <span class="keyword">if</span> (ph) &#123;</span><br><span class="line">        id = ntohl(ph-&gt;packet_id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;packet: %u\n&quot;</span>, id);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> nfq_set_verdict(qh, id, NF_ACCEPT, <span class="number">0</span>, <span class="literal">NULL</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfq_handle</span> *<span class="title">h</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfq_q_handle</span> *<span class="title">qh</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">nfnl_handle</span> *<span class="title">nh</span>;</span></span><br><span class="line">    <span class="type">int</span>    fd;</span><br><span class="line">    <span class="type">int</span> rv;</span><br><span class="line">    <span class="type">char</span> buf[<span class="number">4096</span>];</span><br><span class="line"></span><br><span class="line">    assert((h = nfq_open()) != <span class="literal">NULL</span>);</span><br><span class="line">    assert(nfq_unbind_pf(h, AF_INET) == <span class="number">0</span>);</span><br><span class="line">    assert(nfq_bind_pf(h, AF_INET) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    assert((qh = nfq_create_queue(h, <span class="number">0</span>, &amp;cb, <span class="literal">NULL</span>)) != <span class="literal">NULL</span>);</span><br><span class="line">    assert(nfq_set_mode(qh, NFQNL_COPY_PACKET, <span class="number">0xffff</span>) == <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    fd = nfq_fd(h);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> ((rv = recv(fd, buf, <span class="keyword">sizeof</span>(buf), <span class="number">0</span>)) &amp;&amp; rv &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        nfq_handle_packet(h, buf, rv);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    nfq_destroy_queue(qh);</span><br><span class="line"></span><br><span class="line">    nfq_close(h);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>Makefile</code>内容如下:</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">obj-m += nfqdns.o</span><br><span class="line"><span class="section">all:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> modules</span><br><span class="line">    gcc user.c  -l netfilter_queue -o user.out</span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">    make -C /lib/modules/<span class="variable">$(<span class="built_in">shell</span> uname -r)</span>/build M=<span class="variable">$(PWD)</span> clean</span><br></pre></td></tr></table></figure>
+
+<p>因为BUG存在于<code>nf_conntrack</code>模块中，确保加载<code>nf_conntrack</code>和<code>nf_conntrack_ipv4</code>模块，然后加载我们的实验内核模块:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">modprobe nf_conntrack nf_conntrack_ipv4</span><br><span class="line">insmod ./nfqdns.ko</span><br></pre></td></tr></table></figure>
+
+<p>接着运行用户态程序:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./user.out</span><br></pre></td></tr></table></figure>
+
+<p>此时执行<code>curl</code>命令依然可以复现<code>DNS</code>超时现象，可以确定和<code>NFQUEUE</code>机制有关系。</p>
+<p>从我们内核模块的日志输出可以看到在执行<code>nf_hook_out</code>时，<code>AAAA</code>记录的请求数据包还没有被丢弃，也可以看到第一次发送的两个<code>DNS</code>请求数据包的<code>conntrack</code>条目确实不同:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[467402.634931] [nfqdns]: 10.10.10.89:56578-&gt;114.114.114.114:53 queued in [0], skb: ffff880067d15d00, ct: ffff8800905ead68, tid: 8725</span><br><span class="line">[467402.634958] [nfqdns]: 10.10.10.89:56578-&gt;114.114.114.114:53 queued in [0], skb: ffff880067d15c00, ct: ffff8800905ea750, tid: 5451</span><br><span class="line">[467407.643516] [nfqdns]: 10.10.10.89:56578-&gt;114.114.114.114:53 queued in [0], skb: ffff8800b37f9f00, ct: ffff8800905ead68, tid: 8725</span><br><span class="line">[467407.645559] [nfqdns]: 10.10.10.89:56578-&gt;114.114.114.114:53 queued in [0], skb: ffff8800b8fe3100, ct: ffff8800905ead68, tid: 5451</span><br></pre></td></tr></table></figure>
+
+<p><code>conntrack</code>上述BUG丢弃数据包是发生在<code>conntrack</code>条目确认阶段的<code>__nf_conntrack_confirm</code>函数中。<code>conntrack</code>的原理和实现可以参考<a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/conntrack-design-and-implementation-zh/">这篇文章</a>, 本文不详述。</p>
+<p>我们通过<code>systemtap</code>来验证丢包是否发生在这里。<code>systemtap</code>脚本<code>t.stp</code>内容如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">%&#123;</span><br><span class="line">#include &lt;net/udp.h&gt;</span><br><span class="line">%&#125;</span><br><span class="line"></span><br><span class="line">function read_tid: long (udphdr: long) %&#123;</span><br><span class="line">    struct udphdr *udph = (struct udphdr *)STAP_ARG_udphdr;</span><br><span class="line">    unsigned short tid = htons(*(unsigned short *)(udph + 1));</span><br><span class="line">    STAP_RETVALUE = (long) tid;</span><br><span class="line">%&#125;</span><br><span class="line"></span><br><span class="line">probe module(&quot;nf_conntrack&quot;).function(&quot;__nf_conntrack_confirm&quot;) &#123;</span><br><span class="line">    iphdr = __get_skb_iphdr($skb)</span><br><span class="line">    saddr = format_ipaddr(__ip_skb_saddr(iphdr), %&#123; AF_INET %&#125;)</span><br><span class="line">    daddr = format_ipaddr(__ip_skb_daddr(iphdr), %&#123; AF_INET %&#125;)</span><br><span class="line">    protocol = __ip_skb_proto(iphdr)</span><br><span class="line"></span><br><span class="line">    udphdr = __get_skb_udphdr($skb)</span><br><span class="line">    if (protocol == %&#123; IPPROTO_UDP %&#125;) &#123;</span><br><span class="line">        dport = __tcp_skb_dport(udphdr)</span><br><span class="line">        sport = __tcp_skb_sport(udphdr)</span><br><span class="line">        if (dport == 53 || sport == 53) &#123;</span><br><span class="line">            printf(&quot;__nf_conntrack_confirm: %s:%d-&gt;%s:%d TID: %d, ct: %p, ctinfo: %d\n&quot;, saddr, sport, daddr, dport, read_tid(udphdr), $skb-&gt;nfct, $ctinfo)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">probe module(&quot;nf_conntrack&quot;).function(&quot;__nf_conntrack_confirm&quot;).return &#123;</span><br><span class="line">    printf(&quot;__nf_conntrack_confirm: return %ld\n&quot;, $return)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从<code>systemtap</code>执行结果可以确定处理第二个<code>DNS</code>请求数据包时，函数<code>__nf_conntrack_confirm</code>函数返回了<code>0(NF_DROP)</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost <span class="built_in">fg</span>]<span class="comment"># stap -g t.stp</span></span><br><span class="line">__nf_conntrack_confirm: 10.10.10.89:58305-&gt;114.114.114.114:53 TID: 16998, ct: 0xffff8800905eb860, ctinfo: 2</span><br><span class="line">__nf_conntrack_confirm: <span class="built_in">return</span> 1</span><br><span class="line">__nf_conntrack_confirm: 10.10.10.89:58305-&gt;114.114.114.114:53 TID: 568, ct: 0xffff8800905eb248, ctinfo: 2</span><br><span class="line">__nf_conntrack_confirm: <span class="built_in">return</span> 0</span><br></pre></td></tr></table></figure>
+
+<p>而查看<code>3.10.0-123.el7.x86_64</code>版本的<code>__nf_conntrack_confirm(net/netfilter/nf_conntrack_core.c</code>)源码如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Confirm a connection given skb; places it in hash table */</span></span><br><span class="line"><span class="type">int</span></span><br><span class="line">__nf_conntrack_confirm(<span class="keyword">struct</span> sk_buff *skb)</span><br><span class="line">&#123;</span><br><span class="line">        <span class="type">unsigned</span> <span class="type">int</span> hash, repl_hash;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conntrack_tuple_hash</span> *<span class="title">h</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn</span> *<span class="title">ct</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn_help</span> *<span class="title">help</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_conn_tstamp</span> *<span class="title">tstamp</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">hlist_nulls_node</span> *<span class="title">n</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">enum</span> <span class="title">ip_conntrack_info</span> <span class="title">ctinfo</span>;</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">net</span> *<span class="title">net</span>;</span></span><br><span class="line">        u16 zone;</span><br><span class="line"></span><br><span class="line">        ct = nf_ct_get(skb, &amp;ctinfo);</span><br><span class="line">        net = nf_ct_net(ct);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* ipt_REJECT uses nf_conntrack_attach to attach related</span></span><br><span class="line"><span class="comment">           ICMP/TCP RST packets in other direction.  Actual packet</span></span><br><span class="line"><span class="comment">           which created connection will be IP_CT_NEW or for an</span></span><br><span class="line"><span class="comment">           expected connection, IP_CT_RELATED. */</span></span><br><span class="line">        <span class="keyword">if</span> (CTINFO2DIR(ctinfo) != IP_CT_DIR_ORIGINAL)</span><br><span class="line">                <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line"></span><br><span class="line">        zone = nf_ct_zone(ct);</span><br><span class="line">        <span class="comment">/* reuse the hash saved before */</span></span><br><span class="line">        hash = *(<span class="type">unsigned</span> <span class="type">long</span> *)&amp;ct-&gt;tuplehash[IP_CT_DIR_REPLY].hnnode.pprev;</span><br><span class="line">        hash = hash_bucket(hash, net);</span><br><span class="line">        repl_hash = hash_conntrack(net, zone,</span><br><span class="line">                                   &amp;ct-&gt;tuplehash[IP_CT_DIR_REPLY].tuple);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* We&#x27;re not in hash table, and we refuse to set up related</span></span><br><span class="line"><span class="comment">           connections for unconfirmed conns.  But packet copies and</span></span><br><span class="line"><span class="comment">           REJECT will give spurious warnings here. */</span></span><br><span class="line">        <span class="comment">/* NF_CT_ASSERT(atomic_read(&amp;ct-&gt;ct_general.use) == 1); */</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">/* No external references means no one else could have</span></span><br><span class="line"><span class="comment">           confirmed us. */</span></span><br><span class="line">        NF_CT_ASSERT(!nf_ct_is_confirmed(ct));</span><br><span class="line">        pr_debug(<span class="string">&quot;Confirming conntrack %p\n&quot;</span>, ct);</span><br><span class="line"></span><br><span class="line">        spin_lock_bh(&amp;nf_conntrack_lock);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* We have to check the DYING flag inside the lock to prevent</span></span><br><span class="line"><span class="comment">           a race against nf_ct_get_next_corpse() possibly called from</span></span><br><span class="line"><span class="comment">           user context, else we insert an already &#x27;dead&#x27; hash, blocking</span></span><br><span class="line"><span class="comment">           further use of that particular connection -JM */</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (unlikely(nf_ct_is_dying(ct))) &#123;</span><br><span class="line">                spin_unlock_bh(&amp;nf_conntrack_lock);</span><br><span class="line">                <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* See if there&#x27;s one in the list already, including reverse:</span></span><br><span class="line"><span class="comment">           NAT could have grabbed it without realizing, since we&#x27;re</span></span><br><span class="line"><span class="comment">           not in the hash.  If there is, we lost race. */</span></span><br><span class="line">        hlist_nulls_for_each_entry(h, n, &amp;net-&gt;ct.hash[hash], hnnode)</span><br><span class="line">                <span class="keyword">if</span> (nf_ct_tuple_equal(&amp;ct-&gt;tuplehash[IP_CT_DIR_ORIGINAL].tuple,</span><br><span class="line">                                      &amp;h-&gt;tuple) &amp;&amp;</span><br><span class="line">                    zone == nf_ct_zone(nf_ct_tuplehash_to_ctrack(h)))</span><br><span class="line">                        <span class="keyword">goto</span> out;</span><br><span class="line">        hlist_nulls_for_each_entry(h, n, &amp;net-&gt;ct.hash[repl_hash], hnnode)</span><br><span class="line">                <span class="keyword">if</span> (nf_ct_tuple_equal(&amp;ct-&gt;tuplehash[IP_CT_DIR_REPLY].tuple,</span><br><span class="line">                                      &amp;h-&gt;tuple) &amp;&amp;</span><br><span class="line">                    zone == nf_ct_zone(nf_ct_tuplehash_to_ctrack(h)))</span><br><span class="line">                        <span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Remove from unconfirmed list */</span></span><br><span class="line">        hlist_nulls_del_rcu(&amp;ct-&gt;tuplehash[IP_CT_DIR_ORIGINAL].hnnode);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Timer relative to confirmation time, not original</span></span><br><span class="line"><span class="comment">           setting time, otherwise we&#x27;d get timer wrap in</span></span><br><span class="line"><span class="comment">           weird delay cases. */</span></span><br><span class="line">        ct-&gt;timeout.expires += jiffies;</span><br><span class="line">        add_timer(&amp;ct-&gt;timeout);</span><br><span class="line">        <span class="type">atomic_inc</span>(&amp;ct-&gt;ct_general.use);</span><br><span class="line">        ct-&gt;status |= IPS_CONFIRMED;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* set conntrack timestamp, if enabled. */</span></span><br><span class="line">        tstamp = nf_conn_tstamp_find(ct);</span><br><span class="line">        <span class="keyword">if</span> (tstamp) &#123;</span><br><span class="line">                <span class="keyword">if</span> (skb-&gt;tstamp.tv64 == <span class="number">0</span>)</span><br><span class="line">                        __net_timestamp(skb);</span><br><span class="line"></span><br><span class="line">                tstamp-&gt;start = ktime_to_ns(skb-&gt;tstamp);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">/* Since the lookup is lockless, hash insertion must be done after</span></span><br><span class="line"><span class="comment">         * starting the timer and setting the CONFIRMED bit. The RCU barriers</span></span><br><span class="line"><span class="comment">         * guarantee that no other CPU can find the conntrack before the above</span></span><br><span class="line"><span class="comment">         * stores are visible.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        __nf_conntrack_hash_insert(ct, hash, repl_hash);</span><br><span class="line">        NF_CT_STAT_INC(net, insert);</span><br><span class="line">        spin_unlock_bh(&amp;nf_conntrack_lock);</span><br><span class="line"></span><br><span class="line">        help = nfct_help(ct);</span><br><span class="line">        <span class="keyword">if</span> (help &amp;&amp; help-&gt;helper)</span><br><span class="line">                nf_conntrack_event_cache(IPCT_HELPER, ct);</span><br><span class="line"></span><br><span class="line">        nf_conntrack_event_cache(master_ct(ct) ?</span><br><span class="line">                                 IPCT_RELATED : IPCT_NEW, ct);</span><br><span class="line">        <span class="keyword">return</span> NF_ACCEPT;</span><br><span class="line"></span><br><span class="line">out:</span><br><span class="line">        NF_CT_STAT_INC(net, insert_failed);</span><br><span class="line">        spin_unlock_bh(&amp;nf_conntrack_lock);</span><br><span class="line">        <span class="keyword">return</span> NF_DROP;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>从代码可以看到，在从<code>conntrack</code>表中找到<code>tuple</code>信息一致的条目时，会跳转到<code>out</code>标签处，返回<code>NF_DROP</code>将数据包丢弃。</p>
+<p>在更高版本的<code>CentOS</code>内核中修复了这个问题, <code>CentOS7.8</code>(内核版本:<code>3.10.0-1127.el7.x86_64</code>)的相同位置增加了冲突处理的逻辑来修复这个问题:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">out:</span><br><span class="line">    nf_ct_add_to_dying_list(ct);</span><br><span class="line">    ret = nf_ct_resolve_clash(net, skb, ctinfo, h);</span><br><span class="line">dying:</span><br><span class="line">    nf_conntrack_double_unlock(hash, reply_hash);</span><br><span class="line">    NF_CT_STAT_INC(net, insert_failed);</span><br><span class="line">    local_bh_enable();</span><br><span class="line">    <span class="keyword">return</span> ret;</span><br></pre></td></tr></table></figure>
+
+<p>从源码中我们也可以看到当出现这个问题时<code>conntrack</code>模块的<code>insert_failed</code>统计值会增加。我们可以通过<code>conntrack -S</code>命令来查看统计值。通过验证可以看到发生该现象时<code>insert_failed</code>统计值确实增加了:</p>
+<img src="/images/2021-12-29/3.png" class="">
+
+<p>那么为什么<code>NFQUEUE</code>机制会触发该BUG呢？<br>从<code>curl</code>的<code>strace</code>输出可以看到，<code>curl</code>调用<code>sendmmsg</code>同时发送<code>A</code>和<code>AAAA</code>两个<code>DNS</code>请求。<br>系统调用<code>sendmmsg</code>的实现是<code>__sys_sendmmsg(net/socket.c)</code>, 它会循环调用<code>___sys_sendmsg</code>来发送两个数据包:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (datagrams &lt; vlen) &#123;</span><br><span class="line">        <span class="keyword">if</span> (MSG_CMSG_COMPAT &amp; flags) &#123;</span><br><span class="line">                err = ___sys_sendmsg(sock, (<span class="keyword">struct</span> msghdr __user *)compat_entry,</span><br><span class="line">                                     &amp;msg_sys, flags, &amp;used_address);</span><br><span class="line">                <span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">                        <span class="keyword">break</span>;</span><br><span class="line">                err = __put_user(err, &amp;compat_entry-&gt;msg_len);</span><br><span class="line">                ++compat_entry;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                err = ___sys_sendmsg(sock,</span><br><span class="line">                                     (<span class="keyword">struct</span> msghdr __user *)entry,</span><br><span class="line">                                     &amp;msg_sys, flags, &amp;used_address);</span><br><span class="line">                <span class="keyword">if</span> (err &lt; <span class="number">0</span>)</span><br><span class="line">                        <span class="keyword">break</span>;</span><br><span class="line">                err = put_user(err, &amp;entry-&gt;msg_len);</span><br><span class="line">                ++entry;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (err)</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        ++datagrams;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>具体网络发包过程可参考<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/373060740">这篇文章</a>。本文不详述。<code>___sys_sendmsg</code>函数会一直调用到协议栈的<code>ip_output(net/ipv4/ip_output.c)</code>函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">ip_output</span><span class="params">(<span class="keyword">struct</span> sk_buff *skb)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">net_device</span> *<span class="title">dev</span> =</span> skb_dst(skb)-&gt;dev;</span><br><span class="line"></span><br><span class="line">        IP_UPD_PO_STATS(dev_net(dev), IPSTATS_MIB_OUT, skb-&gt;len);</span><br><span class="line"></span><br><span class="line">        skb-&gt;dev = dev;</span><br><span class="line">        skb-&gt;protocol = htons(ETH_P_IP);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING, skb, <span class="literal">NULL</span>, dev,</span><br><span class="line">                            ip_finish_output,</span><br><span class="line">                            !(IPCB(skb)-&gt;flags &amp; IPSKB_REROUTED));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>conntrack</code>实现中，外发连接的<code>conntrack</code>条目的创建是在<code>LOCAL_OUT</code>阶段，而条目确认也就是真正插入<code>conntrack</code>表是在<code>POST_ROUTING</code>阶段。这里的<code>NF_HOOK_COND</code>会迭代调用<code>netfilter</code>框架中注册的一系列<code>hook</code>函数。<code>nf_conntrack_ipv4</code>模块在该阶段注册了<code>ipv4_confirm(net/ipv4/netfilter/nf_conntrack_l3proto_ipv4.c)</code>函数，并且优先级为最低，最后才会执行。当没有加载我们的内核模块时，<code>NF_HOOK_COND</code>会一直执行到<code>ipv4_confirm</code>, 最终调用到<code>__nf_conntrack_confirm</code>函数，将<code>conntrack</code>条目插入<code>conntrack</code>表，之后层层返回。处理第二个数据包时，在<code>LOCAL_OUT</code>阶段处理时已经可以查到插入的<code>conntrack</code>条目，因而不会再给该数据包创建<code>conntrack</code>条目。而加载我们的内核模块后，我们在<code>POST_ROUTING</code>阶段注册的<code>nf_hook_out</code>函数优先级高于<code>nf_conntrack_ipv4</code>的<code>ipv4_confirm</code>函数，会先得到执行。我们返回<code>NF_QUEUE</code>之后，<code>NF_HOOK_COND</code>就会直接返回<code>0</code>。后续的函数执行需要内核收到用户态程序的<code>netlink</code>消息后再继续执行。因而<code>__nf_conntrack_confirm</code>这时并未得到执行。层层返回到<code>___sys_send_msg</code>之后，再发送第二个数据包。在<code>LOCAL_OUT</code>阶段由于在<code>conntrack</code>表中不能查找到相应的<code>conntrack</code>条目，所以会给该数据包再创建<code>conntrack</code>条目，最终触发BUG。</p>
+<p>在存在该BUG的系统上可以通过在<code>/etc/resolv.conf</code>中添加<code>options single-request-reopen</code>来规避:</p>
+<p>从<code>man 5 resolv.conf</code>可以看到相关说明:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">single-request-reopen (since glibc 2.9)</span><br><span class="line">     The resolver uses the same socket for the A and AAAA requests.  Some hardware mistakenly sends back only one reply.  When that happens the client system</span><br><span class="line">     will  sit  and  wait for the second reply.  Turning this option on changes this behavior so that if two requests from the same port are not handled cor‐</span><br><span class="line">     rectly it will close the  socket and open a new one before sending the second request.</span><br></pre></td></tr></table></figure>
+<p>这样就不会同时发送<code>A</code>和<code>AAAA</code>请求包，而是<code>A</code>请求收到回应包再发送<code>AAAA</code>请求，从而能在启用<code>NFQUEUE</code>机制的情况下规避该BUG。</p>
+<p>后续有时间再从源码角度分析一下<code>conntrack</code>机制的实现。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/conntrack-design-and-implementation-zh/">https://arthurchiao.art/blog/conntrack-design-and-implementation-zh/</a></li>
+<li><a target="_blank" rel="noopener" href="http://cxd2014.github.io/2017/08/15/connection-tracking-system/">http://cxd2014.github.io/2017/08/15/connection-tracking-system/</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/373060740">https://zhuanlan.zhihu.com/p/373060740</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.codedump.info/post/20200128-systemtap-by-example/">https://www.codedump.info/post/20200128-systemtap-by-example/</a></li>
+<li><a target="_blank" rel="noopener" href="https://thermalcircle.de/doku.php?id=blog:linux:connection_tracking_1_modules_and_hooks">https://thermalcircle.de/doku.php?id=blog:linux:connection_tracking_1_modules_and_hooks</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Nfqueue/" rel="tag"># Nfqueue</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/11/21/custom-loadbalancer/" rel="prev" title="本地环境Kubernetes LoadBalancer实现">
+      <i class="fa fa-chevron-left"></i> 本地环境Kubernetes LoadBalancer实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/02/22/systemd-env/" rel="next" title="Docker环境中systemd环境变量实验">
+      Docker环境中systemd环境变量实验 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

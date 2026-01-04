@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="应用服务常常需要存取各种各样的机密信息，比如，数据库的访问凭证，依赖的外部服务的Token和Key，服务之间的通信凭证等等。在每个这样的应用中都重复实现机密信息的存取、更新与吊销等管理操作相当繁重，而且容易出问题。HashiCorp公司的开源项目Vault就将这部分工作以独立服务方式来实现，需要机密信息操作的应用可以与Vault服务交互完成相应的操作。 Vault的应用场景非常广泛，如:  机密信">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HashiCorp Vault介绍">
+<meta property="og:url" content="http://just4coding.com/2020/03/13/vault-introduction/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="应用服务常常需要存取各种各样的机密信息，比如，数据库的访问凭证，依赖的外部服务的Token和Key，服务之间的通信凭证等等。在每个这样的应用中都重复实现机密信息的存取、更新与吊销等管理操作相当繁重，而且容易出问题。HashiCorp公司的开源项目Vault就将这部分工作以独立服务方式来实现，需要机密信息操作的应用可以与Vault服务交互完成相应的操作。 Vault的应用场景非常广泛，如:  机密信">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-03-13/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-03-13/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-03-13/3.png">
+<meta property="article:published_time" content="2020-03-13T08:09:56.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.491Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-03-13/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/03/13/vault-introduction/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>HashiCorp Vault介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/03/13/vault-introduction/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          HashiCorp Vault介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-03-13 16:09:56" itemprop="dateCreated datePublished" datetime="2020-03-13T16:09:56+08:00">2020-03-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>应用服务常常需要存取各种各样的机密信息，比如，数据库的访问凭证，依赖的外部服务的<code>Token</code>和<code>Key</code>，服务之间的通信凭证等等。在每个这样的应用中都重复实现机密信息的存取、更新与吊销等管理操作相当繁重，而且容易出问题。HashiCorp公司的开源项目<a target="_blank" rel="noopener" href="https://www.vaultproject.io/">Vault</a>就将这部分工作以独立服务方式来实现，需要机密信息操作的应用可以与Vault服务交互完成相应的操作。</p>
+<p>Vault的应用场景非常广泛，如:</p>
+<ul>
+<li>机密信息存取</li>
+<li>凭证的动态生成，比如数据库凭证、PKI证书、公有云服务的凭证等等</li>
+<li>加密即服务</li>
+</ul>
+<p>Vault架构非常清晰，如下图所示，主要分为三部分:</p>
+<img src="/images/2020-03-13/1.png" class="">
+
+<ul>
+<li><strong>HTTP&#x2F;S API</strong>: Vault服务对外提供HTTP API接口</li>
+<li><strong>Storage Backend</strong>: 负责加密数据的持久化存储, Vault支持多种存储机制。</li>
+<li><strong>Barrier</strong>: 负责各种机密信息相关的处理逻辑，最核心的组件是<code>Secrets Engine</code>和<code>Auth Method</code>。<code>Secrets Engine</code>负责实际机密信息处理功能的实现，各种不同的<code>Secrets Engine</code>有着不同的功能服务，<code>Auth Method</code>提供各种不同的身份校验方法。这两个组件都依赖Plugin机制实现，如果官方提供的功能不满足需求，还可以自己写相应Plugin实现特有功能或身份校验方法。</li>
+</ul>
+<span id="more"></span>
+
+<p>Vault服务部署启动后，处于”密封(<code>sealed</code>)”状态，此时不能提供服务。在该服务能接受请求前，需要初始化和”解封(<code>unseal</code>)”两个步骤。<br>Vault初始化时内部会生成一个加密密钥(<code>Encryption Key</code>), 这个密钥用于加密数据，对外是不可见的。Vault会再生成一个<code>Master key</code>来加密<code>Encryption Key</code>来保护它。Vault会使用<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Shamir's_Secret_Sharing"><code>Shamir密钥分享算法</code></a>将<code>MasterKey</code>分割成若干份<code>KeyShares</code>，而根据其中的若干份<code>KeyShares</code>可以计算出原来的<code>MasterKey</code>。默认配置的<code>KeyShares</code>是<code>5</code>，还原所需要的份数为<code>3</code>。我们需要记录好所生成的<code>KeyShares</code>, Vault自身并不保存<code>MasterKey</code>。当我们忘记<code>KeyShares</code>后，我们就无法得到<code>MasterKey</code>, 从而数据也无法解密。</p>
+<img src="/images/2020-03-13/2.png" class="">
+
+<p>解封(<code>Unseal</code>)过程就是使用若干份<code>KeyShares</code>计算得到<code>MasterKey</code>, 解封之后，Vault就可以通过HTTP API对外提供服务了。</p>
+<p>Vault接收到请求后需要先校验身份请求者身份信息，有多种<code>Auth method</code>可以选择，比如用户名&#x2F;密码、Github帐号等等。支持的方法可以参考<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/auth/">官方文档</a>。身份校验通过后，Vault会根据身份所关联的策略检查该资源请求是否合法。<code>root</code>策略是内置的策略，它允许访问任何资源。Vault管理用户可以创建更细粒度的资源访问控制策略。除非在策略中明确允许访问某种资源，否则Vault会禁止访问。更深入了解策略可以参考<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/concepts/policies/">官方文档</a></p>
+<p>身份校验和策略检测都通过后，Vault会给该客户端分配一个<code>Token</code>。后续的请求都需要携带该<code>token</code>，类似于WEB访问的<code>cookie</code>机制。在Vault中，URL路径会关联一个<code>Secrets Engine</code>。Vault的路由组件会将特定的URL请求路由所关联的<code>Secrets Engine</code>来处理。更细节的了解可<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/internals/architecture/">参考</a></p>
+<p>下边我们实际演示。</p>
+<p>我们选择MySQL作为<code>Storage Backend</code>。首先创建Vault服务的配置文件<code>mysql.hcl</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">storage &quot;mysql&quot; &#123;</span><br><span class="line">    address = &quot;127.0.0.1:3306&quot;</span><br><span class="line">    username = &quot;root&quot;</span><br><span class="line">    password = &quot;123456!&quot;</span><br><span class="line">    database = &quot;vault&quot;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">ui = true</span><br><span class="line"></span><br><span class="line">listener &quot;tcp&quot; &#123;</span><br><span class="line">    address = &quot;0.0.0.0:8200&quot;</span><br><span class="line">    tls_disable = true</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">api_addr = &quot;http://0.0.0.0:8200&quot;</span><br><span class="line">cluster_addr = &quot;http://0.0.0.0:8201&quot;</span><br><span class="line"></span><br><span class="line">cluster_name = &quot;flygoast&quot;</span><br><span class="line">pid_file = &quot;/var/run/vault.pid&quot;</span><br></pre></td></tr></table></figure>
+<p>具体配置说明，参考<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/configuration/">链接</a></p>
+<p>启动服务:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ vault server -config=./mysql.hcl</span><br></pre></td></tr></table></figure>
+
+<p>Vault支持以命令行、UI、HTTP API来访问服务接口。我们这里使用Vault CLI来说明，它也是调用HTTP API实现的相应请求。</p>
+<p>打开另一终端，配置环境变量指定Vault服务地址:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">export</span> VAULT_ADDR=<span class="string">&#x27;http://127.0.0.1:8200&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>然后执行初始化操作:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault operator init</span><br><span class="line">Unseal Key 1: DKhxs3QAHqwUVZ5JwmbrHNjFrxT7OGQPpfy7WPwh0hXX</span><br><span class="line">Unseal Key 2: kRM5krXtme5ZLdDNKhK5aA2VTTfBIg29UW751Y2ZoSfp</span><br><span class="line">Unseal Key 3: fR+B1/b2ma8eNoYMfACPF10OrVJ/dMvygC2bQo2Dzk0p</span><br><span class="line">Unseal Key 4: enZsywfA3wZb/h5MgBKaRGSdcvG16rLOzO5ml1NyyGCv</span><br><span class="line">Unseal Key 5: y1Mto6nPy7oRel2q7c/sWA4n0o0OCbCs8VeAWYIiPSwm</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Initial Root Token: s.e4hh2uBH83HuAh3voGiEiUfE</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Vault initialized with 5 key shares and a key threshold of 3. Please securely</span><br><span class="line">distribute the key shares printed above. When the Vault is re-sealed,</span><br><span class="line">restarted, or stopped, you must supply at least 3 of these keys to unseal it</span><br><span class="line">before it can start servicing requests.</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Vault does not store the generated master key. Without at least 3 key to</span><br><span class="line">reconstruct the master key, Vault will remain permanently sealed!</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">It is possible to generate new unseal keys, provided you have a quorum of</span><br><span class="line">existing unseal keys shares. See &quot;vault operator rekey&quot; for more information.</span><br></pre></td></tr></table></figure>
+<p>可以看到，Vault返回了5个<code>KeyShares</code>和<code>Root Token</code>。</p>
+<p>接着使用做任意3个<code>KeyShares</code>来解封Vault服务, 需要每次输入不同的<code>KeyShare</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault operator unseal</span><br><span class="line">Unseal Key (will be hidden):</span><br><span class="line">Key                Value</span><br><span class="line">---                -----</span><br><span class="line">Seal Type          shamir</span><br><span class="line">Initialized        true</span><br><span class="line">Sealed             true</span><br><span class="line">Total Shares       5</span><br><span class="line">Threshold          3</span><br><span class="line">Unseal Progress    1/3</span><br><span class="line">Unseal Nonce       c9b57a45-b09d-309d-4925-2a96a97e17af</span><br><span class="line">Version            1.3.2</span><br><span class="line">HA Enabled         false</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault operator unseal</span><br><span class="line">Unseal Key (will be hidden):</span><br><span class="line">Key                Value</span><br><span class="line">---                -----</span><br><span class="line">Seal Type          shamir</span><br><span class="line">Initialized        true</span><br><span class="line">Sealed             true</span><br><span class="line">Total Shares       5</span><br><span class="line">Threshold          3</span><br><span class="line">Unseal Progress    2/3</span><br><span class="line">Unseal Nonce       c9b57a45-b09d-309d-4925-2a96a97e17af</span><br><span class="line">Version            1.3.2</span><br><span class="line">HA Enabled         false</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault operator unseal</span><br><span class="line">Unseal Key (will be hidden):</span><br><span class="line">Key             Value</span><br><span class="line">---             -----</span><br><span class="line">Seal Type       shamir</span><br><span class="line">Initialized     true</span><br><span class="line">Sealed          false</span><br><span class="line">Total Shares    5</span><br><span class="line">Threshold       3</span><br><span class="line">Version         1.3.2</span><br><span class="line">Cluster Name    flygoast</span><br><span class="line">Cluster ID      96883f23-97e2-665a-2e17-07541a8e146b</span><br><span class="line">HA Enabled      false</span><br></pre></td></tr></table></figure>
+<p>可以看到第三次执行后，<code>Sealed</code>值变为<code>false</code>，此时Vault服务解封完成。</p>
+<p>接着我们使用<code>RootToken</code>来登录。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault login</span><br><span class="line">Token (will be hidden):</span><br><span class="line">Success! You are now authenticated. The token information displayed below</span><br><span class="line">is already stored in the token helper. You do NOT need to run &quot;vault login&quot;</span><br><span class="line">again. Future Vault requests will automatically use this token.</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Key                  Value</span><br><span class="line">---                  -----</span><br><span class="line">token                s.e4hh2uBH83HuAh3voGiEiUfE</span><br><span class="line">token_accessor       ZQVAa5C3FceWS1oOHL0aqRIw</span><br><span class="line">token_duration       ∞</span><br><span class="line">token_renewable      false</span><br><span class="line">token_policies       [&quot;root&quot;]</span><br><span class="line">identity_policies    []</span><br><span class="line">policies             [&quot;root&quot;]</span><br></pre></td></tr></table></figure>
+<p>从返回结果看到RootToken所关联的策略为<code>root</code>, 能够访问所有资源。在生产环境不建议直接使用RootToken, 可以创建更细粒度权限控制的Token。</p>
+<p>接下来我们就可以来和Vault服务交互完成各种机密信息相关的操作。我们上边说到，Vault的具体功能实现由Secrets Engine来负责。我们下面展示几个不同的Secrets Engine的功能实例。<br>首先来看一下<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/secrets/kv/">Key&#x2F;Value引擎</a></p>
+<p><code>Key/Value</code>引擎可以存取K&#x2F;V形式的数据。它有两个版本，<code>Version2</code>支持数据的历史版本存储，默认存储10个版本。<br>我们开启Version2版本的Key&#x2F;Value引擎，默认的<code>path</code>为kv&#x2F;, 可以通过<code>-path</code>参数指定其他path。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets enable -version=2 kv</span><br><span class="line">Success! Enabled the kv secrets engine at: kv/</span><br></pre></td></tr></table></figure>
+<p>查看已经启用的<code>Secrets Engine</code>, 可以看到路径<code>kv/</code>上已经开启<code>kv</code>引擎:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets list</span><br><span class="line">Path          Type         Accessor              Description</span><br><span class="line">----          ----         --------              -----------</span><br><span class="line">cubbyhole/    cubbyhole    cubbyhole_6f838d14    per-token private secret storage</span><br><span class="line">identity/     identity     identity_df2eda00     identity store</span><br><span class="line">kv/           kv           kv_08d6d535           n/a</span><br><span class="line">sys/          system       system_a0682fee       system endpoints used for control, policy and debugging</span><br></pre></td></tr></table></figure>
+
+<p>接着，我们在key <code>kv/hello</code>中写入一些数据:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault kv put kv/hello foo=bar dummy=demo</span><br><span class="line">Key              Value</span><br><span class="line">---              -----</span><br><span class="line">created_time     2020-03-10T14:54:20.451990799Z</span><br><span class="line">deletion_time    n/a</span><br><span class="line">destroyed        false</span><br><span class="line">version          1</span><br></pre></td></tr></table></figure>
+<p>接着读取数据:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault kv get kv/hello</span><br><span class="line">====== Metadata ======</span><br><span class="line">Key              Value</span><br><span class="line">---              -----</span><br><span class="line">created_time     2020-03-10T14:54:20.451990799Z</span><br><span class="line">deletion_time    n/a</span><br><span class="line">destroyed        false</span><br><span class="line">version          1</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">==== Data ====</span><br><span class="line">Key      Value</span><br><span class="line">---      -----</span><br><span class="line">dummy    demo</span><br><span class="line">foo      bar</span><br></pre></td></tr></table></figure>
+
+<p>给key <code>kv/hello</code>写入不同的数据:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault kv put kv/hello foo=bar dummy=demo2</span><br><span class="line">Key              Value</span><br><span class="line">---              -----</span><br><span class="line">created_time     2020-03-10T14:55:39.294508022Z</span><br><span class="line">deletion_time    n/a</span><br><span class="line">destroyed        false</span><br><span class="line">version          2</span><br></pre></td></tr></table></figure>
+
+<p>再次读取:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault kv get kv/hello</span><br><span class="line">====== Metadata ======</span><br><span class="line">Key              Value</span><br><span class="line">---              -----</span><br><span class="line">created_time     2020-03-10T14:55:39.294508022Z</span><br><span class="line">deletion_time    n/a</span><br><span class="line">destroyed        false</span><br><span class="line">version          2</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">==== Data ====</span><br><span class="line">Key      Value</span><br><span class="line">---      -----</span><br><span class="line">dummy    demo2</span><br><span class="line">foo      bar</span><br></pre></td></tr></table></figure>
+
+<p>也可以通过指定<code>-version</code>来读取历史版本内容:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault kv get -version=1 kv/hello</span><br><span class="line">====== Metadata ======</span><br><span class="line">Key              Value</span><br><span class="line">---              -----</span><br><span class="line">created_time     2020-03-10T14:54:20.451990799Z</span><br><span class="line">deletion_time    n/a</span><br><span class="line">destroyed        false</span><br><span class="line">version          1</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">==== Data ====</span><br><span class="line">Key      Value</span><br><span class="line">---      -----</span><br><span class="line">dummy    demo</span><br><span class="line">foo      bar</span><br></pre></td></tr></table></figure>
+
+<p>接着来看<code>Transit</code>引擎。<code>Transit</code>引擎实现了对数据的加解密操作，使用它可以实现加密即服务。</p>
+<p>启用<code>transit</code>引擎:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets enable transit</span><br><span class="line">Success! Enabled the transit secrets engine at: transit/</span><br></pre></td></tr></table></figure>
+
+<p>指定名称生成一个加密密钥, 一般每个应用都会有自己的加密密钥:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault write -f transit/keys/flygoast-key</span><br><span class="line">Success! Data written to: transit/keys/flygoast-key</span><br></pre></td></tr></table></figure>
+
+<p>这样服务就已经配置完成。我们来调用加密服务。因为Transit引擎支持二进制数据的加解密，所以要求明文数据先以BASE64编码:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault write transit/encrypt/flygoast-key plaintext=$(base64 &lt;&lt;&lt; &quot;my secret data&quot;)</span><br><span class="line">Key           Value</span><br><span class="line">---           -----</span><br><span class="line">ciphertext    vault:v1:DRItP5PSamzwTgxDPzlczBqH0DH4EeCAY1pQ2x0mp4QzYiret1HuOxqLBw==</span><br></pre></td></tr></table></figure>
+<p>我们拷贝生成的密文，再次来调用解密服务:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault write transit/decrypt/flygoast-key ciphertext=vault:v1:DRItP5PSamzwTgxDPzlczBqH0DH4EeCAY1pQ2x0mp4QzYiret1HuOxqLBw==</span><br><span class="line">Key          Value</span><br><span class="line">---          -----</span><br><span class="line">plaintext    bXkgc2VjcmV0IGRhdGEK</span><br></pre></td></tr></table></figure>
+<p>将得到的明文BASE64解码还原了原来的数据:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# base64 --decode &lt;&lt;&lt; &quot;bXkgc2VjcmV0IGRhdGEK&quot;</span><br><span class="line">my secret data</span><br></pre></td></tr></table></figure>
+
+<p>再来看一个动态生成数据库凭证的示例。很多应用需要访问数据库，往往需要将凭证硬编码在代码或配置文件中，这样非常不安全。我们可以通过调用Vault服务来动态生成相应的数据库的访问凭证。<br>这需要用到<a target="_blank" rel="noopener" href="https://www.vaultproject.io/docs/secrets/databases/">database引擎</a>，它是通用的数据库引擎，支持多种数据库，每种数据库以Plugin方法配置，我们以MySQL来说明。<br>首先启用<code>database</code>引擎:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets enable database</span><br><span class="line">Success! Enabled the database secrets engine at: database/</span><br></pre></td></tr></table></figure>
+<p>然后, 配置相应的Plugin和数据库连接信息，database引擎会使用这些信息去连接需要动态生成凭证的数据库:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ./vault write database/config/flygoast-mysql-database plugin_name=mysql-legacy-database-plugin connection_url=<span class="string">&quot;&#123;&#123;username&#125;&#125;:&#123;&#123;password&#125;&#125;@tcp(127.0.0.1:3306)/&quot;</span> allowed_roles=<span class="string">&quot;flygoast-role&quot;</span> username=<span class="string">&quot;root&quot;</span> password=‘123456!’</span><br></pre></td></tr></table></figure>
+
+<p>这里需要说明的是针对MySQL有几种不同的plugin:</p>
+<ul>
+<li>mysql-database-plugin</li>
+<li>mysql-aurora-database-plugin</li>
+<li>mysql-rds-database-plugin</li>
+<li>mysql-legacy-database-plugin</li>
+</ul>
+<p>它们的不同之处是所生成的MySQL的用户名的长度, 因为不同版本的MySQL对用户名长度有着不同的限制。<code>mysql-legacy-database-plugin</code>的用户名长度为16.</p>
+<p>接着创建一个角色(<code>role</code>)映射到创建用户的SQL语句, 数据库指定我们上边所创建的数据库信息。为了避免被Shell解释SQL语句中引号中的内容，Vault支持以BASE64编码的SQL语句。在这个示例中，我们授与<code>cloud_express</code>数据库的<code>SELECT</code>权限给动态生成的用户。这里我们先将动态创建用户的SQL语句使用BASE64编码:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# base64  &lt;&lt;&lt; &quot;CREATE USER &#x27;&#123;&#123;name&#125;&#125;&#x27;@&#x27;%&#x27; IDENTIFIED BY &#x27;&#123;&#123;password&#125;&#125;&#x27;; GRANT SELECT ON cloud_express.* TO &#x27;&#123;&#123;name&#125;&#125;&#x27;@&#x27;%&#x27;;&quot;</span><br><span class="line">Q1JFQVRFIFVTRVIgJ3t7bmFtZX19J0AnJScgSURFTlRJRklFRCBCWSAne3twYXNzd29yZH19Jzsg</span><br><span class="line">R1JBTlQgU0VMRUNUIE9OIGNsb3VkX2V4cHJlc3MuKiBUTyAne3tuYW1lfX0nQCclJzsK</span><br></pre></td></tr></table></figure>
+<p>创建角色:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ./vault write database/roles/flygoast-role db_name=flygoast-mysql-database creation_statements=<span class="string">&quot;Q1JFQVRFIFVTRVIgJ3t7bmFtZX19J0AnJScgSURFTlRJRklFRCBCWSAne3twYXNzd29yZH19Jzsg</span></span><br><span class="line"><span class="string">R1JBTlQgU0VMRUNUIE9OIGNsb3VkX2V4cHJlc3MuKiBUTyAne3tuYW1lfX0nQCclJzsK&quot;</span> default_ttl=<span class="string">&quot;1h&quot;</span> max_ttl=<span class="string">&quot;24h&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>现在服务已经配置完成。后续我们从该角色读取就会生成相应的数据库用户:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault read database/creds/flygoast-role</span><br><span class="line">Key                Value</span><br><span class="line">---                -----</span><br><span class="line">lease_id           database/creds/flygoast-role/AZKwNAH6tYEy0v6OykKOyjyg</span><br><span class="line">lease_duration     1h</span><br><span class="line">lease_renewable    true</span><br><span class="line">password           A1a-BywEBFA3AeUlncdK</span><br><span class="line">username           v-flyg-gvQygnKRB</span><br></pre></td></tr></table></figure>
+
+<p>我们使用上边所生成的用户来尝试登录MySQL:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# mysql -uv-flyg-gvQygnKRB -pA1a-BywEBFA3AeUlncdK</span><br><span class="line">Welcome to the MariaDB monitor.  Commands end with ; or \g.</span><br><span class="line">Your MariaDB connection id is 610</span><br><span class="line">Server version: 5.5.60-MariaDB MariaDB Server</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">Type &#x27;help;&#x27; or &#x27;\h&#x27; for help. Type &#x27;\c&#x27; to clear the current input statement.</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">MariaDB [(none)]&gt;</span><br></pre></td></tr></table></figure>
+
+<p>登录成功。</p>
+<p>最后我们再来看如何使用PKI引擎来构建私有<code>CA:Certificate Authority</code>服务。CA是PKI(Public Key Infrastructure)体系中负责颁发和吊销证书的机构。这些证书可用于通信加密及真实性校验。因为在线CA服务有可能被入侵，往往CA的实际部署是分层的, <code>Root CA</code>保持离线，而使用离线的Root CA来签发中间CA证书，中间CA在线提供证书签发服务。当在线的中间CA沦陷后，可以使用离线的RootCA签发新的中间CA证书。Vault本身也可以创建RootCA, 为了模拟RootCA离线存储方式，我们使用<a target="_blank" rel="noopener" href="https://github.com/cloudflare/cfssl">CFSSL</a>来生成RootCA，使用Vault来构建中间CA服务。</p>
+<p>首先我们来创建RootCA:<br>编辑Root CA的配置文件<code>root_ca.json</code>:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;CN&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Just4coding Root CA&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;key&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;algo&quot;</span><span class="punctuation">:</span> <span class="string">&quot;rsa&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="number">2048</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;names&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;C&quot;</span><span class="punctuation">:</span> <span class="string">&quot;CN&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;ST&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Beijing&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;O&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Just4coding&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;OU&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Just4coding&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;L&quot;</span><span class="punctuation">:</span> <span class="string">&quot;Beijing&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;ca&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;expiry&quot;</span><span class="punctuation">:</span> <span class="string">&quot;87600h&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>创建自签名证书:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ cfssl gencert -initca root_ca.json |cfssljson -bare root_ca</span><br></pre></td></tr></table></figure>
+
+<p>会产生3个文件:</p>
+<ul>
+<li>root_ca.pem: 公钥证书</li>
+<li>root_ca.csr: CSR:Certificate Signing Request</li>
+<li>root_ca-key.pem: 证书私钥，需要离线保存</li>
+</ul>
+<p>我们在Vault服务中在路径<code>pki_int</code>上启用<code>PKI</code>引擎:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets enable -path=pki_int pki</span><br><span class="line">Success! Enabled the pki secrets engine at: pki_int/</span><br></pre></td></tr></table></figure>
+<p>调整<code>pki_int</code>最大颁发证书的有效期为<code>43800</code>小时:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault secrets tune -max-lease-ttl=43800h pki_int</span><br><span class="line">Success! Tuned the secrets engine at: pki_int/</span><br></pre></td></tr></table></figure>
+
+<p>生成该中间CA的CSR:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ./vault write -format=json pki_int/intermediate/generate/internal common_name=<span class="string">&quot;Just4coding Intermediate CA&quot;</span> | jq -r <span class="string">&#x27;.data.csr&#x27;</span> &gt; inter_ca.csr</span><br></pre></td></tr></table></figure>
+
+<p>我们使用RootCA来签发中间CA证书。<br>创建cfssl需要使用的配置文件<code>root_signing.json</code>:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;signing&quot;</span><span class="punctuation">:</span><span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;default&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">            <span class="attr">&quot;usages&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;digital signature&quot;</span><span class="punctuation">,</span> <span class="string">&quot;cert sign&quot;</span><span class="punctuation">,</span> <span class="string">&quot;crl sign&quot;</span><span class="punctuation">,</span> <span class="string">&quot;signing&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">            <span class="attr">&quot;expiry&quot;</span><span class="punctuation">:</span> <span class="string">&quot;43800h&quot;</span><span class="punctuation">,</span></span><br><span class="line">            <span class="attr">&quot;ca_constraint&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;is_ca&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">&#125;</span></span><br><span class="line">        <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>执行签名命令:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ cfssl sign -ca root_ca.pem -ca-key root_ca-key.pem  -config root_signing.json inter_ca.csr | cfssljson -bare inter_ca</span><br></pre></td></tr></table></figure>
+<p>生成的文件<code>inter_ca.pem</code>即为中间CA证书。我们将该证书导入Vault的<code>pki_int</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault write pki_int/intermediate/set-signed certificate=@inter_ca.pem</span><br><span class="line">Success! Data written to: pki_int/intermediate/set-signed</span><br></pre></td></tr></table></figure>
+<p>接着创建角色。角色是用来表示生成证书的策略，可以通过参数来配置这些策略:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@fg-t2 vault]# ./vault write pki_int/roles/just4coding allowed_domains=&quot;just4coding.com&quot; allow_subdomains=true max_ttl=&quot;720h&quot;</span><br><span class="line">Success! Data written to: pki_int/roles/just4coding</span><br></pre></td></tr></table></figure>
+
+<p>至此服务已经配置完成。我们来请求证书:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ./vault write -format=json pki_int/issue/just4coding common_name=<span class="string">&quot;test.just4coding.com&quot;</span> ttl=“24h<span class="string">&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>响应里包含:私钥、证书、CA链、颁发者证书。CA链里默认只包含签发者的证书。应用程序在使用生成的该证书时，需要把RootCA的证书信息添加到CA链中。</p>
+<p>本文为了简单使用vault命令行来说明各实例。HTTP API及各语言的客户端库可以参考官方文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.vaultproject.io/api-docs/index/">https://www.vaultproject.io/api-docs/index/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.vaultproject.io/api-docs/libraries/">https://www.vaultproject.io/api-docs/libraries/</a></li>
+</ul>
+<p>Vault还自带了WEB UI界面，UI上提供了非常详细的操作指引,使用者可以非常快速上手Vault操作。</p>
+<img src="/images/2020-03-13/3.png" class="">
+
+<p>参考链接:<br><a target="_blank" rel="noopener" href="https://learn.hashicorp.com/vault/secrets-management/sm-pki-engine">https://learn.hashicorp.com/vault/secrets-management/sm-pki-engine</a><br><a target="_blank" rel="noopener" href="https://cloudinvent.com/blog/howto-hashicorp-vault-ca-pki-deployment/">https://cloudinvent.com/blog/howto-hashicorp-vault-ca-pki-deployment/</a><br><a target="_blank" rel="noopener" href="http://yet.org/2018/10/vault-pki/">http://yet.org/2018/10/vault-pki/</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/03/02/Kubernetes-CDR/" rel="prev" title="Kubernetes CDR和Custom Controller">
+      <i class="fa fa-chevron-left"></i> Kubernetes CDR和Custom Controller
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/04/20/vxlan-fdb/" rel="next" title="动态维护FDB表项实现VXLAN通信">
+      动态维护FDB表项实现VXLAN通信 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

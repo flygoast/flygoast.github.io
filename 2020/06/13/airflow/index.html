@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="很多业务场景都需要在后台定期执行任务，如数据ETL(Extract-Transform-Load)操作。简单处理可通过crontab来管理。当任务需要在多台机器上执行，或者任务之间有依赖关系时，crontab便不太能满足需求。这种场景下需要分布式任务调度系统来组织任务编排，管理任务依赖，调度任务工作流和监视任务执行状态。 比较优秀的开源解决方案有:  Apache Airflow LinkedIn">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Apache Airflow介绍">
+<meta property="og:url" content="http://just4coding.com/2020/06/13/airflow/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="很多业务场景都需要在后台定期执行任务，如数据ETL(Extract-Transform-Load)操作。简单处理可通过crontab来管理。当任务需要在多台机器上执行，或者任务之间有依赖关系时，crontab便不太能满足需求。这种场景下需要分布式任务调度系统来组织任务编排，管理任务依赖，调度任务工作流和监视任务执行状态。 比较优秀的开源解决方案有:  Apache Airflow LinkedIn">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2020-06-13/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-06-13/2.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-06-13/3.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-06-13/4.png">
+<meta property="og:image" content="http://just4coding.com/images/2020-06-13/5.png">
+<meta property="article:published_time" content="2020-06-13T09:02:01.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.492Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Airflow">
+<meta property="article:tag" content="Workflow">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2020-06-13/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2020/06/13/airflow/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Apache Airflow介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2020/06/13/airflow/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Apache Airflow介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-06-13 17:02:01" itemprop="dateCreated datePublished" datetime="2020-06-13T17:02:01+08:00">2020-06-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>很多业务场景都需要在后台定期执行任务，如数据ETL(Extract-Transform-Load)操作。简单处理可通过crontab来管理。当任务需要在多台机器上执行，或者任务之间有依赖关系时，crontab便不太能满足需求。这种场景下需要分布式任务调度系统来组织任务编排，管理任务依赖，调度任务工作流和监视任务执行状态。</p>
+<p>比较优秀的开源解决方案有:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://airflow.apache.org/">Apache Airflow</a></li>
+<li><a target="_blank" rel="noopener" href="https://azkaban.github.io/">LinkedIn Azkaban</a></li>
+<li><a target="_blank" rel="noopener" href="https://oozie.apache.org/">Apache Oozie</a></li>
+</ul>
+<p>Azkaban和Oozie都更聚集在大数据处理平台上的任务调度，Airflow的应用场景更为通用。本文简单介绍Airflow。</p>
+<p>Airflow使用Python开发，它通过<code>DAGs(Directed Acyclic Graph, 有向无环图)</code>来表达一个工作流中所要执行的任务，以及任务之间的关系和依赖。比如，如下的工作流中，任务<code>T1</code>执行完成，<code>T2</code>和<code>T3</code>才能开始执行，<code>T2</code>和<code>T3</code>都执行完成，<code>T4</code>才能开始执行。</p>
+<img src="/images/2020-06-13/1.png" class="">
+
+<span id="more"></span>
+
+<p>Airflow使用<code>Code as Configuration</code>的理念，<code>DAG</code>由Python源码文件来定义, 如:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> datetime <span class="keyword">import</span> datetime, timedelta</span><br><span class="line"><span class="keyword">from</span> airflow <span class="keyword">import</span> DAG</span><br><span class="line"><span class="keyword">from</span> airflow.operators.dummy_operator <span class="keyword">import</span> DummyOperator</span><br><span class="line"></span><br><span class="line">dag = DAG(</span><br><span class="line">        dag_id=<span class="string">&#x27;dummy_dag&#x27;</span>,</span><br><span class="line">        schedule_interval=dt.timedelta(days=<span class="number">1</span>),</span><br><span class="line">        start_date=days_ago(<span class="number">1</span>)</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">t1 = DummyOperator(task_id=<span class="string">&#x27;task1&#x27;</span>, dag=dag)</span><br><span class="line">t2 = DummyOperator(task_id=<span class="string">&#x27;task2&#x27;</span>, dag=dag)</span><br><span class="line">t3 = DummyOperator(task_id=<span class="string">&#x27;task3&#x27;</span>, dag=dag)</span><br><span class="line">t4 = DummyOperator(task_id=<span class="string">&#x27;task4&#x27;</span>, dag=dag)</span><br><span class="line"></span><br><span class="line">t1 &gt;&gt; [t2, t3] &gt;&gt; t4</span><br></pre></td></tr></table></figure>
+
+<p>Etsy提供了一个工具，可以从YAML文件来生成DAG文件，如果不习惯使用Python来定义DAG文件，可以使用该工具。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/etsy/boundary-layer">https://github.com/etsy/boundary-layer</a></li>
+</ul>
+<p>DAG的一次执行叫做<code>DAG run</code>, 包括了本次工作流执行中的任务执行实例。DAG文件定义了工作流逻辑，任务本身的实现由Operator定义。Operator一般是原子任务，两个Operator之间一般不共享资源。DAG保证他们之间的执行顺序，而他们实际完全有可能在不同的机器上运行。如果两个Operator之间确实共享信息，可以使用airflow的<a target="_blank" rel="noopener" href="http://airflow.apache.org/docs/stable/concepts.html#concepts-xcom">XComs机制</a>。</p>
+<p>Airflow提供了各种Operator实现，可以完成各种任务实现:</p>
+<ul>
+<li>BashOperator: 执行Bash命令</li>
+<li>PythonOperator: 执行Python函数</li>
+<li>EmailOperator: 发送邮件</li>
+<li>SimpleHttpOperator: 发送HTTP请求</li>
+<li>……</li>
+</ul>
+<p>一些情况下，我们需要根据执行结果执行不同的任务，这样工作流会产生分支。如:</p>
+<img src="/images/2020-06-13/2.png" class="">
+
+<p>这种需求可以使用<code>BranchPythonOperator</code>来实现。参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://airflow.apache.org/docs/stable/concepts.html#branching">http://airflow.apache.org/docs/stable/concepts.html#branching</a></li>
+</ul>
+<p>Airflow的整体架构主要由三部分:</p>
+<ul>
+<li>WebServer：提供WEB服务，会定时扫描指定目录下的DAG文件</li>
+<li>Scheduler: 定期检查所有DAG及其中的任务，如果发现符合执行条件，则发起相应的任务供worker接收</li>
+<li>Worker: 接收任务并执行任务</li>
+</ul>
+<p>Worker的具体实现由配置文件中的<code>executor</code>来指定，airflow支持多种<code>Executor</code>:</p>
+<ul>
+<li>SequentialExecutor: 单进程顺序执行，一般只用来测试</li>
+<li>LocalExecutor: 本地多进程执行</li>
+<li>CeleryExecutor: 使用<a target="_blank" rel="noopener" href="https://docs.celeryproject.org/en/stable/">Celery</a>进行分布式任务调度</li>
+<li>DaskExecutor：使用<a target="_blank" rel="noopener" href="https://distributed.dask.org/en/latest/">Dask</a>进行分布式任务调度</li>
+<li>KubernetesExecutor: 1.10.0新增, 创建临时POD执行每次任务</li>
+</ul>
+<p>生产环境一般使用<code>CeleryExecutor</code>和<code>KubernetesExecutor</code>。</p>
+<p>使用<code>CeleryExecutor</code>的架构如图:</p>
+<img src="/images/2020-06-13/3.png" class="">
+
+<p>使用<code>KubernetesExecutor</code>的架构如图:</p>
+<img src="/images/2020-06-13/4.png" class="">
+
+<p>可以根据实际任务的执行环境要求来进行选择，当然<code>kubernetes</code>平台已经非常成熟和便捷，资源使用弹性更加具备优势。但目前<code>KubernetesExecutor</code>还不太稳定，简单场景可以通过使用LocalExecutor执行kubectl相关操作或者使用<code>KubernetesPodOperator</code>来变相实现在Kubernetes集群中运行任务的需求。</p>
+<p>下面介绍在Kubernetes环境中使用Helm来安装Airflow.</p>
+<p>Bitnami提供了<a target="_blank" rel="noopener" href="https://github.com/bitnami/charts/tree/master/bitnami/airflow">Apache Airflow Helm Chart</a>。</p>
+<p>它需要一个GIT仓库地址来拉取DAG文件，需要提前准备好:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> REPOSITORY_URL=https://github.com/flygoast/airflow-dag-examples</span><br></pre></td></tr></table></figure>
+
+<p>在Kubernetes集群安装:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">helm install airflow bitnami/airflow \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.enabled=<span class="literal">true</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.repository=<span class="variable">$REPOSITORY_URL</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.branch=master \</span><br><span class="line">--<span class="built_in">set</span> airflow.baseUrl=http://127.0.0.1:8080</span><br></pre></td></tr></table></figure>
+
+<p>等待安装完成:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % kubectl get pods</span><br><span class="line">NAME                                 READY   STATUS    RESTARTS   AGE</span><br><span class="line">airflow-postgresql-0                 1/1     Running   0          16m</span><br><span class="line">airflow-redis-master-0               1/1     Running   0          16m</span><br><span class="line">airflow-redis-slave-0                1/1     Running   0          16m</span><br><span class="line">airflow-redis-slave-1                1/1     Running   0          15m</span><br><span class="line">airflow-scheduler-8557d55695-wlkd9   2/2     Running   0          16m</span><br><span class="line">airflow-web-766bb56d6d-8fl7l         2/2     Running   0          16m</span><br><span class="line">airflow-worker-0                     2/2     Running   0          16m</span><br></pre></td></tr></table></figure>
+
+<p>配置端口映射:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubectl port-forward --namespace default svc/airflow 8080:8080</span><br></pre></td></tr></table></figure>
+
+<p>获取密码:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flygoast@bogon devel % echo Password: $(kubectl get secret --namespace default airflow -o jsonpath=&quot;&#123;.data.airflow-password&#125;&quot; | base64 --decode)</span><br><span class="line">Password: c9Yq6z17tk</span><br></pre></td></tr></table></figure>
+
+<p>使用<code>user</code>和密码登录<code>http://127.0.0.1:8080</code>, airflow安装完成:</p>
+<img src="/images/2020-06-13/5.png" class="">
+
+<p>当我们更新了GIT仓库中的DAG文件后，需要执行<code>helm upgrade</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">helm upgrade airflow bitnami/airflow \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.enabled=<span class="literal">true</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.repository=<span class="variable">$REPOSITORY_URL</span> \</span><br><span class="line">--<span class="built_in">set</span> airflow.cloneDagFilesFromGit.branch=master \</span><br><span class="line">--<span class="built_in">set</span> airflow.baseUrl=http://127.0.0.1:8080</span><br></pre></td></tr></table></figure>
+
+<p>参考链接:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/">https://docs.bitnami.com/tutorials/deploy-apache-airflow-kubernetes-helm/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Airflow/" rel="tag"># Airflow</a>
+              <a href="/tags/Workflow/" rel="tag"># Workflow</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/05/emcp-ospf-cumulus/" rel="prev" title="基于Cumulus VX实验ECMP+OSPF负载均衡">
+      <i class="fa fa-chevron-left"></i> 基于Cumulus VX实验ECMP+OSPF负载均衡
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/06/21/NSX/" rel="next" title="NSX分布式逻辑路由器介绍">
+      NSX分布式逻辑路由器介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

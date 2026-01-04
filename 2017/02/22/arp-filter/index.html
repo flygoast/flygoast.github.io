@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前文章&lt;&lt;ARP代理实例研究&gt;&gt;提到: 在默认配置下，只要ARP请求中的目标IP配置在本机，无论其是否配置在收到ARP请求数据包的接口上，Linux收包接口都会以身MAC地址发送ARP响应。若是不希望接口响应所有本机IP，可以通过修改arp_ignore参数来调整。 那么如果机器上多个网卡连接在同一交换机，这样多个网卡会收到相同的ARP请求。若多个网卡都回复，则客户端应该">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ARP响应实例研究">
+<meta property="og:url" content="http://just4coding.com/2017/02/22/arp-filter/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前文章&lt;&lt;ARP代理实例研究&gt;&gt;提到: 在默认配置下，只要ARP请求中的目标IP配置在本机，无论其是否配置在收到ARP请求数据包的接口上，Linux收包接口都会以身MAC地址发送ARP响应。若是不希望接口响应所有本机IP，可以通过修改arp_ignore参数来调整。 那么如果机器上多个网卡连接在同一交换机，这样多个网卡会收到相同的ARP请求。若多个网卡都回复，则客户端应该">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-02-22T11:55:04.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.480Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2017/02/22/arp-filter/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>ARP响应实例研究 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/02/22/arp-filter/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ARP响应实例研究
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-02-22 19:55:04" itemprop="dateCreated datePublished" datetime="2017-02-22T19:55:04+08:00">2017-02-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前文章<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/02/19/arp-proxy/">&lt;&lt;ARP代理实例研究&gt;&gt;</a>提到: 在默认配置下，只要ARP请求中的目标IP配置在本机，无论其是否配置在收到ARP请求数据包的接口上，Linux收包接口都会以身MAC地址发送ARP响应。若是不希望接口响应所有本机IP，可以通过修改<code>arp_ignore</code>参数来调整。</p>
+<p>那么如果机器上多个网卡连接在同一交换机，这样多个网卡会收到相同的ARP请求。若多个网卡都回复，则客户端应该收到多个ARP响应。这种情况下，Linux是如何处理的呢？</p>
+<span id="more"></span>
+
+<p>我们来实验来看一下。实验环境为VirtualBox HostOnly网络<code>vboxnet0</code>, 宿主机网关IP为:<code>192.168.33.1</code>, 虚拟机上有两个网卡接入该网络，IP分别为<code>192.168.33.10</code>和<code>192.168.33.11</code>。</p>
+<p>首先在宿主机上清空<code>vboxnet0</code>的ARP缓存:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">arp -d -ivboxnet0 -a</span><br></pre></td></tr></table></figure>
+<p>然后启动<code>tcpdump</code>抓包，在另一终端来访问<code>192.168.33.11</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">bogon:~ fenggu$ ping -c 1 192.168.33.11</span><br><span class="line">PING 192.168.33.11 (192.168.33.11): 56 data bytes</span><br><span class="line">64 bytes from 192.168.33.11: icmp_seq=0 ttl=64 time=0.563 ms</span><br><span class="line"></span><br><span class="line">--- 192.168.33.11 ping statistics ---</span><br><span class="line">1 packets transmitted, 1 packets received, 0.0% packet loss</span><br><span class="line">round-trip min/avg/max/stddev = 0.563/0.563/0.563/0.000 ms</span><br></pre></td></tr></table></figure>
+<p>抓包结果:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">sh-3.2# tcpdump -ivboxnet0 -nn arp or icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on vboxnet0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">15:21:20.981561 ARP, Request who-has 192.168.33.11 tell 192.168.33.1, length 28</span><br><span class="line">15:21:20.981890 ARP, Reply 192.168.33.11 is-at 08:00:27:e6:6a:de, length 46</span><br><span class="line">15:21:20.981922 IP 192.168.33.1 &gt; 192.168.33.11: ICMP echo request, id 42280, seq 0, length 64</span><br><span class="line">15:21:20.982032 IP 192.168.33.11 &gt; 192.168.33.1: ICMP echo reply, id 42280, seq 0, length 64</span><br><span class="line">^C</span><br><span class="line">4 packets captured</span><br><span class="line">10 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>抓包显示只收到了一个ARP响应。</p>
+<p>虚拟机上查看网络地址:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# ip a</span><br><span class="line">...</span><br><span class="line">3: enp0s8: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000</span><br><span class="line">    link/ether 08:00:27:e6:6a:de brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 192.168.33.10/24 scope global enp0s8</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::a00:27ff:fee6:6ade/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">4: enp0s9: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000</span><br><span class="line">    link/ether 08:00:27:3c:1e:5b brd ff:ff:ff:ff:ff:ff</span><br><span class="line">    inet 192.168.33.11/24 scope global enp0s9</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br><span class="line">    inet6 fe80::a00:27ff:fe3c:1e5b/64 scope link</span><br><span class="line">       valid_lft forever preferred_lft forever</span><br></pre></td></tr></table></figure>
+<p>响应的MAC地址<code>08:00:27:e6:6a:de</code>为网卡<code>enp0s8</code>的地址。</p>
+<p>哪个设备来响应ARP请求如何决定呢?此时，我们来看路由信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# ip route</span><br><span class="line">default via 10.0.2.2 dev enp0s3  proto static  metric 100</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15  metric 100</span><br><span class="line">192.168.33.0/24 dev enp0s8  proto kernel  scope link  src 192.168.33.10</span><br><span class="line">192.168.33.0/24 dev enp0s9  proto kernel  scope link  src 192.168.33.11</span><br></pre></td></tr></table></figure>
+<p>此时<code>enp0s8</code>的路由条目优先级高。我们重启<code>enp0s8</code>设备，调整两条路由条目的顺序:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# ip link set down enp0s8</span><br><span class="line">[root@centos1 vagrant]# ip link set up enp0s8</span><br><span class="line">[root@centos1 vagrant]# ip route</span><br><span class="line">default via 10.0.2.2 dev enp0s3  proto static  metric 100</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15  metric 100</span><br><span class="line">192.168.33.0/24 dev enp0s9  proto kernel  scope link  src 192.168.33.11</span><br><span class="line">192.168.33.0/24 dev enp0s8  proto kernel  scope link  src 192.168.33.10</span><br></pre></td></tr></table></figure>
+<p>此时在宿主机上，清空ARP缓存再次访问<code>192.168.33.11</code>，抓包结果为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">sh-3.2# tcpdump -ivboxnet0 -nn arp or icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on vboxnet0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">15:30:57.113221 ARP, Request who-has 192.168.33.11 tell 192.168.33.1, length 28</span><br><span class="line">15:30:57.113542 ARP, Reply 192.168.33.11 is-at 08:00:27:3c:1e:5b, length 46</span><br><span class="line">15:30:57.113574 IP 192.168.33.1 &gt; 192.168.33.11: ICMP echo request, id 4137, seq 0, length 64</span><br><span class="line">15:30:57.113636 IP 192.168.33.11 &gt; 192.168.33.1: ICMP echo reply, id 4137, seq 0, length 64</span><br><span class="line">^C</span><br><span class="line">4 packets captured</span><br><span class="line">5 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>响应的MAC地址<code>08:00:27:3c:1e:5b</code>为网卡<code>enp0s9</code>的地址。</p>
+<p>在虚拟机上查看<code>rp_filter</code>选项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# sysctl -a |grep rp_filter</span><br><span class="line">net.ipv4.conf.all.arp_filter = 0</span><br><span class="line">net.ipv4.conf.all.rp_filter = 1</span><br><span class="line">net.ipv4.conf.default.arp_filter = 0</span><br><span class="line">net.ipv4.conf.default.rp_filter = 1</span><br><span class="line">net.ipv4.conf.enp0s3.arp_filter = 0</span><br><span class="line">net.ipv4.conf.enp0s3.rp_filter = 1</span><br><span class="line">net.ipv4.conf.enp0s8.arp_filter = 0</span><br><span class="line">net.ipv4.conf.enp0s8.rp_filter = 1</span><br><span class="line">net.ipv4.conf.enp0s9.arp_filter = 0</span><br><span class="line">net.ipv4.conf.enp0s9.rp_filter = 1</span><br><span class="line">net.ipv4.conf.lo.arp_filter = 0</span><br><span class="line">net.ipv4.conf.lo.rp_filter = 0</span><br></pre></td></tr></table></figure>
+<p>可以发现设备的<code>rp_filter</code>选项是开启的。Linux在处理ARP数据包时会对源IP进行路由查找。在<code>rp_filter</code>开启的情况下，若路由找到的接口与接收ARP的接口不一致，该包就被丢弃了。我们第一次请求时，<code>enp0s8</code>的路由条目优先级更高，路由到的接口为<code>enp0s8</code>，<code>enp0s9</code>收到的ARP包被丢弃。我们调整完路由条目顺序后，<code>enp0s8</code>的ARP包就被丢弃了。</p>
+<p>接下来我们在虚拟机上将<code>rp_filter</code>选项关闭:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sysctl -w net.ipv4.conf.enp0s8.rp_filter=0</span><br><span class="line">sysctl -w net.ipv4.conf.enp0s9.rp_filter=0</span><br><span class="line">sysctl -w net.ipv4.conf.all.rp_filter=0</span><br></pre></td></tr></table></figure>
+<p>再次在宿主机上清除缓存并访问<code>192.168.33.11</code>, 抓包结果:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">sh-3.2# tcpdump -ivboxnet0 -nn arp or icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on vboxnet0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">16:05:28.756702 ARP, Request who-has 192.168.33.11 tell 192.168.33.1, length 28</span><br><span class="line">16:05:28.756976 ARP, Reply 192.168.33.11 is-at 08:00:27:3c:1e:5b, length 46</span><br><span class="line">16:05:28.757011 IP 192.168.33.1 &gt; 192.168.33.11: ICMP echo request, id 34346, seq 0, length 64</span><br><span class="line">16:05:28.757072 ARP, Reply 192.168.33.11 is-at 08:00:27:e6:6a:de, length 46</span><br><span class="line">16:05:28.757163 IP 192.168.33.11 &gt; 192.168.33.1: ICMP echo reply, id 34346, seq 0, length 64</span><br><span class="line">^C</span><br><span class="line">5 packets captured</span><br><span class="line">5 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>发现收到了两个ARP响应。</p>
+<p>接着我们在虚拟机上开启<code>arp_filter</code>选项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# sysctl -w net.ipv4.conf.enp0s8.arp_filter=1</span><br><span class="line">net.ipv4.conf.enp0s8.arp_filter = 1</span><br><span class="line">[root@centos1 vagrant]# sysctl -w net.ipv4.conf.enp0s9.arp_filter=1</span><br><span class="line">net.ipv4.conf.enp0s9.arp_filter = 1</span><br><span class="line">[root@centos1 vagrant]# sysctl -a |grep arp_filter</span><br><span class="line">net.ipv4.conf.all.arp_filter = 0</span><br><span class="line">net.ipv4.conf.default.arp_filter = 0</span><br><span class="line">net.ipv4.conf.enp0s3.arp_filter = 0</span><br><span class="line">net.ipv4.conf.enp0s8.arp_filter = 1</span><br><span class="line">net.ipv4.conf.enp0s9.arp_filter = 1</span><br><span class="line">net.ipv4.conf.lo.arp_filter = 0</span><br></pre></td></tr></table></figure>
+<p>再次从宿主机清缓存来访问，抓包结果:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">sh-3.2# tcpdump -ivboxnet0 -nn arp or icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on vboxnet0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">16:09:34.975032 ARP, Request who-has 192.168.33.11 tell 192.168.33.1, length 28</span><br><span class="line">16:09:34.975354 ARP, Reply 192.168.33.11 is-at 08:00:27:3c:1e:5b, length 46</span><br><span class="line">16:09:34.975385 IP 192.168.33.1 &gt; 192.168.33.11: ICMP echo request, id 44330, seq 0, length 64</span><br><span class="line">16:09:34.975466 IP 192.168.33.11 &gt; 192.168.33.1: ICMP echo reply, id 44330, seq 0, length 64</span><br><span class="line">^C</span><br><span class="line">4 packets captured</span><br><span class="line">4 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>响应的MAC地址<code>08:00:27:3c:1e:5b</code>为网卡<code>enp0s9</code>的地址。<br>再次将设备<code>enp0s9</code>重启:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@centos1 vagrant]# ip link set enp0s9 down</span><br><span class="line">[root@centos1 vagrant]# ip link set enp0s9 up</span><br><span class="line">[root@centos1 vagrant]# ip route</span><br><span class="line">default via 10.0.2.2 dev enp0s3  proto static  metric 100</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15</span><br><span class="line">10.0.2.0/24 dev enp0s3  proto kernel  scope link  src 10.0.2.15  metric 100</span><br><span class="line">192.168.33.0/24 dev enp0s8  proto kernel  scope link  src 192.168.33.10</span><br><span class="line">192.168.33.0/24 dev enp0s9  proto kernel  scope link  src 192.168.33.11</span><br></pre></td></tr></table></figure>
+<p>再次实验抓包结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">sh-3.2# tcpdump -ivboxnet0 -nn arp or icmp</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on vboxnet0, link-type EN10MB (Ethernet), capture size 262144 bytes</span><br><span class="line">16:12:30.150463 ARP, Request who-has 192.168.33.11 tell 192.168.33.1, length 28</span><br><span class="line">16:12:30.150775 ARP, Reply 192.168.33.11 is-at 08:00:27:e6:6a:de, length 46</span><br><span class="line">16:12:30.150800 IP 192.168.33.1 &gt; 192.168.33.11: ICMP echo request, id 52010, seq 0, length 64</span><br><span class="line">16:12:30.150988 IP 192.168.33.11 &gt; 192.168.33.1: ICMP echo reply, id 52010, seq 0, length 64</span><br><span class="line">^C</span><br><span class="line">4 packets captured</span><br><span class="line">5 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>响应的MAC地址<code>08:00:27:3c:1e:5b</code>为网卡<code>enp0s8</code>的地址。与<code>rp_filter</code>参数的行为表现一致。</p>
+<p>事实上，<code>arp_filter</code>选项开启时，也会对源IP进行路由查找。若找到的接口与接收ARP的接口不一致，包被丢弃。</p>
+<p><code>rp_filter</code>和<code>arp_filter</code>选项的逻辑相似，但控制的层次不一样。<code>rp_filter</code>控制整个路由系统的过滤机制，<code>arp_filter</code>控制ARP响应的过滤机制。</p>
+<p><code>rp_filter</code>和<code>arp_filter</code>的文档地址:<br><a target="_blank" rel="noopener" href="https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt">https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/02/19/arp-proxy/" rel="prev" title="ARP代理实例研究">
+      <i class="fa fa-chevron-left"></i> ARP代理实例研究
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/03/27/nfqueue/" rel="next" title="NFQUEUE和libnetfilter_queue实例分析">
+      NFQUEUE和libnetfilter_queue实例分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

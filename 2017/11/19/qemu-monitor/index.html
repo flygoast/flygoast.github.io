@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="QEMU实例运行时，用户可以通过monitor机制来与实例进行交互，通过它可以获取当前运行的虚拟机信息，处理热插拔设备，管理虚拟机快照等。要了解全部能力，可以参考文档:https:&#x2F;&#x2F;qemu.weilnetz.de&#x2F;doc&#x2F;qemu-doc.html#pcsys_005fmonitor QEMU启动时，需要使用-monitor选项指定做为console设备，官方文档说明如下: 12-monito">
+<meta property="og:type" content="article">
+<meta property="og:title" content="QEMU monitor机制实例分析">
+<meta property="og:url" content="http://just4coding.com/2017/11/19/qemu-monitor/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="QEMU实例运行时，用户可以通过monitor机制来与实例进行交互，通过它可以获取当前运行的虚拟机信息，处理热插拔设备，管理虚拟机快照等。要了解全部能力，可以参考文档:https:&#x2F;&#x2F;qemu.weilnetz.de&#x2F;doc&#x2F;qemu-doc.html#pcsys_005fmonitor QEMU启动时，需要使用-monitor选项指定做为console设备，官方文档说明如下: 12-monito">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-11-19/1.png">
+<meta property="article:published_time" content="2017-11-19T06:40:08.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.486Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-11-19/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/11/19/qemu-monitor/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>QEMU monitor机制实例分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/11/19/qemu-monitor/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          QEMU monitor机制实例分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-11-19 14:40:08" itemprop="dateCreated datePublished" datetime="2017-11-19T14:40:08+08:00">2017-11-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>QEMU实例运行时，用户可以通过monitor机制来与实例进行交互，通过它可以获取当前运行的虚拟机信息，处理热插拔设备，管理虚拟机快照等。要了解全部能力，可以参考文档:<br><a target="_blank" rel="noopener" href="https://qemu.weilnetz.de/doc/qemu-doc.html#pcsys_005fmonitor">https://qemu.weilnetz.de/doc/qemu-doc.html#pcsys_005fmonitor</a></p>
+<p>QEMU启动时，需要使用<code>-monitor</code>选项指定做为<code>console</code>设备，官方文档说明如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-monitor dev</span><br><span class="line">    Redirect the monitor to host device dev (same devices as the serial port). The default device is vc in graphical mode and stdio in non graphical mode. Use -monitor none to disable the default monitor.</span><br></pre></td></tr></table></figure>
+<p>下面首先以标准输入输出设备做为<code>console</code>来启动QEMU实例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :20 -device virtio-net-pci,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -name vm0 -monitor stdio</span><br><span class="line"></span><br><span class="line">QEMU 2.0.0 monitor - type &#x27;help&#x27; for more information</span><br><span class="line">(qemu)</span><br></pre></td></tr></table></figure>
+<p>在<code>console</code>里可以输入相关命令来完成我们的操作，比如我们查看虚拟机网络设备状态:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(qemu) info network</span><br><span class="line">virtio-net-pci.0: index=0,type=nic,model=virtio-net-pci,macaddr=52:54:00:12:34:56</span><br><span class="line"> \ net0: index=0,type=tap,ifname=tap0,script=no,downscript=no</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>也可以动态添加设备，比如我们添加一个8M大小的<code>ivshmem</code>设备:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">(qemu) device_add ivshmem,size=8m,shm=flygoast_vm0,bus=pci.0,addr=0x1f</span><br><span class="line">(qemu) info pci</span><br><span class="line">  Bus  0, device   0, function 0:</span><br><span class="line">    Host bridge: PCI device 8086:1237</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 0:</span><br><span class="line">    ISA bridge: PCI device 8086:7000</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 1:</span><br><span class="line">    IDE controller: PCI device 8086:7010</span><br><span class="line">      BAR4: I/O at 0xc020 [0xc02f].</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   1, function 3:</span><br><span class="line">    Bridge: PCI device 8086:7113</span><br><span class="line">      IRQ 9.</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   2, function 0:</span><br><span class="line">    VGA controller: PCI device 1013:00b8</span><br><span class="line">      BAR0: 32 bit prefetchable memory at 0xfc000000 [0xfdffffff].</span><br><span class="line">      BAR1: 32 bit memory at 0xfebd0000 [0xfebd0fff].</span><br><span class="line">      BAR6: 32 bit memory at 0xffffffffffffffff [0x0000fffe].</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device   3, function 0:</span><br><span class="line">    Ethernet controller: PCI device 1af4:1000</span><br><span class="line">      IRQ 11.</span><br><span class="line">      BAR0: I/O at 0xc000 [0xc01f].</span><br><span class="line">      BAR1: 32 bit memory at 0xfebd1000 [0xfebd1fff].</span><br><span class="line">      BAR6: 32 bit memory at 0xffffffffffffffff [0x0003fffe].</span><br><span class="line">      id &quot;&quot;</span><br><span class="line">  Bus  0, device  31, function 0:</span><br><span class="line">    RAM controller: PCI device 1af4:1110</span><br><span class="line">      IRQ 0.</span><br><span class="line">      BAR0: 32 bit memory at 0x80800000 [0x808000ff].</span><br><span class="line">      BAR2: 64 bit prefetchable memory at 0x80000000 [0x807fffff].</span><br><span class="line">      id “&quot;</span><br></pre></td></tr></table></figure>
+<p>执行后，我们在Guest OS里查看PCI设备, 可以看到已经检测到了新的PCI设备:</p>
+<img src="/images/2017-11-19/1.png" class="">
+
+<p>除了标准输入输出设备，也可以使用网络连接做为<code>console</code>, 比如TCP、UnixSocket等。下面使用TCP监听端口做为<code>console</code>启动QEMU实例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :20 -device virtio-net-pci,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -name vm0 -monitor tcp:127.0.0.1:4444,server,nowait -daemonize</span><br></pre></td></tr></table></figure>
+<p>使用<code>nc</code>连接<code>console</code>并查询虚拟机状态:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# nc 127.0.0.1 4444</span><br><span class="line">QEMU 2.0.0 monitor - type &#x27;help&#x27; for more information</span><br><span class="line">(qemu) info status</span><br><span class="line">info status</span><br><span class="line">VM status: running</span><br><span class="line">(qemu)</span><br></pre></td></tr></table></figure>
+
+<p>上述这种方式更偏向用户直接输入命令进行交互，称为HMP(Human Machine Protocol)，程序使用这种方式不是太方便。QEMU还提供了另外一种基于JSON的QMP(QEMU Machine Protocol)来满足自动化处理的需求。Libvirt就是使用QMP来控制QEMU实例。</p>
+<p>QMP规范可以参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/qemu/qemu/blob/master/docs/interop/qmp-intro.txt">https://github.com/qemu/qemu/blob/master/docs/interop/qmp-intro.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/qemu/qemu/blob/master/docs/interop/qmp-spec.txt">https://github.com/qemu/qemu/blob/master/docs/interop/qmp-spec.txt</a></li>
+<li><a target="_blank" rel="noopener" href="https://qemu.weilnetz.de/doc/qemu-qmp-ref.html">https://qemu.weilnetz.de/doc/qemu-qmp-ref.html</a></li>
+</ul>
+<p>QMP协议的工作流程如下:</p>
+<ul>
+<li>连接建立后服务器发送欢迎信息，进入能力协商(<code>capabilities negotiation</code>)模式</li>
+<li>客户端发送<code>&#123;“execute”:”qmp_capablities”&#125;</code></li>
+<li>成功则服务器返回<code>&#123;“return”:&#123;&#125;&#125;</code>，否则<code>return</code>中会含有<code>error</code>。</li>
+<li>客户端发送命令</li>
+<li>服务器以异步消息返回结果</li>
+</ul>
+<p>QMP方式<code>console</code>也可以使用多种设备形式, 如，标准输入输出、TCP、UnixSocket等。可以通过QEMU选项<code>-mon</code>来指定<code>console</code>设备， 我们以标准输入输出设备做为<code>console</code>启动QEMU实例:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :20 -device virtio-net-pci,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -name vm0 -chardev stdio,id=mon0 -mon chardev=mon0,mode=control,pretty=on</span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line">    &quot;QMP&quot;: &#123;</span><br><span class="line">        &quot;version&quot;: &#123;</span><br><span class="line">            &quot;qemu&quot;: &#123;</span><br><span class="line">                &quot;micro&quot;: 0,</span><br><span class="line">                &quot;minor&quot;: 0,</span><br><span class="line">                &quot;major&quot;: 2</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;package&quot;: &quot;&quot;</span><br><span class="line">        &#125;,</span><br><span class="line">        &quot;capabilities&quot;: [</span><br><span class="line">        ]</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到服务器发送了欢迎信息到标准输出，我们在标准输入设备里输入:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span><span class="attr">&quot;execute&quot;</span><span class="punctuation">:</span><span class="string">&quot;qmp_capabilities”&#125;</span></span><br></pre></td></tr></table></figure>
+<p>QEMU实例返回:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;return&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>此时我们可以发送命令了，我们来查询虚拟机状态:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span><span class="attr">&quot;execute&quot;</span><span class="punctuation">:</span><span class="string">&quot;query-status”&#125;</span></span><br></pre></td></tr></table></figure>
+<p>服务器返回了结果:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;return&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="string">&quot;running&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;singlestep&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">false</span></span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;running&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>我们还可以使用UnixSocket做为<code>console</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :20 -device virtio-net-pci,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -name vm0 -chardev socket,id=mon0,path=/tmp/vm0.monitor,server,nowait -mon chardev=mon0,mode=control,pretty=on -daemonize</span><br></pre></td></tr></table></figure>
+<p>使用<code>nc</code>连接UnixSocket文件, QEMU实例返回了欢迎信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# nc -U /tmp/vm0.monitor</span><br><span class="line">&#123;</span><br><span class="line">    &quot;QMP&quot;: &#123;</span><br><span class="line">        &quot;version&quot;: &#123;</span><br><span class="line">            &quot;qemu&quot;: &#123;</span><br><span class="line">                &quot;micro&quot;: 0,</span><br><span class="line">                &quot;minor&quot;: 0,</span><br><span class="line">                &quot;major&quot;: 2</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;package&quot;: &quot;&quot;</span><br><span class="line">        &#125;,</span><br><span class="line">        &quot;capabilities&quot;: [</span><br><span class="line">        ]</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>除了使用<code>-mon</code>选项，还可以直接使用<code>-qmp</code>选项:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# qemu-system-x86_64 cirros-0.3.5-x86_64-disk.img -smp 2,cores=2 -m 2G -vnc :20 -device virtio-net-pci,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -name vm0 -qmp unix:/tmp/vm0.monitor,server,nowait -daemonize</span><br></pre></td></tr></table></figure>
+<p>使用<code>nc</code>连接:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# nc -U /tmp/vm0.monitor</span><br><span class="line">&#123;&quot;QMP&quot;: &#123;&quot;version&quot;: &#123;&quot;qemu&quot;: &#123;&quot;micro&quot;: 0, &quot;minor&quot;: 0, &quot;major&quot;: 2&#125;, &quot;package&quot;: &quot;&quot;&#125;, &quot;capabilities&quot;: []&#125;&#125;</span><br></pre></td></tr></table></figure>
+<p>上面提到，Libvirt使用QMP与QEMU实例通信，libvirt创建QEMU实例时会指定一个UnixSocket文件做为<code>console</code>。我们可以通过使用<code>virsh</code>命令的<code>qemu-monitor-command</code>子命令来访问QEMU monitor，比如我们查询块文件信息:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# virsh qemu-monitor-command i1 &#x27;&#123;&quot;execute&quot;:&quot;query-block&quot;&#125;&#x27;</span><br><span class="line">&#123;&quot;return&quot;:[&#123;&quot;io-status&quot;:&quot;ok&quot;,&quot;device&quot;:&quot;drive-ide0-0-0&quot;,&quot;locked&quot;:false,&quot;removable&quot;:false,&quot;inserted&quot;:&#123;&quot;iops_rd&quot;:0,&quot;detect_zeroes&quot;:&quot;off&quot;,&quot;image&quot;:&#123;&quot;virtual-size&quot;:21474836480,&quot;filename&quot;:&quot;/tmp/i1.qcow2&quot;,&quot;cluster-size&quot;:65536,&quot;format&quot;:&quot;qcow2&quot;,&quot;actual-size&quot;:12482580480,&quot;format-specific&quot;:&#123;&quot;type&quot;:&quot;qcow2&quot;,&quot;data&quot;:&#123;&quot;compat&quot;:&quot;0.10&quot;,&quot;refcount-bits&quot;:16&#125;&#125;,&quot;dirty-flag&quot;:false&#125;,&quot;iops_wr&quot;:0,&quot;ro&quot;:false,&quot;backing_file_depth&quot;:0,&quot;drv&quot;:&quot;qcow2&quot;,&quot;iops&quot;:0,&quot;bps_wr&quot;:0,&quot;write_threshold&quot;:0,&quot;encrypted&quot;:false,&quot;bps&quot;:0,&quot;bps_rd&quot;:0,&quot;cache&quot;:&#123;&quot;no-flush&quot;:false,&quot;direct&quot;:false,&quot;writeback&quot;:true&#125;,&quot;file&quot;:&quot;/tmp/i1.qcow2&quot;,&quot;encryption_key_missing&quot;:false&#125;,&quot;type&quot;:&quot;unknown&quot;&#125;,&#123;&quot;io-status&quot;:&quot;ok&quot;,&quot;device&quot;:&quot;drive-ide0-0-1&quot;,&quot;locked&quot;:false,&quot;removable&quot;:true,&quot;tray_open&quot;:false,&quot;type&quot;:&quot;unknown&quot;&#125;],&quot;id&quot;:&quot;libvirt-13”&#125;</span><br></pre></td></tr></table></figure>
+<p>这种方式使用的是JSON格式的QMP协议，可以加上<code>—hmp</code>选项直接输入命令来交互:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# virsh qemu-monitor-command --hmp i1 info kvm</span><br><span class="line">kvm support: enabled</span><br></pre></td></tr></table></figure>
+
+<p>我们如果想直接连接libvirt生成的Unix Socket文件来操作QEMU实例，需要先将libvirtd关闭，如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost ~]# service libvirtd stop</span><br><span class="line">Redirecting to /bin/systemctl stop  libvirtd.service</span><br><span class="line">[root@localhost ~]# nc -U /var/lib/libvirt/qemu/domain-26-i1/monitor.sock</span><br><span class="line">&#123;&quot;QMP&quot;: &#123;&quot;version&quot;: &#123;&quot;qemu&quot;: &#123;&quot;micro&quot;: 0, &quot;minor&quot;: 3, &quot;major&quot;: 2&#125;, &quot;package&quot;: &quot; (qemu-kvm-ev-2.3.0-31.0.el7_2.21.1)&quot;&#125;, &quot;capabilities&quot;: []&#125;&#125;</span><br><span class="line">^C</span><br><span class="line">[root@localhost ~]# service libvirtd start</span><br><span class="line">Redirecting to /bin/systemctl start  libvirtd.service</span><br></pre></td></tr></table></figure>
+
+
+
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/11/09/timewait/" rel="prev" title="TIME_WAIT状态实验分析">
+      <i class="fa fa-chevron-left"></i> TIME_WAIT状态实验分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/11/25/qemu-hook/" rel="next" title="Libvirt和QEMU hook机制介绍">
+      Libvirt和QEMU hook机制介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

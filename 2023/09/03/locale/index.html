@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="近期开发的C++程序遇到一个关于locale的问题。程序在通过SSH直接登录到root用户后，运行程序会崩溃，而通过其他用户SSH登录后，再切换到root用户后，程序则运行正常。 12terminate called after throwing an instance of &amp;#x27;std::runtime_error&amp;#x27;  what():  locale::facet::_S_cr">
+<meta property="og:type" content="article">
+<meta property="og:title" content="关于应用程序的locale设置">
+<meta property="og:url" content="http://just4coding.com/2023/09/03/locale/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="近期开发的C++程序遇到一个关于locale的问题。程序在通过SSH直接登录到root用户后，运行程序会崩溃，而通过其他用户SSH登录后，再切换到root用户后，程序则运行正常。 12terminate called after throwing an instance of &amp;#x27;std::runtime_error&amp;#x27;  what():  locale::facet::_S_cr">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-09-03T15:40:04.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.508Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="MISC">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2023/09/03/locale/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>关于应用程序的locale设置 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/09/03/locale/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          关于应用程序的locale设置
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-09-03 23:40:04" itemprop="dateCreated datePublished" datetime="2023-09-03T23:40:04+08:00">2023-09-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>近期开发的<code>C++</code>程序遇到一个关于<code>locale</code>的问题。程序在通过<code>SSH</code>直接登录到<code>root</code>用户后，运行程序会崩溃，而通过其他用户<code>SSH</code>登录后，再切换到<code>root</code>用户后，程序则运行正常。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">terminate called after throwing an instance of &#x27;std::runtime_error&#x27;</span><br><span class="line">  what():  locale::facet::_S_create_c_locale name not valid</span><br></pre></td></tr></table></figure>
+
+<p>根据<a target="_blank" rel="noopener" href="https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2">locale文档</a>中的描述:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">std::locale::locale(const char * __s)	[explicit]</span><br><span class="line"></span><br><span class="line">Named locale constructor.</span><br><span class="line"></span><br><span class="line">Constructs a copy of the named C library locale.</span><br><span class="line"></span><br><span class="line">Parameters:</span><br><span class="line">    s	Name of the locale to construct.</span><br><span class="line"></span><br><span class="line">Exceptions:</span><br><span class="line">    std::runtime_error	if s is null or an undefined locale.</span><br></pre></td></tr></table></figure>
+
+<p>可以得知，指定的<code>locale</code>不存在。</p>
+<p><code>Google</code>上查到一般解决方案是设置环境变量<code>LC_ALL=C</code>可以解决。</p>
+<span id="more"></span>
+
+<p>下面来看看问题出现的原因和这样解决的原因。</p>
+<p><code>locale</code>在<code>UNIX/Linux</code>上指的是一系列环境变量，它根据用户所使用的语言、国家或者地区、字符集等来设置系统的语言环境。应用程序可以根据这个设置来展示不同的语言信息。</p>
+<p><code>locale</code>把所涉及到的使用习惯的各个方面分成12个大类, 每类都有独立的环境变量来设置。</p>
+<p>可以使用<code>locale</code>命令来展示相应的配置:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># locale</span></span><br><span class="line">LANG=en_US.UTF-8</span><br><span class="line">LC_CTYPE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_NUMERIC=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_TIME=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_COLLATE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MONETARY=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MESSAGES=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_PAPER=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_NAME=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_ADDRESS=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_TELEPHONE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MEASUREMENT=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_IDENTIFICATION=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_ALL=</span><br></pre></td></tr></table></figure>
+
+<p>上边结果显示的不只有12个独立的<code>LC_*</code>环境变量，还有<code>LC_ALL</code>和<code>LANG</code>两个环境变量。</p>
+<p>它们的生效优先级是:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LC_ALL &gt; LC_* &gt; LANG</span><br></pre></td></tr></table></figure>
+<p>也就是, <code>LC_ALL</code>是强制设定，设置它之后可以覆盖其他变量内容。<code>LANG</code>是默认值，其他值没有设置时，使用它做为默认值。</p>
+<p>我们开头提到的问题原因看上去是指定的<code>locale</code>不存在，而在不同的<code>SSH</code>登录环境下表现却有所不同，因而可能是不同环境下默认的<code>locale</code>不同。经过调研发现:</p>
+<p>直接使用<code>root</code>用户<code>SSH</code>登录后，执行<code>locale</code>命令:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># locale</span></span><br><span class="line">locale: Cannot <span class="built_in">set</span> LC_CTYPE to default locale: No such file or directory</span><br><span class="line">locale: Cannot <span class="built_in">set</span> LC_MESSAGES to default locale: No such file or directory</span><br><span class="line">locale: Cannot <span class="built_in">set</span> LC_ALL to default locale: No such file or directory</span><br><span class="line">LANG=zh_CN.UTF-8</span><br><span class="line">LC_CTYPE=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_NUMERIC=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_TIME=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_COLLATE=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_MONETARY=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_MESSAGES=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_PAPER=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_NAME=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_ADDRESS=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_TELEPHONE=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_MEASUREMENT=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_IDENTIFICATION=<span class="string">&quot;zh_CN.UTF-8&quot;</span></span><br><span class="line">LC_ALL=</span><br></pre></td></tr></table></figure>
+<p>默认的<code>locale</code>为<code>zh_CN.UTF-8</code>。</p>
+<p>而使用其他用户<code>SSH</code>登录再切换为<code>root</code>之后，执行<code>locale</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># locale</span></span><br><span class="line">LANG=en_US.UTF-8</span><br><span class="line">LC_CTYPE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_NUMERIC=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_TIME=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_COLLATE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MONETARY=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MESSAGES=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_PAPER=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_NAME=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_ADDRESS=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_TELEPHONE=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_MEASUREMENT=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_IDENTIFICATION=<span class="string">&quot;en_US.UTF-8&quot;</span></span><br><span class="line">LC_ALL=</span><br></pre></td></tr></table></figure>
+<p>默认的<code>locale</code>为<code>en_US.UTF-8</code>。</p>
+<p>而通过<code>locale</code>查找，这台服务器上确实没有<code>zh_CN.UTF-8</code>的语言包:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># locale -a |grep zh_CN</span></span><br><span class="line">[root@default ~]<span class="comment">#</span></span><br><span class="line">[root@default ~]<span class="comment"># locale -a |grep en_US</span></span><br><span class="line">en_US</span><br><span class="line">en_US.iso88591</span><br><span class="line">en_US.iso885915</span><br><span class="line">en_US.utf8</span><br></pre></td></tr></table></figure>
+
+<p>因而当启动我们应用程序的<code>bash</code>的<code>locale</code>为<code>zh_CN.UTF-8</code>时，程序抛出了异常，而<code>locale</code>为<code>en_US.UTF-8</code>时则正常运行。</p>
+<p>那么这两种情况下<code>locale</code>的差异来源于哪里呢？经过调研发现，默认情况下，<code>SSH</code>连接会设置目标服务的环境变量，可以在配置文件:<code>/etc/ssh/ssh_config</code>中进行调整:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Host *</span><br><span class="line">    GSSAPIAuthentication yes</span><br><span class="line"># If this option is set to yes then remote X11 clients will have full access</span><br><span class="line"># to the original X11 display. As virtually no X11 client supports the untrusted</span><br><span class="line"># mode correctly we set this to yes.</span><br><span class="line">    ForwardX11Trusted yes</span><br><span class="line"># Send locale-related environment variables</span><br><span class="line">    SendEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES</span><br><span class="line">    SendEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT</span><br><span class="line">    SendEnv LC_IDENTIFICATION LC_ALL LANGUAGE</span><br><span class="line">    SendEnv XMODIFIERS</span><br></pre></td></tr></table></figure>
+
+<p>由于我本地<code>MAC</code>电脑的<code>locale</code>为<code>zh_CN.UTF-8</code>, 因而使用<code>root</code>建立<code>SSH</code>连接后，目标服务器上该<code>SSH</code>连接所运行的<code>bash</code>的<code>locale</code>被设置为<code>zh_CN.UTF-8</code>, 而通过其他用户切换到<code>root</code>, 则使用了<code>root</code>的默认<code>locale</code>:<code>en_US.UTF-8</code>。</p>
+<p>应用程序不能依赖所有执行环境都能正确配置好<code>locale</code>, 因而我们需要在应用程序中自行指定好<code>locale</code>。也就是我们文章开头所说的，设置环境变量<code>LC_ALL</code>为<code>C</code>。</p>
+<p><code>locale: C</code>是一个特殊的<code>locale</code>, 其他的<code>locale</code>是用于向人类展示信息的，而<code>C</code>表示<code>computer</code>, 它是用于向计算机展示信息的。它的字符集是单字节的<code>ASCII</code>。它在<code>POSIX</code>兼容的系统上都存在，因而我们的程序设定<code>locale</code>为<code>C</code>后，彻底摆脱了运行环境的影响，可以解决文章开头的问题。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2">https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2https://gcc.gnu.org/onlinedocs/gcc-4.6.2/libstdc++/api/a00589.html#a268965d97cffcf472d2f0fa8b74aa1e2</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.tecmint.com/set-system-locales-in-linux/">https://www.tecmint.com/set-system-locales-in-linux/</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.360doc.com/content/14/0103/13/10384031_342301450.shtml">http://www.360doc.com/content/14/0103/13/10384031_342301450.shtml</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/29609371/how-not-to-pass-the-locale-through-an-ssh-connection-command">https://stackoverflow.com/questions/29609371/how-not-to-pass-the-locale-through-an-ssh-connection-command</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/kunyus/article/details/104628559">https://blog.csdn.net/kunyus/article/details/104628559</a></li>
+<li><a target="_blank" rel="noopener" href="https://unix.stackexchange.com/questions/87745/what-does-lc-all-c-do">https://unix.stackexchange.com/questions/87745/what-does-lc-all-c-do</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/MISC/" rel="tag"># MISC</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/08/24/docker-bridge/" rel="prev" title="从外部访问Docker桥接网络容器路径分析">
+      <i class="fa fa-chevron-left"></i> 从外部访问Docker桥接网络容器路径分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/10/19/openbox/" rel="next" title="CentOS7配置Console界面运行openbox">
+      CentOS7配置Console界面运行openbox <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

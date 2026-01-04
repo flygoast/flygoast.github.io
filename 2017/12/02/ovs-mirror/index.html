@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;VMware vSphere平台端口镜像&gt;&gt;介绍了VMware vSphere环境下虚拟交换机的端口镜像机制，本文来介绍在OpenvSwitch环境中如何实现端口镜像。 OVS上实现端口镜像的基本流程如下:  创建mirror，在mirror中指定镜像数据源及镜像目的地 将创建的mirror应用到bridge中  镜像数据源可以通过下面几个选项来指定:  se">
+<meta property="og:type" content="article">
+<meta property="og:title" content="OpenvSwitch端口镜像">
+<meta property="og:url" content="http://just4coding.com/2017/12/02/ovs-mirror/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;VMware vSphere平台端口镜像&gt;&gt;介绍了VMware vSphere环境下虚拟交换机的端口镜像机制，本文来介绍在OpenvSwitch环境中如何实现端口镜像。 OVS上实现端口镜像的基本流程如下:  创建mirror，在mirror中指定镜像数据源及镜像目的地 将创建的mirror应用到bridge中  镜像数据源可以通过下面几个选项来指定:  se">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://just4coding.com/images/2017-12-02/1.png">
+<meta property="og:image" content="http://just4coding.com/images/2017-12-02/2.png">
+<meta property="article:published_time" content="2017-12-02T14:26:35.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.486Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://just4coding.com/images/2017-12-02/1.png">
+
+<link rel="canonical" href="http://just4coding.com/2017/12/02/ovs-mirror/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>OpenvSwitch端口镜像 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/12/02/ovs-mirror/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          OpenvSwitch端口镜像
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-12-02 22:26:35" itemprop="dateCreated datePublished" datetime="2017-12-02T22:26:35+08:00">2017-12-02</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Virtualization/" itemprop="url" rel="index">
+                    <span itemprop="name">Virtualization</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/11/07/port-mirroring/">VMware vSphere平台端口镜像</a>&gt;&gt;介绍了<code>VMware vSphere</code>环境下虚拟交换机的端口镜像机制，本文来介绍在<code>OpenvSwitch</code>环境中如何实现端口镜像。</p>
+<p>OVS上实现端口镜像的基本流程如下:</p>
+<ul>
+<li>创建<code>mirror</code>，在<code>mirror</code>中指定镜像数据源及镜像目的地</li>
+<li>将创建的<code>mirror</code>应用到<code>bridge</code>中</li>
+</ul>
+<p>镜像数据源可以通过下面几个选项来指定:</p>
+<ul>
+<li><code>select_all</code>: 布尔值，设置为<code>true</code>时，进出该<code>mirror</code>所生效的<code>bridge</code>上的每个数据包都将被镜像</li>
+<li><code>select_dst_port</code>: 从该<code>port</code>离开虚拟交换机的数据包将会被镜像，从Guest角度看是Guest网络接口的流入方向</li>
+<li><code>select_src_port</code>: 从该<code>port</code>进入虚拟交换机的数据包将会被镜像，从Guest角度看是Guest网络接口的流出方向</li>
+<li><code>select_vlan</code>: 指定特定VLAN做为数据源，整个VLAN的数据包都会镜像到目的地</li>
+</ul>
+<p>镜像目的地可以用下面选项来指定:</p>
+<ul>
+<li><code>output_port</code>: 将数据包镜像到特定的<code>port</code></li>
+<li><code>output_vlan</code>: 将数据包镜像到指定VLAN, 原始数据的VLAN tag会被剥掉。若镜像多个VLAN到同一个VLAN，没有办法区分镜像后的数据包来源于哪个VLAN。</li>
+</ul>
+<span id="more"></span>
+
+<p>下面我们通过实例来说明OVS上的镜像机制。我们的第一个实验拓朴结构如下图，我们将流入<code>tap1</code>网络接口的数据包镜像到<code>tap3</code>中:</p>
+<img src="/images/2017-12-02/1.png" class="">
+
+<p>首先构造环境:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br0</span><br><span class="line">ovs-vsctl add-port br0 tap1 -- <span class="built_in">set</span> interface tap1 <span class="built_in">type</span>=internal</span><br><span class="line">ovs-vsctl add-port br0 tap2 -- <span class="built_in">set</span> interface tap2 <span class="built_in">type</span>=internal</span><br><span class="line">ovs-vsctl add-port br0 tap3 -- <span class="built_in">set</span> interface tap3 <span class="built_in">type</span>=internal</span><br><span class="line">ip netns add ns1</span><br><span class="line">ip netns add ns2</span><br><span class="line">ip netns add ns3</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev tap1 netns ns1</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev tap2 netns ns2</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> dev tap3 netns ns3</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip addr add 10.10.10.11/24 dev tap1</span><br><span class="line">ip netns <span class="built_in">exec</span> ns1 ip <span class="built_in">link</span> <span class="built_in">set</span> up tap1</span><br><span class="line">ip netns <span class="built_in">exec</span> ns2 ip addr add 10.10.10.12/24 dev tap2</span><br><span class="line">ip netns <span class="built_in">exec</span> ns2 ip <span class="built_in">link</span> <span class="built_in">set</span> up tap2</span><br><span class="line">ip netns <span class="built_in">exec</span> ns3 ip <span class="built_in">link</span> <span class="built_in">set</span> up tap3</span><br></pre></td></tr></table></figure>
+
+<p>我们从<code>ns1</code>中PING <code>ns2</code>的IP:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns1 ping 10.10.10.12 -c 2</span><br><span class="line">PING 10.10.10.12 (10.10.10.12) 56(84) bytes of data.</span><br><span class="line">64 bytes from 10.10.10.12: icmp_seq=1 ttl=64 time=0.060 ms</span><br><span class="line">64 bytes from 10.10.10.12: icmp_seq=2 ttl=64 time=0.106 ms</span><br><span class="line"></span><br><span class="line">--- 10.10.10.12 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1000ms</span><br><span class="line">rtt min/avg/max/mdev = 0.060/0.083/0.106/0.023 ms</span><br></pre></td></tr></table></figure>
+<p>在<code>ns3</code>中运行<code>tcpdump</code>观察是否能收到数据包, 可以看到此时<code>ns3</code>的<code>tap3</code>并不会收到<code>tap1</code>访问<code>tap2</code>的数据包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns3 tcpdump -i tap3 -e -nn icmp or arp</span><br><span class="line">tcpdump: WARNING: tap3: no IPv4 address assigned</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on tap3, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">^C</span><br><span class="line">0 packets captured</span><br><span class="line">0 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>接下来我们创建了相应的<code>mirror</code>, 并将其应用到<code>br0</code>上:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl -- --<span class="built_in">id</span>=@tap1 get port tap1  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@tap3 get port tap3  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@m create mirror name=m0 select_dst_port=@tap1 output_port=@tap3 \</span><br><span class="line">          -- <span class="built_in">set</span> bridge br0 mirrors=@m</span><br></pre></td></tr></table></figure>
+<p>此时查看<code>OVS</code>上的<code>mirror</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ovs-vsctl list mirror</span><br><span class="line">_uuid               : 98b89127-cf94-4926-8d5f-76145154b03c</span><br><span class="line">external_ids        : &#123;&#125;</span><br><span class="line">name                : &quot;m0&quot;</span><br><span class="line">output_port         : 1dcde312-e33d-439f-b646-9db92416a586</span><br><span class="line">output_vlan         : []</span><br><span class="line">select_all          : false</span><br><span class="line">select_dst_port     : [16db4055-5b5b-411d-8e98-87813ba14eff]</span><br><span class="line">select_src_port     : []</span><br><span class="line">select_vlan         : []</span><br><span class="line">statistics          : &#123;tx_bytes=0, tx_packets=0&#125;</span><br></pre></td></tr></table></figure>
+<p>再次进行PING实验:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns1 ping 10.10.10.12 -c 2</span><br><span class="line">PING 10.10.10.12 (10.10.10.12) 56(84) bytes of data.</span><br><span class="line">64 bytes from 10.10.10.12: icmp_seq=1 ttl=64 time=0.274 ms</span><br><span class="line">64 bytes from 10.10.10.12: icmp_seq=2 ttl=64 time=0.341 ms</span><br><span class="line"></span><br><span class="line">--- 10.10.10.12 ping statistics ---</span><br><span class="line">2 packets transmitted, 2 received, 0% packet loss, time 1000ms</span><br><span class="line">rtt min/avg/max/mdev = 0.274/0.307/0.341/0.037 ms</span><br></pre></td></tr></table></figure>
+<p>在<code>ns3</code>上抓包可以看到成功获得<code>tap2</code>回应<code>tap1</code>的ICMP响应数据包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns3 tcpdump -i tap3 -e -nn icmp or arp</span><br><span class="line">tcpdump: WARNING: tap3: no IPv4 address assigned</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on tap3, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">23:22:11.919448 26:1e:74:67:6c:cc &gt; 16:fe:12:ad:f0:4f, ethertype IPv4 (0x0800), length 98: 10.10.10.12 &gt; 10.10.10.11: ICMP echo reply, id 4411, seq 1, length 64</span><br><span class="line">23:22:12.919823 26:1e:74:67:6c:cc &gt; 16:fe:12:ad:f0:4f, ethertype IPv4 (0x0800), length 98: 10.10.10.12 &gt; 10.10.10.11: ICMP echo reply, id 4411, seq 2, length 64</span><br><span class="line">23:22:16.929503 26:1e:74:67:6c:cc &gt; 16:fe:12:ad:f0:4f, ethertype ARP (0x0806), length 42: Request who-has 10.10.10.11 tell 10.10.10.12, length 28</span><br><span class="line">^C</span><br><span class="line">3 packets captured</span><br><span class="line">3 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+
+<p>这种方式对应了<code>Cisco</code>的<code>SPAN</code>方式, 下面我们来实验<code>RSPAN</code>方式。我们将拓朴修改为如下图所示，我们首先在<code>br0</code>上将<code>tap1</code>的数据包镜像到物定VLAN: <code>111</code>, 在<code>br1</code>上再从VLAN: <code>111</code>中将数据包镜像到<code>tap4</code>:</p>
+<img src="/images/2017-12-02/2.png" class="">
+
+<p>准备拓朴:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ip <span class="built_in">link</span> add p0 <span class="built_in">type</span> veth peer name p1</span><br><span class="line">ovs-vsctl add-port br0 p0</span><br><span class="line">ovs-vsctl add-port br1 p1</span><br><span class="line">ovs-vsctl add-port br1 tap4 -- <span class="built_in">set</span> interface tap4 <span class="built_in">type</span>=internal</span><br><span class="line">ip netns add ns4</span><br><span class="line">ip <span class="built_in">link</span> <span class="built_in">set</span> tap4 netns ns4</span><br><span class="line">ip netns <span class="built_in">exec</span> ns4 ip <span class="built_in">link</span> <span class="built_in">set</span> up tap4</span><br></pre></td></tr></table></figure>
+
+<p>关闭VLAN:<code>111</code>的MAC学习功能，避免影响正常网络转发:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl <span class="built_in">set</span> bridge br0 flood_vlans=111</span><br><span class="line">ovs-vsctl <span class="built_in">set</span> bridge br1 flood_vlans=111</span><br></pre></td></tr></table></figure>
+
+<p>首先创建一个<code>mirror</code>将<code>tap1</code>的数据包镜像到VLAN:<code>111</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl -- --<span class="built_in">id</span>=@tap1 get port tap1  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@m create mirror name=m1 select_src_port=@tap1 output_vlan=111 \</span><br><span class="line">          -- <span class="built_in">set</span> bridge br0 mirrors=@m</span><br></pre></td></tr></table></figure>
+<p>查看<code>OVS</code>上的<code>mirror</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ovs-vsctl list mirror</span><br><span class="line">_uuid               : fd39fdb2-ab69-47c1-bde9-01b7b40dd4d3</span><br><span class="line">external_ids        : &#123;&#125;</span><br><span class="line">name                : &quot;m1&quot;</span><br><span class="line">output_port         : []</span><br><span class="line">output_vlan         : 111</span><br><span class="line">select_all          : false</span><br><span class="line">select_dst_port     : []</span><br><span class="line">select_src_port     : [16db4055-5b5b-411d-8e98-87813ba14eff]</span><br><span class="line">select_vlan         : []</span><br><span class="line">statistics          : &#123;tx_bytes=13426, tx_packets=157&#125;</span><br></pre></td></tr></table></figure>
+<p>再次从<code>tap1</code>发送PING包到<code>tap2</code>, 我们在<code>tap4</code>上抓包, 可以看到<code>tap4</code>上可以收到镜像的数据包:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns4 tcpdump -i tap4 -e -nn icmp or arp</span><br><span class="line">tcpdump: WARNING: tap4: no IPv4 address assigned</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on tap4, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">14:45:58.762260 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype 802.1Q (0x8100), length 102: vlan 111, p 0, ethertype IPv4, 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 9722, seq 1, length 64</span><br><span class="line">14:45:59.806203 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype 802.1Q (0x8100), length 102: vlan 111, p 0, ethertype IPv4, 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 9722, seq 2, length 64</span><br><span class="line">^C</span><br><span class="line">2 packets captured</span><br><span class="line">2 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>此时，<code>tap4</code>为<code>trunk</code>模式，所有VLAN的数据包都可以收到。我们将<code>tap4</code>的<code>tag</code>设置为<code>111</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl <span class="built_in">set</span> port tap4 tap=111</span><br></pre></td></tr></table></figure>
+<p>此时，再次重复PING访问，<code>tap4</code>上依然可以收到镜像的数据包, 只不过VLAN TAG已经被剥除:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns4 tcpdump -i tap4 -e -nn icmp or arp</span><br><span class="line">tcpdump: WARNING: tap4: no IPv4 address assigned</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on tap4, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">14:47:24.060144 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 9816, seq 1, length 64</span><br><span class="line">14:47:25.117508 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 9816, seq 2, length 64</span><br><span class="line">^C</span><br><span class="line">2 packets captured</span><br><span class="line">2 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>我们再次将<code>tag</code>设置为<code>110</code>，再次从<code>tap4</code>抓包则收不到数据包。</p>
+<p>我们可以添加另一个镜像规则，将镜像VLAN的数据包镜像到<code>tap4</code>:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl -- --<span class="built_in">id</span>=@tap4 get port tap4  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@m create mirror name=m2 select_vlan=111 select_all=<span class="literal">true</span> output_port=@tap4 \</span><br><span class="line">          -- add bridge br1 mirrors @m</span><br></pre></td></tr></table></figure>
+<p>查看OVS上的<code>mirror</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ovs-vsctl list mirror</span><br><span class="line">_uuid               : e758d8ae-408d-4e4f-a1c4-eaa8dd99bce5</span><br><span class="line">external_ids        : &#123;&#125;</span><br><span class="line">name                : &quot;m2&quot;</span><br><span class="line">output_port         : e6a7d9b6-1032-4f9a-84f1-54b69f6db315</span><br><span class="line">output_vlan         : []</span><br><span class="line">select_all          : true</span><br><span class="line">select_dst_port     : []</span><br><span class="line">select_src_port     : []</span><br><span class="line">select_vlan         : [111]</span><br><span class="line">statistics          : &#123;tx_bytes=0, tx_packets=0&#125;</span><br><span class="line"></span><br><span class="line">_uuid               : fd39fdb2-ab69-47c1-bde9-01b7b40dd4d3</span><br><span class="line">external_ids        : &#123;&#125;</span><br><span class="line">name                : &quot;m1&quot;</span><br><span class="line">output_port         : []</span><br><span class="line">output_vlan         : 111</span><br><span class="line">select_all          : false</span><br><span class="line">select_dst_port     : []</span><br><span class="line">select_src_port     : [16db4055-5b5b-411d-8e98-87813ba14eff]</span><br><span class="line">select_vlan         : []</span><br><span class="line">statistics          : &#123;tx_bytes=14378, tx_packets=169&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在<code>tap4</code>上抓包, 得到的数据包已经被剥掉VLAN TAG:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ip netns exec ns4 tcpdump -i tap4 -e -nn icmp or arp</span><br><span class="line">tcpdump: WARNING: tap4: no IPv4 address assigned</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on tap4, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">14:50:37.842958 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 10044, seq 1, length 64</span><br><span class="line">14:50:38.904391 16:fe:12:ad:f0:4f &gt; 26:1e:74:67:6c:cc, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 10044, seq 2, length 64</span><br><span class="line">^C</span><br><span class="line">2 packets captured</span><br><span class="line">2 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+<p>使用镜像到物定VLAN的方式会导致原始的VLAN TAG信息丢失，如果要镜像多个VLAN的数据到同一目的地则会造成混乱。这种场景下，最好将数据包镜像到一个GRE port，基于这种方式可以实现<code>ERSPAN</code>模式。</p>
+<p>清除<code>mirror</code>设置:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl clear bridge br0 mirrors</span><br><span class="line">ovs-vsctl clear bridge br1 mirrors</span><br></pre></td></tr></table></figure>
+
+<p>添加一个GRE端口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port br0 gre0 -- <span class="built_in">set</span> interface gre0 <span class="built_in">type</span>=gre options:key=0x1111 options:remote_ip=10.95.30.43</span><br></pre></td></tr></table></figure>
+
+<p>创建<code>mirror</code>将<code>tap1</code>的数据包镜像至GRE端口:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl -- --<span class="built_in">id</span>=@tap1 get port tap1  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@gre0 get port gre0  \</span><br><span class="line">          -- --<span class="built_in">id</span>=@m create mirror name=m3 select_src_port=@tap1 output_port=@gre0 \</span><br><span class="line">          -- <span class="built_in">set</span> bridge br0 mirrors=@m</span><br></pre></td></tr></table></figure>
+<p>查看<code>mirror</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# ovs-vsctl list mirror</span><br><span class="line">_uuid               : 3c63e590-d42c-454a-a7f9-baa3e0ebb77f</span><br><span class="line">external_ids        : &#123;&#125;</span><br><span class="line">name                : &quot;m3&quot;</span><br><span class="line">output_port         : e71af801-289f-466b-9f66-d1e5cf396233</span><br><span class="line">output_vlan         : []</span><br><span class="line">select_all          : false</span><br><span class="line">select_dst_port     : []</span><br><span class="line">select_src_port     : [16db4055-5b5b-411d-8e98-87813ba14eff]</span><br><span class="line">select_vlan         : []</span><br><span class="line">statistics          : &#123;tx_bytes=0, tx_packets=0&#125;</span><br></pre></td></tr></table></figure>
+<p>我们在外网出口<code>eth0</code>上抓包，可以看到，GRE数据包已经发送:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@centos3 vagrant]# tcpdump -ieth0 -nn -e proto gre</span><br><span class="line">tcpdump: verbose output suppressed, use -v or -vv for full protocol decode</span><br><span class="line">listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes</span><br><span class="line">15:46:50.236791 08:00:27:6b:57:88 &gt; 52:54:00:12:35:02, ethertype IPv4 (0x0800), length 140: 10.0.2.15 &gt; 10.95.30.43: GREv0, key=0x1111, proto TEB (0x6558), length 106: 86:5e:7a:ba:4a:5f &gt; e2:ee:06:10:cb:70, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 1941, seq 1, length 64</span><br><span class="line">15:46:51.237935 08:00:27:6b:57:88 &gt; 52:54:00:12:35:02, ethertype IPv4 (0x0800), length 140: 10.0.2.15 &gt; 10.95.30.43: GREv0, key=0x1111, proto TEB (0x6558), length 106: 86:5e:7a:ba:4a:5f &gt; e2:ee:06:10:cb:70, ethertype IPv4 (0x0800), length 98: 10.10.10.11 &gt; 10.10.10.12: ICMP echo request, id 1941, seq 2, length 64</span><br><span class="line">^C</span><br><span class="line">2 packets captured</span><br><span class="line">2 packets received by filter</span><br><span class="line">0 packets dropped by kernel</span><br></pre></td></tr></table></figure>
+
+<p>最后需要注意一点，我们的实验是在<code>VirtualBox</code>虚拟机中完成的，<code>VirtualBox</code>的底层虚拟网络基础设施不支持GRE协议，因而实际的GRE数据包并不能到达宿主机并发送到目的地，因而我们选择在本地出口网卡处来抓包。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/11/25/qemu-hook/" rel="prev" title="Libvirt和QEMU hook机制介绍">
+      <i class="fa fa-chevron-left"></i> Libvirt和QEMU hook机制介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/12/19/vsphere-api/" rel="next" title="VMware vSphere平台下API操作虚拟交换机及虚拟接口">
+      VMware vSphere平台下API操作虚拟交换机及虚拟接口 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

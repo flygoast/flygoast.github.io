@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="最近遇到一个CentOS8环境上的内核崩溃问题,内核版本号为4.18.0-305.3.1.el8.x86_64，崩溃堆栈为: 123456789101112131415161718192021222324252627282930313233343536crash&gt; btPID: 2310003  TASK: ffff99f4ee683e80  CPU: 1   COMMAND: &quot;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="__pv_queued_spin_lock_slowpath崩溃分析">
+<meta property="og:url" content="http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="最近遇到一个CentOS8环境上的内核崩溃问题,内核版本号为4.18.0-305.3.1.el8.x86_64，崩溃堆栈为: 123456789101112131415161718192021222324252627282930313233343536crash&gt; btPID: 2310003  TASK: ffff99f4ee683e80  CPU: 1   COMMAND: &quot;">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-02-26T05:00:40.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.507Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="Kernel">
+<meta property="article:tag" content="Network">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>__pv_queued_spin_lock_slowpath崩溃分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2023/02/26/pv-queued-spin-lock-slowpath/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          __pv_queued_spin_lock_slowpath崩溃分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2023-02-26 13:00:40" itemprop="dateCreated datePublished" datetime="2023-02-26T13:00:40+08:00">2023-02-26</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Kernel/" itemprop="url" rel="index">
+                    <span itemprop="name">Kernel</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>最近遇到一个<code>CentOS8</code>环境上的内核崩溃问题,内核版本号为<code>4.18.0-305.3.1.el8.x86_64</code>，崩溃堆栈为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; bt</span><br><span class="line">PID: 2310003  TASK: ffff99f4ee683e80  CPU: 1   COMMAND: &quot;Verdict2&quot;</span><br><span class="line"> #0 [ffffb71241e375e8] machine_kexec at ffffffffbc66156e</span><br><span class="line"> #1 [ffffb71241e37640] __crash_kexec at ffffffffbc78f99d</span><br><span class="line"> #2 [ffffb71241e37708] crash_kexec at ffffffffbc79088d</span><br><span class="line"> #3 [ffffb71241e37720] oops_end at ffffffffbc62434d</span><br><span class="line"> #4 [ffffb71241e37740] no_context at ffffffffbc67262f</span><br><span class="line"> #5 [ffffb71241e37798] __bad_area_nosemaphore at ffffffffbc67298c</span><br><span class="line"> #6 [ffffb71241e377e0] do_page_fault at ffffffffbc673267</span><br><span class="line"> #7 [ffffb71241e37810] page_fault at ffffffffbd0010fe</span><br><span class="line">    [exception RIP: __pv_queued_spin_lock_slowpath+410]</span><br><span class="line">    RIP: ffffffffbc73cbda  RSP: ffffb71241e378c0  RFLAGS: 00010282</span><br><span class="line">    RAX: 0000000000003ffe  RBX: ffff99f4a6ffc624  RCX: 0000000000000001</span><br><span class="line">    RDX: 0000000000003fff  RSI: 0000000000000000  RDI: 0000000000000000</span><br><span class="line">    RBP: ffff99f576e6ac00   R8: 0000000000000000   R9: ffff99f56428e200</span><br><span class="line">    R10: 0000000032950000  R11: 0000000000000002  R12: ffffffffbcaaa6d0</span><br><span class="line">    R13: ffff99f576e6ac14  R14: 0000000000000001  R15: 0000000000080000</span><br><span class="line">    ORIG_RAX: ffffffffffffffff  CS: 0010  SS: 0018</span><br><span class="line"> #8 [ffffb71241e378f8] queued_write_lock_slowpath at ffffffffbc73df3c</span><br><span class="line"> #9 [ffffb71241e37910] bpf_sk_reuseport_detach at ffffffffbc842ff9</span><br><span class="line">#10 [ffffb71241e37928] reuseport_detach_sock at ffffffffbcdc2c25</span><br><span class="line">#11 [ffffb71241e37940] sk_destruct at ffffffffbcd7ac33</span><br><span class="line">#12 [ffffb71241e37950] nf_queue_entry_release_refs at ffffffffbce1c1e4</span><br><span class="line">#13 [ffffb71241e37960] nf_reinject at ffffffffbce1c52e</span><br><span class="line">#14 [ffffb71241e37998] nfqnl_recv_verdict at ffffffffc095a81f [nfnetlink_queue]</span><br><span class="line">#15 [ffffb71241e37a10] nfnetlink_rcv_msg at ffffffffc09552be [nfnetlink]</span><br><span class="line">#16 [ffffb71241e37b88] netlink_rcv_skb at ffffffffbce07a3c</span><br><span class="line">#17 [ffffb71241e37bd8] nfnetlink_rcv at ffffffffc0955d08 [nfnetlink]</span><br><span class="line">#18 [ffffb71241e37c18] netlink_unicast at ffffffffbce0725e</span><br><span class="line">#19 [ffffb71241e37c58] netlink_sendmsg at ffffffffbce07524</span><br><span class="line">#20 [ffffb71241e37cc8] sock_sendmsg at ffffffffbcd751fc</span><br><span class="line">#21 [ffffb71241e37ce0] ____sys_sendmsg at ffffffffbcd7551b</span><br><span class="line">#22 [ffffb71241e37d58] ___sys_sendmsg at ffffffffbcd76b9c</span><br><span class="line">#23 [ffffb71241e37eb0] __sys_sendmsg at ffffffffbcd76c67</span><br><span class="line">#24 [ffffb71241e37f38] do_syscall_64 at ffffffffbc60420b</span><br><span class="line">#25 [ffffb71241e37f50] entry_SYSCALL_64_after_hwframe at ffffffffbd0000ad</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>我们的场景是通过<code>NFQUEUE</code>机制将网络数据包上送到用户态，由用户态完成检测后再下发裁决放行或丢弃。从堆栈看崩溃就发生在用户态进程下发裁决的过程中，销毁<code>sock</code>结构的过程中调用自旋锁逻辑出现了崩溃。</p>
+<p>反汇编函数<code>__pv_queued_spin_lock_slowpath</code>进行查看:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">/usr/src/debug/kernel-4.18.0-305.3.1.el8_4/linux-4.18.0-305.3.1.el8.x86_64/kernel/locking/qspinlock.c: 139</span><br><span class="line">0xffffffffbc73cbd2 &lt;__pv_queued_spin_lock_slowpath+402&gt;:        add    -0x42884760(,%rax,8),%r12</span><br><span class="line">/usr/src/debug/kernel-4.18.0-305.3.1.el8_4/linux-4.18.0-305.3.1.el8.x86_64/./include/linux/compiler.h: 294</span><br><span class="line">0xffffffffbc73cbda &lt;__pv_queued_spin_lock_slowpath+410&gt;:        mov    %rbp,(%r12)</span><br><span class="line">/usr/src/debug/kernel-4.18.0-305.3.1.el8_4/linux-4.18.0-305.3.1.el8.x86_64/kernel/locking/qspinlock_paravirt.h: 301</span><br><span class="line">0xffffffffbc73cbde &lt;__pv_queued_spin_lock_slowpath+414&gt;:        mov    $0x8000,%eax</span><br><span class="line">0xffffffffbc73cbe3 &lt;__pv_queued_spin_lock_slowpath+419&gt;:        jmp    0xffffffffbc73cbfa &lt;__pv_queued_spin_lock_slowpath+442&gt;</span><br></pre></td></tr></table></figure>
+
+<p>结合源码可以确认崩溃在<code>WRITE_ONCE</code>的调用:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * if there was a previous node; link it and wait until reaching the</span></span><br><span class="line"><span class="comment"> * head of the waitqueue.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">if</span> (old &amp; _Q_TAIL_MASK) &#123;</span><br><span class="line">        prev = decode_tail(old);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Link @node into the waitqueue. */</span></span><br><span class="line">        WRITE_ONCE(prev-&gt;next, node);</span><br><span class="line"></span><br><span class="line">        pv_wait_node(node, prev);</span><br><span class="line">        arch_mcs_spin_lock_contended(&amp;node-&gt;locked);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * While waiting for the MCS lock, the next pointer may have</span></span><br><span class="line"><span class="comment">         * been set by another lock waiter. We optimistically load</span></span><br><span class="line"><span class="comment">         * the next pointer &amp; prefetch the cacheline for writing</span></span><br><span class="line"><span class="comment">         * to reduce latency in the upcoming MCS unlock operation.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        next = READ_ONCE(node-&gt;next);</span><br><span class="line">        <span class="keyword">if</span> (next)</span><br><span class="line">                prefetchw(next);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>崩溃时执行指令要写入的<code>r12</code>寄存器所指向的地址为非法值因而导致崩溃。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mov    %rbp,(%r12)</span><br></pre></td></tr></table></figure>
+
+<p>继续分析锁结构的内容。<code>__pv_queued_spin_lock_slowpath</code>开始执行时会将寄存器<code>rdi</code>值写入到<code>rbx</code>，后续<code>rbx</code>没有再被写入。因而此时，<code>rbx</code>的值<code>ffff99f4a6ffc624</code>为<code>struct qspinlock</code>参数的地址:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">/usr/src/debug/kernel-4.18.0-305.3.1.el8_4/linux-4.18.0-305.3.1.el8.x86_64/kernel/locking/qspinlock.c: 325</span><br><span class="line">0xffffffffbc73ca40 &lt;__pv_queued_spin_lock_slowpath&gt;:    nopl   0x0(%rax,%rax,1) [FTRACE NOP]</span><br><span class="line">/usr/src/debug/kernel-4.18.0-305.3.1.el8_4/linux-4.18.0-305.3.1.el8.x86_64/kernel/locking/qspinlock.c: 409</span><br><span class="line">0xffffffffbc73ca45 &lt;__pv_queued_spin_lock_slowpath+5&gt;:  push   %r15</span><br><span class="line">0xffffffffbc73ca47 &lt;__pv_queued_spin_lock_slowpath+7&gt;:  mov    $0x2ac00,%rax</span><br><span class="line">0xffffffffbc73ca4e &lt;__pv_queued_spin_lock_slowpath+14&gt;: push   %r14</span><br><span class="line">0xffffffffbc73ca50 &lt;__pv_queued_spin_lock_slowpath+16&gt;: push   %r13</span><br><span class="line">0xffffffffbc73ca52 &lt;__pv_queued_spin_lock_slowpath+18&gt;: push   %r12</span><br><span class="line">0xffffffffbc73ca54 &lt;__pv_queued_spin_lock_slowpath+20&gt;: push   %rbp</span><br><span class="line">0xffffffffbc73ca55 &lt;__pv_queued_spin_lock_slowpath+21&gt;: push   %rbx</span><br><span class="line">0xffffffffbc73ca56 &lt;__pv_queued_spin_lock_slowpath+22&gt;: mov    %rdi,%rbx</span><br><span class="line">0xffffffffbc73ca59 &lt;__pv_queued_spin_lock_slowpath+25&gt;: sub    $0x8,%rsp</span><br></pre></td></tr></table></figure>
+
+<p>查看锁结构数据，很明显数据不对:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct qspinlock ffff99f4a6ffc624</span><br><span class="line">struct qspinlock &#123;</span><br><span class="line">  &#123;</span><br><span class="line">    val = &#123;</span><br><span class="line">      counter = 589823</span><br><span class="line">    &#125;,</span><br><span class="line">    &#123;</span><br><span class="line">      locked = 255 &#x27;\377&#x27;,</span><br><span class="line">      pending = 255 &#x27;\377&#x27;</span><br><span class="line">    &#125;,</span><br><span class="line">    &#123;</span><br><span class="line">      locked_pending = 65535,</span><br><span class="line">      tail = 8</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因而开始怀疑<code>sock</code>结构的内容被写脏了，继续分析<code>sock</code>结构:</p>
+<p>通过偏移量可以计算出<code>sk</code>地址为<code>ffff99f4a6ffc3f0</code>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -xo sock.sk_callback_lock</span><br><span class="line">struct sock &#123;</span><br><span class="line">  [0x230] rwlock_t sk_callback_lock;</span><br><span class="line">&#125;</span><br><span class="line">crash&gt; struct -xo rwlock_t</span><br><span class="line">typedef struct &#123;</span><br><span class="line">  [0x0] arch_rwlock_t raw_lock;</span><br><span class="line">&#125; rwlock_t;</span><br><span class="line">SIZE: 0x8</span><br><span class="line">crash&gt; struct -xo arch_rwlock_t</span><br><span class="line">typedef struct qrwlock &#123;</span><br><span class="line">        union &#123;</span><br><span class="line">  [0x0]     atomic_t cnts;</span><br><span class="line">            struct &#123;</span><br><span class="line">  [0x0]         u8 wlocked;</span><br><span class="line">  [0x1]         u8 __lstate[3];</span><br><span class="line">            &#125;;</span><br><span class="line">        &#125;;</span><br><span class="line">  [0x4] arch_spinlock_t wait_lock;</span><br><span class="line">&#125; arch_rwlock_t;</span><br><span class="line">SIZE: 0x8</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>sock</code>结构:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">skc_family = 0xa,</span><br><span class="line">skc_state = 0xc,</span><br><span class="line">skc_reuse = 0x6,</span><br><span class="line">skc_reuseport = 0x0,</span><br><span class="line">skc_ipv6only = 0x1,</span><br><span class="line">skc_net_refcnt = 0x0,</span><br></pre></td></tr></table></figure>
+
+<p>发现<code>sock</code>结构的<code>skc_reuseport</code>为<code>0</code>, 正常情况下并不应该调用到函数<code>reuseport_detach_sock</code>。</p>
+<p>查看源码发现中判断是否调用<code>reuseport_detach_sock</code>是依赖字段<code>sk_reuseport_cb</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">sk_destruct</span><span class="params">(<span class="keyword">struct</span> sock *sk)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="type">bool</span> use_call_rcu = sock_flag(sk, SOCK_RCU_FREE);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (rcu_access_pointer(sk-&gt;sk_reuseport_cb)) &#123;</span><br><span class="line">                reuseport_detach_sock(sk);</span><br><span class="line">                use_call_rcu = <span class="literal">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (use_call_rcu)</span><br><span class="line">                call_rcu(&amp;sk-&gt;sk_rcu, __sk_destruct);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">                __sk_destruct(&amp;sk-&gt;sk_rcu);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>查看字段<code>sk_reuseport_cb</code>发现指针明显不合法：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; <span class="class"><span class="keyword">struct</span> -<span class="title">x</span> <span class="title">sock</span>.<span class="title">sk_reuseport_cb</span>  <span class="title">ffff99f4a6ffc3f0</span></span></span><br><span class="line"><span class="class">  <span class="title">sk_reuseport_cb</span> =</span> <span class="number">0x37cbbd77ffff0000</span></span><br><span class="line">crash&gt; <span class="class"><span class="keyword">struct</span> -<span class="title">x</span> <span class="title">sock_reuseport</span> 0<span class="title">x37cbbd77ffff0000</span></span></span><br><span class="line"><span class="class"><span class="keyword">struct</span>:</span> invalid kernel virtual address: <span class="number">0x37cbbd77ffff0000</span></span><br></pre></td></tr></table></figure>
+
+<p>因而怀疑该<code>sock</code>结构并不是完整的<code>sock</code>结构。</p>
+<p>继续查看<code>sock</code>结构状态，发现状态为<code>TCP_NEW_SYN_RECV</code></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">skc_state = 0xc,</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> &#123;</span></span><br><span class="line">        TCP_ESTABLISHED = <span class="number">1</span>,</span><br><span class="line">        TCP_SYN_SENT,</span><br><span class="line">        TCP_SYN_RECV,</span><br><span class="line">        TCP_FIN_WAIT1,</span><br><span class="line">        TCP_FIN_WAIT2,</span><br><span class="line">        TCP_TIME_WAIT,</span><br><span class="line">        TCP_CLOSE,</span><br><span class="line">        TCP_CLOSE_WAIT,</span><br><span class="line">        TCP_LAST_ACK,</span><br><span class="line">        TCP_LISTEN,</span><br><span class="line">        TCP_CLOSING,    <span class="comment">/* Now a valid state */</span></span><br><span class="line">        TCP_NEW_SYN_RECV,</span><br><span class="line"></span><br><span class="line">        TCP_MAX_STATES  <span class="comment">/* Leave at the end! */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>而状态为<code>TCP_NEW_SYN_RECV</code>状态时，此时的<code>sock</code>结构不是完整的<code>sock</code>结构，而是<code>tcp_request_sock</code>结构。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -x tcp_request_sock</span><br><span class="line">struct tcp_request_sock &#123;</span><br><span class="line">    struct inet_request_sock req;</span><br><span class="line">    const struct tcp_request_sock_ops *af_specific;</span><br><span class="line">    u64 snt_synack;</span><br><span class="line">    bool tfo_listener;</span><br><span class="line">    bool is_mptcp;</span><br><span class="line">    bool drop_req;</span><br><span class="line">    u32 txhash;</span><br><span class="line">    u32 rcv_isn;</span><br><span class="line">    u32 snt_isn;</span><br><span class="line">    u32 ts_off;</span><br><span class="line">    u32 last_oow_ack_time;</span><br><span class="line">    u32 rcv_nxt;</span><br><span class="line">&#125;</span><br><span class="line">SIZE: 0x148</span><br><span class="line">crash&gt; struct -xo sock.sk_callback_lock</span><br><span class="line">struct sock &#123;</span><br><span class="line">  [0x230] rwlock_t sk_callback_lock;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>tcp_request_sock</code>结构的大小为<code>0x148</code>, 而<code>sk_callback_lock</code>的偏移为<code>0x230</code>， 因而会越界读取到脏数据，因而调用到<code>reuseport_detach_sock</code>路径。</p>
+<p>继续从堆栈向上溯源查看<code>nf_queue_entry_release_refs</code>代码:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">nf_queue_entry_release_refs</span><span class="params">(<span class="keyword">struct</span> nf_queue_entry *entry)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">nf_hook_state</span> *<span class="title">state</span> =</span> &amp;entry-&gt;state;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Release those devices we held, or Alexey will kill me. */</span></span><br><span class="line">        <span class="keyword">if</span> (state-&gt;in)</span><br><span class="line">                dev_put(state-&gt;in);</span><br><span class="line">        <span class="keyword">if</span> (state-&gt;out)</span><br><span class="line">                dev_put(state-&gt;out);</span><br><span class="line">        <span class="keyword">if</span> (state-&gt;sk)</span><br><span class="line">                sock_put(state-&gt;sk);</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">if</span> IS_ENABLED(CONFIG_BRIDGE_NETFILTER)</span></span><br><span class="line">        <span class="keyword">if</span> (entry-&gt;physin)</span><br><span class="line">                dev_put(entry-&gt;physin);</span><br><span class="line">        <span class="keyword">if</span> (entry-&gt;physout)</span><br><span class="line">                dev_put(entry-&gt;physout);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>发现<code>nf_queue_entry_release_refs</code>是直接调用<code>sock_put</code>进行的引用计数释放，而未区分<code>sock</code>结构和<code>request_sock</code>结构，也就是在这里将<code>tcp_request_sock</code>当成<code>sock</code>结构来进行释放，最终导致崩溃。</p>
+<p>内核官方已经修复了这个BUG:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/commit/747670fd9a2d1b7774030dba65ca022ba442ce71">https://github.com/torvalds/linux/commit/747670fd9a2d1b7774030dba65ca022ba442ce71</a></li>
+</ul>
+<p>如果要执行到本次崩溃的堆栈，需要<code>sk_refcnt</code>为<code>1</code>, 也就是<code>nfqueue</code>所持有的引用计数必须为最后一个:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Ungrab socket and destroy it, if it was the last reference. */</span></span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">void</span> <span class="title function_">sock_put</span><span class="params">(<span class="keyword">struct</span> sock *sk)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="keyword">if</span> (refcount_dec_and_test(&amp;sk-&gt;sk_refcnt))</span><br><span class="line">                sk_free(sk);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>目前想到的场景可以有两种:</p>
+<ol>
+<li>内核回复<code>syn/ack</code>包后，在超时时间内没有收到<code>ack</code>包，于是重传<code>syn/ack</code>包，这个数据包被<code>NFQUEUE</code>送到用户态，<code>NFQUEUE</code>持有一个引用计数。而这时<code>ack</code>包到达，完成三次握手，用户态程序调用了<code>accept()</code>, 此时，<code>request_sock</code>从<code>listener</code>的队列中移除，只剩下<code>NFQUEUE</code>所持有的引用计数。</li>
+<li><code>NFQUEUE</code>持有<code>request_sock</code>的引用计数期间，<code>syn/ack</code>包的所有重传都已超时，这时<code>NFQUEUE</code>所持有的引用计数就是<code>request_sock</code>的唯一引用计数了。<code>SYN/ACK</code>重传参数在<code>CentOS</code>的默认值为<code>5</code>, 全部重传完成约<code>64</code>秒, 因而在实际场景下不太会出现，但可以将该值设置为<code>0</code>来构造该场景。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@centos8<span class="number">-2</span> linux<span class="number">-4.18</span><span class="number">.0</span><span class="number">-305.3</span><span class="number">.1</span>.el8.x86_64]<span class="meta"># sysctl -a |grep synack</span></span><br><span class="line">net.ipv4.tcp_synack_retries = <span class="number">5</span></span><br></pre></td></tr></table></figure></li>
+</ol>
+<p>本文分析的崩溃就是第一种场景, 可以看到<code>tcp_request_sock</code>结构的<code>num_retrans</code>为<code>1</code>，表示重传了一次：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">struct -x tcp_request_sock  ffff99f4a6ffc3f0</span><br><span class="line">...</span><br><span class="line">      dl_next = 0xffff99f523345a40,</span><br><span class="line">      mss = 0x58c,</span><br><span class="line">      num_retrans = 0x1,</span><br><span class="line">      syncookie = 0x0,</span><br><span class="line">      num_timeout = 0x1,</span><br><span class="line">      ts_recent = 0x29596c,</span><br><span class="line"></span><br><span class="line">      ...</span><br><span class="line"></span><br><span class="line">      rsk_ops = 0xffffffffbde2a6e0,</span><br><span class="line">      sk = 0xffff99f4fb463d80,</span><br><span class="line">      saved_syn = 0x0,</span><br><span class="line">      secid = 0x6806fc76,</span><br><span class="line">      peer_secid = 0x1d810b44</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p><code>tcp_request_sock</code>结构中的<code>sk</code>字段也指向了新建的完整<code>sock</code>。</p>
+<p>此外，从源码中看到，在将<code>tcp_request_sock</code>结构当作<code>sock</code>结构来释放的过程中，即使从<code>sock_put</code>调用到了<code>sk_free</code>, 如果<code>sk_wmem_alloc</code>值不为<code>1</code>也不会调用<code>__sk_free</code>, 只是将<code>sk_wmem_alloc</code>所对应的内存值减<code>1</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> <span class="title function_">sk_free</span><span class="params">(<span class="keyword">struct</span> sock *sk)</span></span><br><span class="line">&#123;</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * We subtract one from sk_wmem_alloc and can know if</span></span><br><span class="line"><span class="comment">         * some packets are still in some tx queue.</span></span><br><span class="line"><span class="comment">         * If not null, sock_wfree() will call __sk_free(sk) later</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">if</span> (refcount_dec_and_test(&amp;sk-&gt;sk_wmem_alloc))</span><br><span class="line">                __sk_free(sk);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而<code>sk_wmem_alloc</code>的偏移为<code>0x144</code>, 而<code>tcp_request_sock</code>的大小为<code>0x148</code>, 所修改的位置恰好是最后对齐的四个无用字节，因而没有其他副作用，只是单纯的造成该<code>tcp_request_sock</code>结构内存泄漏。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">crash&gt; struct -xo sock.sk_wmem_alloc</span><br><span class="line">struct sock &#123;</span><br><span class="line">  [0x144] refcount_t sk_wmem_alloc;</span><br><span class="line">&#125;</span><br><span class="line">crash&gt; struct -xo tcp_request_sock</span><br><span class="line">struct tcp_request_sock &#123;</span><br><span class="line">    [0x0] struct inet_request_sock req;</span><br><span class="line">  [0x118] const struct tcp_request_sock_ops *af_specific;</span><br><span class="line">  [0x120] u64 snt_synack;</span><br><span class="line">  [0x128] bool tfo_listener;</span><br><span class="line">  [0x129] bool is_mptcp;</span><br><span class="line">  [0x12a] bool drop_req;</span><br><span class="line">  [0x12c] u32 txhash;</span><br><span class="line">  [0x130] u32 rcv_isn;</span><br><span class="line">  [0x134] u32 snt_isn;</span><br><span class="line">  [0x138] u32 ts_off;</span><br><span class="line">  [0x13c] u32 last_oow_ack_time;</span><br><span class="line">  [0x140] u32 rcv_nxt;</span><br><span class="line">&#125;</span><br><span class="line">SIZE: 0x148</span><br></pre></td></tr></table></figure>
+
+<p><code>CentOS8-stream</code>内核版本<code>4.18.0-373.el8.x86_64</code>之后修复了该BUG。分析清楚了具体的触发逻辑后，如果不能升级内核也可以通过<code>hook</code> <code>nf_reinject</code>函数来进行规避。</p>
+<p>参考:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://lihanlu.cn/new-qspinlock/">http://lihanlu.cn/new-qspinlock/</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/commit/747670fd9a2d1b7774030dba65ca022ba442ce71">https://github.com/torvalds/linux/commit/747670fd9a2d1b7774030dba65ca022ba442ce71</a></li>
+<li><a target="_blank" rel="noopener" href="https://nan01ab.github.io/2019/10/Linux-NetStack.html">https://nan01ab.github.io/2019/10/Linux-NetStack.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/Alexkk/p/12101950.html">https://www.cnblogs.com/Alexkk/p/12101950.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/sinat_20184565/article/details/88723621">https://blog.csdn.net/sinat_20184565/article/details/88723621</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/xingruizhi/p/14331785.html">https://www.cnblogs.com/xingruizhi/p/14331785.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/u011130578/article/details/44954891">https://blog.csdn.net/u011130578/article/details/44954891</a></li>
+<li><a target="_blank" rel="noopener" href="https://wangquan.blog.csdn.net/article/details/108908194">https://wangquan.blog.csdn.net/article/details/108908194</a></li>
+<li><a target="_blank" rel="noopener" href="https://gohalo.me/post/network-synack-queue.html">https://gohalo.me/post/network-synack-queue.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/25313903">https://zhuanlan.zhihu.com/p/25313903</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kernel/" rel="tag"># Kernel</a>
+              <a href="/tags/Network/" rel="tag"># Network</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/02/15/ct-fix/" rel="prev" title="nf_ct_deliver_cached_events崩溃修复或规避方案">
+      <i class="fa fa-chevron-left"></i> nf_ct_deliver_cached_events崩溃修复或规避方案
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/06/19/netfiter-priority/" rel="next" title="netfilter中相同优先级的HOOK函数的执行顺序">
+      netfilter中相同优先级的HOOK函数的执行顺序 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

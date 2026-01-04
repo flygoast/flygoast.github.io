@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在我们的一个CentOS 7.8系统上，&#x2F;tmp目录下偶尔会有一些随机名称的文件产生。业务比较久远，已经不清楚这些文件的来源，需要确定是哪个进程在创建它们。 Linux以VFS: Virtual File System通用文件模型的方式在物理存储介质上的文件系统和用户接口之间建立一个虚拟文件系统的抽象层。其中最重要的两个结构是:  inode: 存放文件的一般信息，每个inode结构都有自己的编号">
+<meta property="og:type" content="article">
+<meta property="og:title" content="使用eBPF和BCC调查创建文件的进程">
+<meta property="og:url" content="http://just4coding.com/2022/03/19/ebpf-bcc/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="在我们的一个CentOS 7.8系统上，&#x2F;tmp目录下偶尔会有一些随机名称的文件产生。业务比较久远，已经不清楚这些文件的来源，需要确定是哪个进程在创建它们。 Linux以VFS: Virtual File System通用文件模型的方式在物理存储介质上的文件系统和用户接口之间建立一个虚拟文件系统的抽象层。其中最重要的两个结构是:  inode: 存放文件的一般信息，每个inode结构都有自己的编号">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-03-19T07:49:15.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.499Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="eBPF">
+<meta property="article:tag" content="BCC">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2022/03/19/ebpf-bcc/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>使用eBPF和BCC调查创建文件的进程 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2022/03/19/ebpf-bcc/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          使用eBPF和BCC调查创建文件的进程
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2022-03-19 15:49:15" itemprop="dateCreated datePublished" datetime="2022-03-19T15:49:15+08:00">2022-03-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Network/" itemprop="url" rel="index">
+                    <span itemprop="name">Network</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在我们的一个<code>CentOS 7.8</code>系统上，<code>/tmp</code>目录下偶尔会有一些随机名称的文件产生。业务比较久远，已经不清楚这些文件的来源，需要确定是哪个进程在创建它们。</p>
+<p><code>Linux</code>以<code>VFS: Virtual File System</code>通用文件模型的方式在物理存储介质上的文件系统和用户接口之间建立一个虚拟文件系统的抽象层。其中最重要的两个结构是:</p>
+<ul>
+<li><code>inode</code>: 存放文件的一般信息，每个<code>inode</code>结构都有自己的编号，这个号码唯一标识了文件系统中的文件。</li>
+<li><code>dentry</code>: 存放文件名称信息，以及与对应文件进行链接的有关信息。</li>
+</ul>
+<p><code>VFS</code>创建文件的最主要的步骤是:</p>
+<ol>
+<li>为要创建的文件创建一个<code>dentry</code>结构</li>
+<li>为要创建的文件创建一个<code>inode</code>结构并分配<code>inode</code>编号</li>
+<li>将<code>inode</code>编号和文件名映射关系保存在所分配的<code>dentry</code>结构中</li>
+<li>将<code>dentry</code>写入到父目录的数据区</li>
+</ol>
+<span id="more"></span>
+
+<p>这个过程中会调用到<code>vfs_create</code>函数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">vfs_create</span><span class="params">(<span class="keyword">struct</span> inode *dir, <span class="keyword">struct</span> dentry *dentry, <span class="type">umode_t</span> mode,</span></span><br><span class="line"><span class="params">        <span class="type">bool</span> want_excl)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">int</span> error = may_create(dir, dentry);</span><br><span class="line">    <span class="keyword">if</span> (error)</span><br><span class="line">        <span class="keyword">return</span> error;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!dir-&gt;i_op-&gt;create)</span><br><span class="line">        <span class="keyword">return</span> -EACCES; <span class="comment">/* shouldn&#x27;t it be ENOSYS? */</span></span><br><span class="line">    mode &amp;= S_IALLUGO;</span><br><span class="line">    mode |= S_IFREG;</span><br><span class="line">    error = security_inode_create(dir, dentry, mode);</span><br><span class="line">    <span class="keyword">if</span> (error)</span><br><span class="line">        <span class="keyword">return</span> error;</span><br><span class="line">    error = dir-&gt;i_op-&gt;create(dir, dentry, mode, want_excl);</span><br><span class="line">    <span class="keyword">if</span> (!error)</span><br><span class="line">        fsnotify_create(dir, dentry);</span><br><span class="line">    <span class="keyword">return</span> error;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中，<code>dentry</code>参数是文件的目录项结构，<code>dir</code>参数是<code>dentry</code>结构对应的<code>inode</code>结构。<code>vfs_create</code>检查是否可以在<code>dir</code>指定的目录下创建该<code>dentry</code>结构指定的文件对象，最后调用真实文件系统的<code>create</code>函数指针创建文件。</p>
+<p>我们可以跟踪<code>vfs_create</code>来找出究竟是哪个进程在创建特定文件。</p>
+<p>要动态跟踪内核函数，第一时间想到可以使用<code>systemtap</code>来实现。但最近发现<code>CentOS7.6</code>(内核版本:<code>3.10.0-940.el7.x86_64</code>)添加了<code>eBPF</code>的支持，而<code>BCC</code>工具更是基于<code>eBPF</code>提供了更简单的跟踪内核的方法。<code>BCC</code>提供的<code>kprobe</code>和<code>kretprobe</code>可以在内核函数开始或者返回前，执行我们自定义的代码。我们选择使用<code>BCC</code>来实现<code>vfs_create</code>跟踪。</p>
+<p><code>BCC</code>的安装可以参考:<br><a target="_blank" rel="noopener" href="https://www.redhat.com/en/blog/introduction-ebpf-red-hat-enterprise-linux-7">https://www.redhat.com/en/blog/introduction-ebpf-red-hat-enterprise-linux-7</a></p>
+<p>因为系统上创建文件比较频繁，因而要调查的数据输出较多，我们可以跟据父目录的<code>inode</code>编号来对数据进行过滤, 跟踪程序的主体逻辑如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">kprobe__vfs_create</span><span class="params">(<span class="keyword">struct</span> pt_regs *ctx, <span class="keyword">struct</span> inode *dir, <span class="keyword">struct</span> dentry *dentry)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">qstr</span> <span class="title">d_name</span> =</span> dentry-&gt;d_name;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dir-&gt;i_ino != <span class="number">12345678</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (d_name.len == <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    bpf_trace_printk(<span class="string">&quot;FNAME: %s\\n&quot;</span>, d_name.name);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>编写<code>BCC</code>跟踪工具<code>file_create</code>:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python</span></span><br><span class="line"><span class="keyword">from</span> __future__ <span class="keyword">import</span> print_function</span><br><span class="line"><span class="keyword">from</span> bcc <span class="keyword">import</span> BPF</span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"></span><br><span class="line"><span class="comment"># arguments</span></span><br><span class="line">examples = <span class="string">&quot;&quot;&quot;file_create:</span></span><br><span class="line"><span class="string">    ./file_create               # trace all vfs_create()</span></span><br><span class="line"><span class="string">    ./file_create -i 67149893   # trace file create in directory with inode</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line">parser = argparse.ArgumentParser(</span><br><span class="line">    description=<span class="string">&quot;Trace file create&quot;</span>,</span><br><span class="line">    formatter_class=argparse.RawDescriptionHelpFormatter,</span><br><span class="line">    epilog=examples)</span><br><span class="line">parser.add_argument(<span class="string">&quot;-i&quot;</span>, <span class="string">&quot;--inode&quot;</span>,</span><br><span class="line">    <span class="built_in">help</span>=<span class="string">&quot;trace this inode only&quot;</span>)</span><br><span class="line">parser.add_argument(<span class="string">&quot;--ebpf&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>,</span><br><span class="line">    <span class="built_in">help</span>=argparse.SUPPRESS)</span><br><span class="line">args = parser.parse_args()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">bpf_source = <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">#include &lt;uapi/linux/ptrace.h&gt;</span></span><br><span class="line"><span class="string">#include &lt;linux/fs.h&gt;</span></span><br><span class="line"><span class="string">#include &lt;linux/sched.h&gt;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">int kprobe__vfs_create(struct pt_regs *ctx, struct inode *dir, struct dentry *dentry)</span></span><br><span class="line"><span class="string">&#123;</span></span><br><span class="line"><span class="string">    struct qstr d_name = dentry-&gt;d_name;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    FILTER</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    if (d_name.len == 0)</span></span><br><span class="line"><span class="string">        return 0;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    bpf_trace_printk(&quot;FNAME: %s\\n&quot;, d_name.name);</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    return 0;</span></span><br><span class="line"><span class="string">&#125;;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> args.inode:</span><br><span class="line">    bpf_source = bpf_source.replace(<span class="string">&#x27;FILTER&#x27;</span>,</span><br><span class="line">        <span class="string">&#x27;if (dir-&gt;i_ino != %s) &#123; return 0; &#125;&#x27;</span> % args.inode)</span><br><span class="line"><span class="keyword">else</span>:</span><br><span class="line">    bpf_source = bpf_source.replace(<span class="string">&#x27;FILTER&#x27;</span>, <span class="string">&#x27;&#x27;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> args.ebpf:</span><br><span class="line">    <span class="built_in">print</span>(bpf_source)</span><br><span class="line">    <span class="keyword">if</span> args.ebpf:</span><br><span class="line">        exit()</span><br><span class="line"></span><br><span class="line">bpf = BPF(text = bpf_source)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;Started...&quot;</span>)</span><br><span class="line">bpf.trace_print()</span><br></pre></td></tr></table></figure>
+
+<p>查看<code>/tmp</code>目录的<code>inode</code>编号:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@default ebpf]<span class="comment"># ls -id /tmp/</span></span><br><span class="line">67149893 /tmp/</span><br></pre></td></tr></table></figure>
+
+<p>启动跟踪工具:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">python file_create -i 67149893</span><br></pre></td></tr></table></figure>
+
+<p>在另一个终端上, 在<code>/tmp</code>目录下创建一个测试文件:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@default ~]<span class="comment"># touch /tmp/12345</span></span><br></pre></td></tr></table></figure>
+
+<p>可以看到跟踪工具输出了相应进程的<code>cmdline</code>和<code>pid</code>，以及创建的文件名称:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@default ebpf]<span class="comment"># python file_create -i 67149893</span></span><br><span class="line">Started...</span><br><span class="line">           touch-3366  [000] d...  3077.238910: : FNAME: 12345</span><br></pre></td></tr></table></figure>
+
+<p>这样，那些随机文件再次被创建时我们就获取到对应进程的信息了。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.redhat.com/en/blog/introduction-ebpf-red-hat-enterprise-linux-7">https://www.redhat.com/en/blog/introduction-ebpf-red-hat-enterprise-linux-7</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/iovisor/bcc">https://github.com/iovisor/bcc</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/742082/">https://lwn.net/Articles/742082/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/eBPF/" rel="tag"># eBPF</a>
+              <a href="/tags/BCC/" rel="tag"># BCC</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/03/02/socks-dante/" rel="prev" title="SOCKS5和Dante介绍">
+      <i class="fa fa-chevron-left"></i> SOCKS5和Dante介绍
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/03/22/ebpf-c/" rel="next" title="eBPF原理介绍与C语言实现eBPF程序">
+      eBPF原理介绍与C语言实现eBPF程序 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

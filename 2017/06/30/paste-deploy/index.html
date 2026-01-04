@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="之前的文章&lt;&lt;WSGI介绍&gt;&gt;简要介绍了WSGI中的server, application，middleware等概念。WSGI Server收到请求后调用WSGI application的入口点(一般为callable对象或者函数)来处理请求。比如，uWSGI和mod_wsgi默认调用名为application的入口点。 PasteDeploy是一套发现和配置WSGI应用">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PasteDeploy介绍">
+<meta property="og:url" content="http://just4coding.com/2017/06/30/paste-deploy/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="之前的文章&lt;&lt;WSGI介绍&gt;&gt;简要介绍了WSGI中的server, application，middleware等概念。WSGI Server收到请求后调用WSGI application的入口点(一般为callable对象或者函数)来处理请求。比如，uWSGI和mod_wsgi默认调用名为application的入口点。 PasteDeploy是一套发现和配置WSGI应用">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-06-29T16:04:03.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.482Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2017/06/30/paste-deploy/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>PasteDeploy介绍 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2017/06/30/paste-deploy/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          PasteDeploy介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-06-30 00:04:03" itemprop="dateCreated datePublished" datetime="2017-06-30T00:04:03+08:00">2017-06-30</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/OpenStack/" itemprop="url" rel="index">
+                    <span itemprop="name">OpenStack</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>之前的文章&lt;&lt;<a target="_blank" rel="noopener" href="http://www.just4coding.com/blog/2017/01/18/wsgi/">WSGI介绍</a>&gt;&gt;简要介绍了WSGI中的<code>server</code>, <code>application</code>，<code>middleware</code>等概念。<code>WSGI Server</code>收到请求后调用<code>WSGI application</code>的入口点(一般为<code>callable</code>对象或者函数)来处理请求。比如，<code>uWSGI</code>和<code>mod_wsgi</code>默认调用名为application的入口点。</p>
+<p>PasteDeploy是一套发现和配置WSGI应用的系统。它根据指定的配置文件动态生成入口点和组织<code>WSGI application</code>间的逻辑关系。配置文件为INI格式。每个配置文件可以包含多个<code>section</code>, <code>section</code>以格式为<code>[type:name]</code>形式的段名开始，段名行之后为具体配置。示例如下:</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[DEFAULT]</span></span><br><span class="line"><span class="attr">email</span> = alice@example.org</span><br><span class="line"></span><br><span class="line"><span class="section">[app:main]</span></span><br><span class="line"><span class="attr">use</span> = egg:BlogApp</span><br><span class="line"><span class="attr">database</span> = sqlite:/home/me/blog.db</span><br><span class="line">set <span class="attr">email</span> = bob@example.org</span><br><span class="line"></span><br><span class="line"><span class="section">[app:wiki]</span></span><br><span class="line"><span class="attr">use</span> = call:mywiki.main:application</span><br><span class="line"><span class="attr">database</span> = sqlite:/home/me/wiki.db</span><br></pre></td></tr></table></figure>
+
+<p>其中，<code>[DEFAULT]</code>段中为全局配置，各section中可以覆盖<code>[DEFAULT]</code>段中配置。如示例中的<code>set email</code>配置。</p>
+<span id="more"></span>
+
+<p>常用的type有:</p>
+<ul>
+<li>app: <code>WSGI application</code></li>
+<li>composite: WSGI应用的组合，它可以根据规则将请求分发给不同的应用</li>
+<li>filter：<code>WSGI middleware</code></li>
+<li>pipeline: 按顺序执行的一系列<code>middleware</code>和应用</li>
+</ul>
+<p>下面以示例来说明PasteDeploy的用法:<br>我们使用<code>uwsgi</code>做为<code>WSGI Server</code>，首先安装uwsgi环境:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y uwsgi uwsgi-plugin-python</span><br></pre></td></tr></table></figure>
+
+<p>安装Paste、WebOb，PasteDeploy:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install Paste WebOb PasteDeploy</span><br></pre></td></tr></table></figure>
+
+<p>创建三个文件:app.py, paste.ini, driver.py:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> wsgi &amp;&amp; <span class="built_in">cd</span> wsgi</span><br><span class="line"><span class="built_in">touch</span> app.py paste.ini driver.py</span><br></pre></td></tr></table></figure>
+
+<p>app.py内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob <span class="keyword">import</span> Response</span><br><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">demo_app</span>(<span class="params">req</span>):</span><br><span class="line">    <span class="keyword">return</span> Response(<span class="string">&#x27;Hello Demo\n&#x27;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">demo_app_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> demo_app</span><br></pre></td></tr></table></figure>
+
+<p>paste.ini内容如下:</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[app:main]</span></span><br><span class="line"><span class="attr">paste.app_factory</span> = app:demo_app_factory</span><br></pre></td></tr></table></figure>
+
+<p>driver.py内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> paste.deploy <span class="keyword">import</span> loadapp</span><br><span class="line">application = loadapp(<span class="string">&#x27;config:/home/vagrant/wsgi/paste.ini’)</span></span><br></pre></td></tr></table></figure>
+
+<p>启动uwsgi加载driver.py:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">uwsgi --http-socket 127.0.0.1:8080 --plugins-dir /usr/lib64/uwsgi/ --plugin python_plugin.so -w driver</span><br></pre></td></tr></table></figure>
+
+<p>打开另一终端访问8080端口，结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost src]# curl http://127.0.0.1:8080</span><br><span class="line">Hello Demo</span><br></pre></td></tr></table></figure>
+
+<p>下面具体各文件内容。首先来看<code>driver.py</code>文件, 我们使用<code>paste.deploy.loadapp</code>来动态生成名为<code>application</code>的WSGI应用入口点。<code>loadapp</code>参数为<code>config:</code>形式的配置文件路径和以及<code>#name</code>形式的section名称，比如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">config:/path/to/paste.ini#start</span><br></pre></td></tr></table></figure>
+
+<p>若没有指定名称，则使用名称为<code>main</code>的section。</p>
+<p>接下来看paste.ini。paste.ini中只包含一个app section。<br>section中有两种方法来指定要执行的WSGI应用。<br>一种是使用另外的URI或者应用名，如:</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[app:myapp]</span></span><br><span class="line"><span class="attr">use</span> = config:another_config_file.ini<span class="comment">#app_name</span></span><br></pre></td></tr></table></figure>
+
+<p>另外一种方式是直接指定需要执行的Python代码，如：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[app:myapp]</span></span><br><span class="line"><span class="attr">paste.app_factory</span> = myapp.modulename:app_factory</span><br></pre></td></tr></table></figure>
+
+<p>这种方式通过调用工厂函数来生成入口点。上述示例表示需要<code>import</code>模块<code>myapp.modulename</code>, 再调用<code>app_factory</code>获取WSGI应用入口点。<code>app_factory</code>的原型如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">app_factory</span>(<span class="params">global_config, **local_conf</span>):</span><br><span class="line">    <span class="keyword">return</span> wsgi_app</span><br></pre></td></tr></table></figure>
+
+<p><code>global_config</code>是一个字典类型，存储INI配置文件中放在<code>[DEFAULT]</code> section中的参数。<code>local_conf</code>表示关键字参数，存储相应section侧段中参数。</p>
+<p>下面看另一个示例。修改app.py为:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob <span class="keyword">import</span> Response</span><br><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">demo_app</span>(<span class="params">req</span>):</span><br><span class="line">    <span class="keyword">if</span> req.environ.has_key(<span class="string">&#x27;test&#x27;</span>):</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] += <span class="string">&quot;app\n&quot;</span> </span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] = <span class="string">&quot;app\n&quot;</span> </span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Response(req.environ[<span class="string">&#x27;test&#x27;</span>])</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">demo_app_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> demo_app</span><br></pre></td></tr></table></figure>
+
+<p>再创建文件foo_filter.py，内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify.middleware()</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">foo_filter</span>(<span class="params">req, app</span>):</span><br><span class="line">    <span class="keyword">if</span> req.environ.has_key(<span class="string">&#x27;test&#x27;</span>):</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] += <span class="string">&quot;foo\n&quot;</span> </span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] = <span class="string">&quot;foo\n&quot;</span> </span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> app(req)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">filter_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> foo_filter</span><br></pre></td></tr></table></figure>
+
+<p>创建文件bar_filter.py，内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify.middleware()</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bar_filter</span>(<span class="params">req, app</span>):</span><br><span class="line">    <span class="keyword">if</span> req.environ.has_key(<span class="string">&#x27;test&#x27;</span>):</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] += <span class="string">&quot;bar\n&quot;</span> </span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        req.environ[<span class="string">&quot;test&quot;</span>] = <span class="string">&quot;bar\n&quot;</span> </span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> app(req)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">filter_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> bar_filter</span><br></pre></td></tr></table></figure>
+
+<p>修改paste.ini为:</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[pipeline:main]</span></span><br><span class="line"><span class="attr">pipeline</span> = foo_filter bar_filter demo</span><br><span class="line"></span><br><span class="line"><span class="section">[filter:foo_filter]</span></span><br><span class="line"><span class="attr">paste.filter_factory</span> = foo_filter:filter_factory</span><br><span class="line"></span><br><span class="line"><span class="section">[filter:bar_filter]</span></span><br><span class="line"><span class="attr">paste.filter_factory</span> = bar_filter:filter_factory</span><br><span class="line"></span><br><span class="line"><span class="section">[app:demo]</span></span><br><span class="line"><span class="attr">paste.app_factory</span> = app:demo_app_factory</span><br></pre></td></tr></table></figure>
+
+<p>重启uwsgi, 再次访问8080端口:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost src]# curl http://127.0.0.1:8080</span><br><span class="line">foo</span><br><span class="line">bar</span><br><span class="line">app</span><br></pre></td></tr></table></figure>
+
+<p>首先来看<code>foo_filter.py</code>，它根据<code>req.environ[“test”]</code>是否存在，来直接赋值或者追加字符串”foo\n”。bar_filter.py逻辑类似。<br>再来看app.py, 它追加字符串”app\n”到<code>req.environ[“test”]</code>, 并将该字符串做为Response返回。</p>
+<p>paste.ini中我们使用pipeline类型来定义filter执行顺序，从结果可以看到foo_filter,bar_filter和app按我们在INI配置文件中指定的顺序来执行。我们再次修改paste.ini中的pipeline为:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pipeline = bar_filter foo_filter demo</span><br></pre></td></tr></table></figure>
+
+<p>再次访问8080端口, 看到结果顺序也跟着调整:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost src]# curl http://127.0.0.1:8080/</span><br><span class="line">bar</span><br><span class="line">foo</span><br><span class="line">app</span><br></pre></td></tr></table></figure>
+
+<p>下面再以实例介绍<code>composite</code>类型:<br>修改paste.ini为:</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[composite:main]</span></span><br><span class="line"><span class="attr">use</span> = egg:Paste<span class="comment">#urlmap</span></span><br><span class="line">/<span class="attr">foo</span> = foo</span><br><span class="line">/<span class="attr">bar</span> = bar</span><br><span class="line"></span><br><span class="line"><span class="section">[app:foo]</span></span><br><span class="line"><span class="attr">paste.app_factory</span> = foo_app:foo_app_factory</span><br><span class="line"></span><br><span class="line"><span class="section">[app:bar]</span></span><br><span class="line"><span class="attr">paste.app_factory</span> = bar_app:bar_app_factory</span><br></pre></td></tr></table></figure>
+
+<p>创建文件foo_app.py，内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob <span class="keyword">import</span> Response</span><br><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">foo_app</span>(<span class="params">req</span>):</span><br><span class="line">    <span class="keyword">return</span> Response(<span class="string">&quot;foo\n&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">foo_app_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> foo_app</span><br></pre></td></tr></table></figure>
+
+<p>创建bar_app.py，内容如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> webob <span class="keyword">import</span> Response</span><br><span class="line"><span class="keyword">from</span> webob.dec <span class="keyword">import</span> wsgify</span><br><span class="line"></span><br><span class="line"><span class="meta">@wsgify</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bar_app</span>(<span class="params">req</span>):</span><br><span class="line">    <span class="keyword">return</span> Response(<span class="string">&quot;bar\n&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bar_app_factory</span>(<span class="params">global_config, **local_config</span>):</span><br><span class="line">    <span class="keyword">return</span> bar_app</span><br></pre></td></tr></table></figure>
+
+<p>重启uwsgi, 分别访问<code>/foo</code>和<code>/bar</code>, 结果如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost src]# curl http://127.0.0.1:8080/foo</span><br><span class="line">foo</span><br><span class="line">[root@localhost src]# curl http://127.0.0.1:8080/bar</span><br><span class="line">bar</span><br></pre></td></tr></table></figure>
+
+<p>paste.ini中使用<code>paste</code>包中提供的应用<code>urlmap</code>根据请求的URL前缀将请求映射到不同的WSGI应用上, 这完成WEB框架的基本路由功能。</p>
+<p>从上述几个例子，我们可以体会到PasteDeploy给WSGI应用开发带来的便利。OpenStack各项目实现都使用了PasteDeploy, 理解PasteDeploy是理解OpenStack API实现的基础。</p>
+<p>详细说明参考官方文档:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://pastedeploy.readthedocs.io/en/latest/#">http://pastedeploy.readthedocs.io/en/latest/#</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2017/06/10/vmware-westeast/" rel="prev" title="VMware vSphere东西向网络防护">
+      <i class="fa fa-chevron-left"></i> VMware vSphere东西向网络防护
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2017/07/07/websocket/" rel="next" title="WebSocket介绍与实例分析">
+      WebSocket介绍与实例分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

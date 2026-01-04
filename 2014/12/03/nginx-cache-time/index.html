@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="业务要求Cache服务器能够随时增删允许访问的HOST。而每个HOST有单独的配置，这些配置随时都可能更改。如果单纯采用静态配置文件(nginx.conf)的方式，每次修改都要reload NGINX。如果更改很频繁，会造成服务器上存在大量的NGINX进程，导致服务器负载很高。因而我们将需要随时更改的配置存储于一个独立的配置服务器中。请求处理时，先去配置服务器中获取该请求需要使用的配置，再根据这些">
+<meta property="og:type" content="article">
+<meta property="og:title" content="修改NGINX实现灵活设置文件缓存时间">
+<meta property="og:url" content="http://just4coding.com/2014/12/03/nginx-cache-time/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="业务要求Cache服务器能够随时增删允许访问的HOST。而每个HOST有单独的配置，这些配置随时都可能更改。如果单纯采用静态配置文件(nginx.conf)的方式，每次修改都要reload NGINX。如果更改很频繁，会造成服务器上存在大量的NGINX进程，导致服务器负载很高。因而我们将需要随时更改的配置存储于一个独立的配置服务器中。请求处理时，先去配置服务器中获取该请求需要使用的配置，再根据这些">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-03T02:16:36.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.468Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/03/nginx-cache-time/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>修改NGINX实现灵活设置文件缓存时间 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/nginx-cache-time/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          修改NGINX实现灵活设置文件缓存时间
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 10:16:36" itemprop="dateCreated datePublished" datetime="2014-12-03T10:16:36+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>业务要求Cache服务器能够随时增删允许访问的HOST。而每个HOST有单独的配置，这些配置随时都可能更改。如果单纯采用静态配置文件(nginx.conf)的方式，每次修改都要reload NGINX。如果更改很频繁，会造成服务器上存在大量的NGINX进程，导致服务器负载很高。因而我们将需要随时更改的配置存储于一个独立的配置服务器中。请求处理时，先去配置服务器中获取该请求需要使用的配置，再根据这些配置进行相应的处理。因而，我们可以随时更改配置服务器中的相应内容。<br>其中一个配置就是文件缓存时间。NGINX中设置文件缓存时间有两种方法：</p>
+<ul>
+<li>设置proxy_cache_valid指令</li>
+<li>在上游响应中的添加”Cache-Control” header和”Expires” header</li>
+</ul>
+<p>其中上游响应header的优先级更高。当不想使用上游响应header中所设置的缓存时间时，可以使用以下指令来禁用。</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">proxy_ignore_headers</span> X-Accel-Expires;</span><br></pre></td></tr></table></figure>
+<p>这两种方法都无法满足我们根据动态配置来设置缓存时间的需求。因而我给NGINX添加了一个内置变量”cache_time”来支持灵活地设置缓存时间，并且该种方式具有最高的优先级。这样，可以非常方便地在ngx_lua等第三方模块中根据条件设置不同的缓存时间。</p>
+<p>在ngx_http_request_t添加一个cache_time成员，在ngx_http_core_variables数组中添加内置变量”cache_time”，”cache_time”在被赋值时会将值存储在r-&gt;cache_time中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#123; ngx_string(<span class="string">&quot;cache_time&quot;</span>), ngx_http_variable_request_set_time,</span><br><span class="line">  ngx_http_variable_request_get_time,</span><br><span class="line">  offsetof(<span class="type">ngx_http_request_t</span>, cache_time),</span><br><span class="line">  NGX_HTTP_VAR_CHANGEABLE|NGX_HTTP_VAR_NOCACHEABLE, <span class="number">0</span> &#125;,</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_variable_request_set_time</span><span class="params">(<span class="type">ngx_http_request_t</span> *r,</span></span><br><span class="line"><span class="params">    <span class="type">ngx_http_variable_value_t</span> *v, <span class="type">uintptr_t</span> data)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_str_t</span>  val;</span><br><span class="line">    <span class="type">time_t</span>     valid, *vp;</span><br><span class="line"></span><br><span class="line">    val.len = v-&gt;len;</span><br><span class="line">    val.data = v-&gt;data;</span><br><span class="line"></span><br><span class="line">    valid = ngx_parse_time(&amp;val, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (valid == (<span class="type">time_t</span>) NGX_ERROR) &#123;</span><br><span class="line">        ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;<span class="built_in">log</span>, <span class="number">0</span>,</span><br><span class="line">                      <span class="string">&quot;invalid time value &quot;</span>%V<span class="string">&quot;&quot;</span>, &amp;val);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    vp = (<span class="type">time_t</span> *) ((<span class="type">char</span> *) r + data);</span><br><span class="line"></span><br><span class="line">    *vp = valid;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因为”cache_time”变量需要比上游响应header具有更高的优先级，因而要在上游header处理之后再处理”cache_time”变量。上游响应的header在ngx_http_upstream_process_headers()中进行处理。因而我在upstream模块中添加了一个hook, 该hook在调用完ngx_http_upstream_process_headers()后，开始处理body前被调用。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (ngx_http_upstream_process_headers(r, u) != NGX_OK) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (u-&gt;post_headers) &#123;</span><br><span class="line">    rc = u-&gt;post_headers(r);</span><br><span class="line">    <span class="keyword">if</span> (rc != NGX_OK) &#123;</span><br><span class="line">        ngx_http_upstream_finalize_request(r, u, rc);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>proxy模块在该hook上注册一个函数，这个函数执行时，首先检查上游响应的状态码判断是否需要处理”cache_time”变量。检查通过后，读取”cache_time”变量的值，依据值来进行各种操作。当值为0时，禁用cache.为正值，则将缓存时间修改为该值。当修改cache缓存时间后，将上游响应中的”Cache-Control”和”Expires” header去除，不再发送给下游。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">u-&gt;post_headers = ngx_http_proxy_post_headers;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_proxy_post_headers</span><span class="params">(<span class="type">ngx_http_request_t</span> *r)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_uint_t</span>         i;</span><br><span class="line">    <span class="type">ngx_table_elt_t</span>  **ph;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (ngx_http_upstream_check_status(r-&gt;upstream-&gt;conf-&gt;cache_time_valid,</span><br><span class="line">                                       r-&gt;upstream-&gt;headers_in.status_n)</span><br><span class="line">        == NGX_DECLINED)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_OK;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (r-&gt;cache_time == (<span class="type">time_t</span>) <span class="number">-1</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_OK;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (r-&gt;cache_time == (<span class="type">time_t</span>) <span class="number">0</span>) &#123;</span><br><span class="line">        r-&gt;upstream-&gt;cacheable = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">return</span> NGX_OK;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    r-&gt;cache-&gt;valid_sec = ngx_time() + r-&gt;cache_time;</span><br><span class="line"></span><br><span class="line">    r-&gt;headers_out.expires-&gt;hash = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    ph = r-&gt;headers_out.cache_control.elts;</span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; r-&gt;headers_out.cache_control.nelts; i++) &#123;</span><br><span class="line">        ph[i]-&gt;hash = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/02/ejabberd-service/" rel="prev" title="ejabberd中Jabber组件协议实现">
+      <i class="fa fa-chevron-left"></i> ejabberd中Jabber组件协议实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/03/nginx-variables/" rel="next" title="NGINX变量机制分析">
+      NGINX变量机制分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

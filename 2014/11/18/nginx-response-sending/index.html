@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="NGINX中使用ngx_http_output_filter()向一个请求发送响应。 1234567891011121314151617181920ngx_int_tngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)&amp;#123;    ngx_int_t          rc;    ngx_connection_t  *">
+<meta property="og:type" content="article">
+<meta property="og:title" content="NGINX发送响应分析">
+<meta property="og:url" content="http://just4coding.com/2014/11/18/nginx-response-sending/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="NGINX中使用ngx_http_output_filter()向一个请求发送响应。 1234567891011121314151617181920ngx_int_tngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)&amp;#123;    ngx_int_t          rc;    ngx_connection_t  *">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-18T07:09:53.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.468Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/11/18/nginx-response-sending/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>NGINX发送响应分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/11/18/nginx-response-sending/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          NGINX发送响应分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-11-18 15:09:53" itemprop="dateCreated datePublished" datetime="2014-11-18T15:09:53+08:00">2014-11-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/NGINX/" itemprop="url" rel="index">
+                    <span itemprop="name">NGINX</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>NGINX中使用<code>ngx_http_output_filter()</code>向一个请求发送响应。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ngx_int_t</span></span><br><span class="line"><span class="title function_">ngx_http_output_filter</span><span class="params">(<span class="type">ngx_http_request_t</span> *r, <span class="type">ngx_chain_t</span> *in)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">ngx_int_t</span>          rc;</span><br><span class="line">    <span class="type">ngx_connection_t</span>  *c;</span><br><span class="line"></span><br><span class="line">    c = r-&gt;connection;</span><br><span class="line"></span><br><span class="line">    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c-&gt;<span class="built_in">log</span>, <span class="number">0</span>,</span><br><span class="line">                   <span class="string">&quot;http output filter &quot;</span>%V?%V<span class="string">&quot;&quot;</span>, &amp;r-&gt;uri, &amp;r-&gt;args);</span><br><span class="line"></span><br><span class="line">    rc = ngx_http_top_body_filter(r, in);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (rc == NGX_ERROR) &#123;</span><br><span class="line">        <span class="comment">/* NGX_ERROR may be returned by any filter */</span></span><br><span class="line">        c-&gt;error = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> rc;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中，<code>r</code>是请求结构体，<code>in</code>为以<code>ngx_chain_t</code>结构链接起来的需要发送的内容。<code>ngx_http_output_filter()</code>会调用<code>ngx_http_top_body_filter()</code>。NGINX采用filter机制对响应进行处理。filter分为<code>header filter</code>和<code>body filter</code>。NGINX分别将两种filter各构建成一个链表。全局变量<code>ngx_http_top_header_filter</code>指向<code>header filter</code>链表的头结点，而全局变量<code>ngx_http_top_body_filter</code>指向<code>body filter</code>链表的头结点。每个filter中用一个变量记录下一个filter，依据情况决定是调用下一个filter，还是直接返回。</p>
+<p>body filter链表顺序如下图:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">+--------------------------+</span><br><span class="line">|ngx_http_range_body_filter|</span><br><span class="line">+----------+---------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+---------+</span><br><span class="line">|ngx_http_copy_filter|</span><br><span class="line">+----------+---------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_charset_body_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------+</span><br><span class="line">|ngx_http_ssi_body_filter|</span><br><span class="line">+----------+-------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------+</span><br><span class="line">|ngx_http_postpone_filter|</span><br><span class="line">+----------+-------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+--------------+</span><br><span class="line">|ngx_http_gzip_body_filter|</span><br><span class="line">+----------+--------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_chunked_body_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+---------------------+</span><br><span class="line">|ngx_http_write_filter|</span><br><span class="line">+---------------------+</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>header filter链表顺序如图:</p>
+<figure class="highlight plaintext"><figcaption><span>token data</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">+----------------------------+</span><br><span class="line">|ngx_http_not_modified_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+------------+</span><br><span class="line">|ngx_http_headers_filter|</span><br><span class="line">+----------+------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------+</span><br><span class="line">|ngx_http_userid_filter|</span><br><span class="line">+----------+-----------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------------+</span><br><span class="line">|ngx_http_charset_header_filter|</span><br><span class="line">+----------+-------------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+---------------+</span><br><span class="line">|ngx_http_ssi_header_filter|</span><br><span class="line">+----------+---------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+----------------+</span><br><span class="line">|ngx_http_gzip_header_filter|</span><br><span class="line">+----------+----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------------+</span><br><span class="line">|ngx_http_range_header_filter|</span><br><span class="line">+----------+-----------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-------------------+</span><br><span class="line">|ngx_http_chunked_header_filter|</span><br><span class="line">+----------+-------------------+</span><br><span class="line">           |</span><br><span class="line">           v</span><br><span class="line">+----------+-----------+</span><br><span class="line">|ngx_http_header_filter|</span><br><span class="line">+----------------------+</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p><code>ngx_http_write_filter()</code>是最后一个被调用的<code>body filter</code>，它进行真正的网络I&#x2F;O操作，将响应发送给客户端。实际上, <code>ngx_http_header_filter()</code>也是调用<code>ngx_http_write_filter()</code>来发送响应中的headers。</p>
+<p><code>ngx_http_write_filter()</code>的简化流程如下:</p>
+<ul>
+<li>检查之前是否有错误发生(c-&gt;error被置位)。如果有错误发生，则没有必要再进行网络I&#x2F;O操作，直接返回NGX_ERROR。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (c-&gt;error) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>计算之前没有发送完成的内容大小并检查是否存在特殊标志。为了优化性能，当没有必要立即发送响应且响应内容大小没有达到设置的阀值时，NGINX可以暂时推迟发送该部分响应。参看:<code>postpone_output</code>指令。<code>flush</code>标志表示需要立即发送响应。<code>recycled</code>表示该buffer需要循环使用，因而需要立即发送以释放该buffer被重新使用。<code>last</code>标志表示该buffer是响应的最后一部分内容，因而也需要立即发送。</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (cl = r-&gt;out; cl; cl = cl-&gt;next) &#123;</span><br><span class="line">    ll = &amp;cl-&gt;next;</span><br><span class="line"></span><br><span class="line">    ......</span><br><span class="line"></span><br><span class="line">    size += ngx_buf_size(cl-&gt;buf);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;flush || cl-&gt;buf-&gt;recycled) &#123;</span><br><span class="line">        flush = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;last_buf) &#123;</span><br><span class="line">        last = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>计算本次将发送的内容大小，检查是否存在特殊标志，并将内容链接到r-&gt;out上。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (ln = in; ln; ln = ln-&gt;next) &#123;</span><br><span class="line">    cl = ngx_alloc_chain_link(r-&gt;pool);</span><br><span class="line">    <span class="keyword">if</span> (cl == <span class="literal">NULL</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    cl-&gt;buf = ln-&gt;buf;</span><br><span class="line">    *ll = cl;</span><br><span class="line">    ll = &amp;cl-&gt;next;</span><br><span class="line"></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    size += ngx_buf_size(cl-&gt;buf);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;flush || cl-&gt;buf-&gt;recycled) &#123;</span><br><span class="line">        flush = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (cl-&gt;buf-&gt;last_buf) &#123;</span><br><span class="line">        last = <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>根据情况决定是需要真正进行网络I&#x2F;O操作, 还是直接返回。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (!last &amp;&amp; !flush &amp;&amp; in &amp;&amp; size &lt; (<span class="type">off_t</span>) clcf-&gt;postpone_output) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>真正进行网络I&#x2F;O操作，发送内容。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chain = c-&gt;send_chain(c, r-&gt;out, limit);</span><br></pre></td></tr></table></figure></li>
+<li>回收发送完成内容的buffer和chain结构, 将没有发送完成的内容存入<code>r-&gt;out</code><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (cl = r-&gt;out; cl &amp;&amp; cl != chain; <span class="comment">/* void */</span>) &#123;</span><br><span class="line">    ln = cl;</span><br><span class="line">    cl = cl-&gt;next;</span><br><span class="line">    ngx_free_chain(r-&gt;pool, ln);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">r-&gt;out = chain;</span><br></pre></td></tr></table></figure></li>
+<li>根据发送是否完成，返回<code>NGX_OK</code>或<code>NGX_AGAIN</code>。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (chain) &#123;</span><br><span class="line">    c-&gt;buffered |= NGX_HTTP_WRITE_BUFFERED;</span><br><span class="line">    <span class="keyword">return</span> NGX_AGAIN;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">c-&gt;buffered &amp;= ~NGX_HTTP_WRITE_BUFFERED;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> ((c-&gt;buffered &amp; NGX_LOWLEVEL_BUFFERED) &amp;&amp; r-&gt;postponed == <span class="literal">NULL</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> NGX_AGAIN;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> NGX_OK;</span><br></pre></td></tr></table></figure>
+此外，<code>ngx_http_write_filter()</code>中也处理了限速发送的逻辑，本文不详述。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/11/14/ejabberd-login/" rel="prev" title="ejabberd登录验证流程分析">
+      <i class="fa fa-chevron-left"></i> ejabberd登录验证流程分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/11/24/ejabberd-ping/" rel="next" title="ejabberd中XMPP协议PING实现">
+      ejabberd中XMPP协议PING实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

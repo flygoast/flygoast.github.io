@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="TokyoCabinet(TC)提供了6种不同结构的数据库，包括:  (MDB) on-memory hash database (NDB) on-memory tree database (HDB) hash database (BDB) B+ tree database (FDB) fixed-length database (TDB) table database  每种数据库都有各自一套A">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Abstract Database和Skeleton Database">
+<meta property="og:url" content="http://just4coding.com/2014/12/03/tt-skeleton/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="TokyoCabinet(TC)提供了6种不同结构的数据库，包括:  (MDB) on-memory hash database (NDB) on-memory tree database (HDB) hash database (BDB) B+ tree database (FDB) fixed-length database (TDB) table database  每种数据库都有各自一套A">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-12-03T03:30:50.000Z">
+<meta property="article:modified_time" content="2026-01-04T08:37:33.470Z">
+<meta property="article:author" content="flygoast">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2014/12/03/tt-skeleton/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Abstract Database和Skeleton Database | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2014/12/03/tt-skeleton/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Abstract Database和Skeleton Database
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2014-12-03 11:30:50" itemprop="dateCreated datePublished" datetime="2014-12-03T11:30:50+08:00">2014-12-03</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2026-01-04 16:37:33" itemprop="dateModified" datetime="2026-01-04T16:37:33+08:00">2026-01-04</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/TokyoCabinet-TokyoTyrant/" itemprop="url" rel="index">
+                    <span itemprop="name">TokyoCabinet,TokyoTyrant</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>TokyoCabinet(TC)提供了6种不同结构的数据库，包括:</p>
+<ul>
+<li>(MDB) on-memory hash database</li>
+<li>(NDB) on-memory tree database</li>
+<li>(HDB) hash database</li>
+<li>(BDB) B+ tree database</li>
+<li>(FDB) fixed-length database</li>
+<li>(TDB) table database</li>
+</ul>
+<p>每种数据库都有各自一套API来进行各种操作。</p>
+<p>为了简化使用，TC还提供了一套通用的API来操作以上所有类型数据库，叫做Abstract Database API.</p>
+<p>Abstract Database API通过数据库名称来区分各类型数据库:</p>
+<ul>
+<li>“*”          on-memory hash database</li>
+<li>“+”          on-memory tree database</li>
+<li>“.tch”       hash database</li>
+<li>“.tcb”       B+ tree database</li>
+<li>“.tcf”       fixed-length database</li>
+<li>“.tct”       table database</li>
+</ul>
+<p>不仅如此，TC更进一步进行了抽象，在Abstract Database中还提供了一种Skeleton Database。<br>通过实现Skeleton Database指定的API，可以使用自定义的数据库类型。<br>Skeleton Database API结构体如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span>                        <span class="comment">/* type of structure for a extra database skeleton */</span></span><br><span class="line">  <span class="type">void</span> *opq;                            <span class="comment">/* opaque pointer */</span></span><br><span class="line">  <span class="type">void</span> (*del)(<span class="type">void</span> *);                  <span class="comment">/* destructor */</span></span><br><span class="line">  <span class="type">bool</span> (*open)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">char</span> *);</span><br><span class="line">  <span class="type">bool</span> (*close)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*put)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>);</span><br><span class="line">  <span class="type">bool</span> (*putkeep)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>);</span><br><span class="line">  <span class="type">bool</span> (*putcat)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>);</span><br><span class="line">  <span class="type">bool</span> (*out)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>);</span><br><span class="line">  <span class="type">void</span> *(*get)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">int</span> *);</span><br><span class="line">  <span class="type">int</span> (*vsiz)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>);</span><br><span class="line">  <span class="type">bool</span> (*iterinit)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">void</span> *(*iternext)(<span class="type">void</span> *, <span class="type">int</span> *);</span><br><span class="line">  TCLIST *(*fwmkeys)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">int</span>);</span><br><span class="line">  <span class="type">int</span> (*addint)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">int</span>);</span><br><span class="line">  <span class="type">double</span> (*adddouble)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">double</span>);</span><br><span class="line">  <span class="type">bool</span> (*sync)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*optimize)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">char</span> *);</span><br><span class="line">  <span class="type">bool</span> (*vanish)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*copy)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">char</span> *);</span><br><span class="line">  <span class="type">bool</span> (*tranbegin)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*trancommit)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*tranabort)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">const</span> <span class="type">char</span> *(*path)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">uint64_t</span> (*rnum)(<span class="type">void</span> *);</span><br><span class="line">  <span class="type">uint64_t</span> (*size)(<span class="type">void</span> *);</span><br><span class="line">  TCLIST *(*misc)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">char</span> *, <span class="type">const</span> TCLIST *);</span><br><span class="line">  <span class="type">bool</span> (*putproc)(<span class="type">void</span> *, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, <span class="type">const</span> <span class="type">void</span> *, <span class="type">int</span>, TCPDPROC, <span class="type">void</span> *);</span><br><span class="line">  <span class="type">bool</span> (*foreach)(<span class="type">void</span> *, TCITER, <span class="type">void</span> *);</span><br><span class="line">&#125; ADBSKEL;</span><br></pre></td></tr></table></figure>
+<p>各成员与其它类型API相应成员意义一致。在开发时，只需实现功能必需的相应函数，忽略其他成员。</p>
+<p>使用示例：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">ADBSKEL skel;</span><br><span class="line"><span class="built_in">memset</span>(<span class="number">0</span>, &amp;skel, <span class="keyword">sizeof</span>(skel));</span><br><span class="line">skel.opq = mydbnew();</span><br><span class="line">skel.del = mydbdel;</span><br><span class="line">skel.open = mydbopen;</span><br><span class="line">skel.close = mydbclose;</span><br><span class="line">...</span><br><span class="line">TCADB *adb = tcadbnew();</span><br><span class="line">tcadbsetskel(adb, &amp;skel);</span><br><span class="line">tcadbopen(adb, <span class="string">&quot;foobarbaz&quot;</span>);</span><br></pre></td></tr></table></figure>
+<p>为了解决多进程共享访问和远程访问TC数据库的不便与繁琐，TC作者开发了一个网络访问层，叫做TokyoTyrant(TT)。它使用TC的Abstract Database API来访问TC数据库。因而内置支持skeleton database扩展。<br>TT提供了-skel命令行选项来指定skeleton database，启动时它会加载传入的Shared Object(SO)文件，使用SO中定制的数据库实现。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ttserver -skel ttskelfoo.so</span><br></pre></td></tr></table></figure>
+<p>我们可以根据需求实现特定的SO文件，就可以完整利用TT本身已经实现的各种特性，如主备同步，memcache协议支持，HTTP协议支持等。在性能满足需求的情况，这将大大减少开发量。SO文件必须导出一个名字为initialize的函数，TT启动时会从SO文件中查找该函数来初始化skeleton database。<br>该函数原型为：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">bool</span> (*initfunc)(ADBSKEL *);</span><br></pre></td></tr></table></figure>
+<p>该函数传入一个指向skeleton database的指针。initialize函数中需要将skeleton database定制的数据库操作的API实现赋值到相应函数指针。<br>由于initialize函数没有参数传递TT本身相关信息，如命令行选项，配置结构等，而TT将一些信息存储在全局变量g_serv指向的TTSERV结构体中，因而SO中可以声明g_serv外部变量来引用。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">extern</span> TTSERV  *g_serv;</span><br></pre></td></tr></table></figure>
+<p>不过较为遗憾的是TTSERV中的信息较少，如有需要的话可以自行扩展。如果SO中逻辑需要依赖命令行选项，可以通过使用启动TT时传入的数据库名来做不同处理。skeleton database的open函数会传入该参数。</p>
+<p>具体例子可以参考：<br><a target="_blank" rel="noopener" href="https://github.com/flygoast/ttskeliplist">https://github.com/flygoast/ttskeliplist</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2014/12/03/opentracker/" rel="prev" title="Opentracker扩展">
+      <i class="fa fa-chevron-left"></i> Opentracker扩展
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2014/12/07/ejabberd-hooks/" rel="next" title="ejabberd中hook机制分析">
+      ejabberd中hook机制分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">140</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">57</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
