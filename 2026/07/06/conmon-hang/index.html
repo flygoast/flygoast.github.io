@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"just4coding.com","root":"/","scheme":"Gemini","version":"7.7.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="问题现象我们的程序通过 podman exec 在容器中周期性执行命令，偶尔会出现命令进程退出后成为僵尸进程zombie，一直不被回收。查看进程关系，僵尸进程的父进程为conmon。此时conmon进程阻塞在poll() 系统调用，无法回收已退出的命令进程。 123456789[root@dev05 ~]# ps -ef |grep 1580889root     1580889       1">
+<meta property="og:type" content="article">
+<meta property="og:title" content="conmon 2.0.29 exec会话僵尸进程根因分析">
+<meta property="og:url" content="http://just4coding.com/2026/07/06/conmon-hang/index.html">
+<meta property="og:site_name" content="Just For Coding">
+<meta property="og:description" content="问题现象我们的程序通过 podman exec 在容器中周期性执行命令，偶尔会出现命令进程退出后成为僵尸进程zombie，一直不被回收。查看进程关系，僵尸进程的父进程为conmon。此时conmon进程阻塞在poll() 系统调用，无法回收已退出的命令进程。 123456789[root@dev05 ~]# ps -ef |grep 1580889root     1580889       1">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-07-06T06:42:41.000Z">
+<meta property="article:modified_time" content="2026-07-06T07:00:30.378Z">
+<meta property="article:author" content="flygoast">
+<meta property="article:tag" content="conmon">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://just4coding.com/2026/07/06/conmon-hang/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>conmon 2.0.29 exec会话僵尸进程根因分析 | Just For Coding</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?1b2d0e9aa90f26734ba45aad8357b186";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Just For Coding</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">Keep learning, keep living...</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://just4coding.com/2026/07/06/conmon-hang/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="flygoast">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Just For Coding">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          conmon 2.0.29 exec会话僵尸进程根因分析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2026-07-06 14:42:41 / 修改时间：15:00:30" itemprop="dateCreated datePublished" datetime="2026-07-06T14:42:41+08:00">2026-07-06</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/MISC/" itemprop="url" rel="index">
+                    <span itemprop="name">MISC</span>
+                  </a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="问题现象"><a href="#问题现象" class="headerlink" title="问题现象"></a>问题现象</h2><p>我们的程序通过 <code>podman exec</code> 在容器中周期性执行命令，偶尔会出现命令进程退出后成为僵尸进程<code>zombie</code>，一直不被回收。查看进程关系，僵尸进程的父进程为<code>conmon</code>。此时<code>conmon</code>进程阻塞在<code>poll()</code> 系统调用，无法回收已退出的命令进程。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[root@dev05 ~]# ps -ef |grep 1580889</span><br><span class="line">root     1580889       1  0 Jul02 ?        00:00:00 /usr/bin/conmon --api-version 1 -c c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5 -u 98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd -r /usr/bin/runc -b /var/lib/containers/storage/overlay-containers/c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5/userdata/98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd -p /var/lib/containers/storage/overlay-containers/c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5/userdata/98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd/exec_pid -n tomcat --exit-dir /var/lib/containers/storage/overlay-containers/c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5/userdata/98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd/exit --full-attach -l none --log-level warning --runtime-arg --log-format=json --runtime-arg --log --runtime-arg=/var/lib/containers/storage/overlay-containers/c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5/userdata/98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd/oci-log -i -e --exec-attach --exec-process-spec /var/lib/containers/storage/overlay-containers/c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5/userdata/98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd/exec-process-454711737 --exit-command /usr/bin/podman --exit-command-arg --root --exit-command-arg /var/lib/containers/storage --exit-command-arg --runroot --exit-command-arg /run/containers/storage --exit-command-arg --log-level --exit-command-arg warning --exit-command-arg --cgroup-manager --exit-command-arg cgroupfs --exit-command-arg --tmpdir --exit-command-arg /run/libpod --exit-command-arg --runtime --exit-command-arg runc --exit-command-arg --storage-driver --exit-command-arg overlay --exit-command-arg --storage-opt --exit-command-arg overlay.mountopt=nodev,metacopy=on --exit-command-arg --events-backend --exit-command-arg file --exit-command-arg container --exit-command-arg cleanup --exit-command-arg --exec --exit-command-arg 98aaaceda2866ee23fc0a5e2e355c696bbb5d9810104331efdacaf31ea33cdcd --exit-command-arg c6b34b14a6622562eb4b076c021c52ba9f55746cd51849638126577328c798a5</span><br><span class="line">root     1580901 1580889  0 Jul02 ?        00:00:00 [md5sum] &lt;defunct&gt;</span><br><span class="line">[root@dev05 tmp]# cat /proc/1580889/stack</span><br><span class="line">[&lt;0&gt;] poll_schedule_timeout.constprop.14+0x42/0x70</span><br><span class="line">[&lt;0&gt;] do_sys_poll+0x493/0x520</span><br><span class="line">[&lt;0&gt;] __x64_sys_poll+0x37/0x130</span><br><span class="line">[&lt;0&gt;] do_syscall_64+0x5b/0x1a0</span><br><span class="line">[&lt;0&gt;] entry_SYSCALL_64_after_hwframe+0x65/0xca</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
+<p>实际上，在<code>podman exec</code>执行过程中，命令进程是由<code>runc</code>进程创建的，但因为<code>conmon</code>实现中设置了<code>PR_SET_CHILD_SUBREAPTER</code>, 因而，<code>runc</code>进程退出后，命令进程的父进程就变为了<code>conmon</code>进程，由<code>conmon</code>进程负责回收退出的进程。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Set self as subreaper so we can wait for container process</span></span><br><span class="line"><span class="comment"> * and return its exit code.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">int</span> ret = prctl(PR_SET_CHILD_SUBREAPER, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line"><span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">	pexit(<span class="string">&quot;Failed to set as subreaper&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="环境信息"><a href="#环境信息" class="headerlink" title="环境信息"></a>环境信息</h2><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>详情</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OS</td>
+<td>CentOS 8 (kernel 4.18.0-348.el8.x86_64)</td>
+</tr>
+<tr>
+<td>Podman</td>
+<td>3.3.1</td>
+</tr>
+<tr>
+<td>conmon</td>
+<td>2.0.29</td>
+</tr>
+<tr>
+<td>GLib</td>
+<td>2.56.4</td>
+</tr>
+</tbody></table>
+<h2 id="根因"><a href="#根因" class="headerlink" title="根因"></a>根因</h2><p>每个进程都有一个信号掩码（signal mask），它是一个位集合，决定了哪些信号当前被阻塞（blocked）。被阻塞的信号不会被递送给进程，而是挂起（pending），直到掩码中取消阻塞后才会处理。进程的sigmask是从父进程继承, 而且<code>exec</code>时并不会重置。而我们的程序中阻塞了<code>SIGUSR1</code>，<code>conmon 2.0.29</code>则依赖<code>SIGUSR1</code>信号唤醒机制, 这样导致<code>GLib</code>主循环永久阻塞在 <code>poll()</code>，无法回收已退出的子进程。那么为什么不是每次都产生僵尸进程呢? 这是因为<code>conmon</code>在实际开始主循环前，会运行一次回收子进程的逻辑。因而只要子进程退出在主循环开始阻塞之前运行，就可以正常退出。</p>
+<h2 id="调用链"><a href="#调用链" class="headerlink" title="调用链"></a>调用链</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">我们的进程(SigBlk=0x5200, 含 SIGUSR1)</span><br><span class="line">  → popen → /bin/sh (继承 SIGUSR1 阻塞)</span><br><span class="line">    → podman exec &lt;cid&gt; &lt;cmd&gt;</span><br><span class="line">      → fork/exec conmon (继承 SIGUSR1 阻塞)</span><br><span class="line">        → conmon.c:202-205: sigprocmask(SIG_BLOCK, &#123;SIGTERM,SIGQUIT,SIGINT&#125;, &amp;oldmask)</span><br><span class="line">           ↳ oldmask = 继承的掩码, SIGUSR1 继续阻塞</span><br><span class="line">        → conmon.c:289: sigprocmask(SIG_SETMASK, &amp;oldmask, NULL)</span><br><span class="line">           ↳ 恢复 oldmask，SIGUSR1 仍然阻塞</span><br><span class="line">        → conmon.c:304: g_unix_signal_add(SIGUSR1, on_sigusr1_cb, &amp;data)</span><br><span class="line">        → conmon.c:306: signal(SIGCHLD, on_sigchld)</span><br><span class="line">        → fork/exec runc (创建 exec 会话)</span><br><span class="line">        → conmon.c:436: g_idle_add(check_child_processes_cb, &amp;data)</span><br><span class="line">        → conmon.c:437: g_main_loop_run(main_loop) — 进入主循环</span><br><span class="line">        → 子进程退出 → SIGCHLD → on_sigchld → raise(SIGUSR1)</span><br><span class="line">           ↳ SIGUSR1 被阻塞 → Pending 永存</span><br><span class="line">           ↳ poll() 无 fd 就绪 → 永久卡死</span><br></pre></td></tr></table></figure>
+
+<h2 id="GLib-主循环机制"><a href="#GLib-主循环机制" class="headerlink" title="GLib 主循环机制"></a>GLib 主循环机制</h2><p>理解<code>conmon</code>的卡死现象，需要先理解<code>GLib 2.56.4</code>的主循环运行机制。<code>GLib</code>主循环由 <code>GMainLoop</code> 和 <code>GMainContext</code> 两部分组成。<code>GMainContext</code> 维护一个事件源（<code>GSource</code>）链表，每种事件源实现 <code>prepare</code>、<code>query</code>、<code>check</code>、<code>dispatch</code> 四个虚函数。<code>g_main_loop_run()</code> 本质上是循环调用 <code>g_main_context_iterate(context, TRUE)</code>，每次迭代执行以下四个阶段：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">g_main_loop_run(main_loop)</span><br><span class="line">  → g_main_context_iterate(context, TRUE)        // blocking=TRUE</span><br><span class="line">      ├─ g_main_context_prepare(context, &amp;max_priority)</span><br><span class="line">      │   遍历所有 source，调用 source-&gt;prepare()</span><br><span class="line">      │   若 prepare() 返回 TRUE → max_priority = max(max_priority, source-&gt;priority)</span><br><span class="line">      │</span><br><span class="line">      ├─ g_main_context_query(context, max_priority, &amp;timeout, fds, n_fds)</span><br><span class="line">      │   遍历所有 source，调用 source-&gt;query() 收集 fd 到 poll 数组</span><br><span class="line">      │   计算 timeout：</span><br><span class="line">      │     - 若有就绪的 source（max_priority &gt;= G_PRIORITY_DEFAULT_IDLE）→ timeout=0</span><br><span class="line">      │     - 若有定时器 → timeout = min(timeout, 最近定时器剩余时间)</span><br><span class="line">      │     - 否则 → timeout = -1（无限等待）</span><br><span class="line">      │</span><br><span class="line">      ├─ g_main_context_poll(context, timeout, priority, fds, n_fds)</span><br><span class="line">      │   底层调用 poll(fds, n_fds, timeout)</span><br><span class="line">      │   ★ 注意：是 poll()，不是 ppoll()，不接收信号掩码参数</span><br><span class="line">      │</span><br><span class="line">      ├─ g_main_context_check(context, max_priority, fds, n_fds)</span><br><span class="line">      │   遍历所有 source，调用 source-&gt;check() 判断哪些 fd 已就绪</span><br><span class="line">      │</span><br><span class="line">      └─ g_main_context_dispatch(context)</span><br><span class="line">          遍历所有 source，对已就绪的 source 调用 source-&gt;dispatch()</span><br></pre></td></tr></table></figure>
+
+<h3 id="timeout-的计算逻辑"><a href="#timeout-的计算逻辑" class="headerlink" title="timeout 的计算逻辑"></a>timeout 的计算逻辑</h3><p><code>g_main_context_query()</code> 中 timeout 的计算是理解问题的关键：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> gint</span><br><span class="line"><span class="title function_">g_main_context_query</span><span class="params">(GMainContext *context,</span></span><br><span class="line"><span class="params">                     gint max_priority,</span></span><br><span class="line"><span class="params">                     gint *timeout,</span></span><br><span class="line"><span class="params">                     GPollFD *fds,</span></span><br><span class="line"><span class="params">                     gint n_fds)</span></span><br><span class="line">&#123;</span><br><span class="line">    gint n_poll = <span class="number">0</span>;</span><br><span class="line">    *timeout = <span class="number">-1</span>;  <span class="comment">// 默认：无限等待</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (source = context-&gt;source_list; source; source = source-&gt;next) &#123;</span><br><span class="line">        <span class="keyword">if</span> (source-&gt;priority &lt;= max_priority) &#123;</span><br><span class="line">            <span class="comment">// 收集 fd</span></span><br><span class="line">            n_poll += source-&gt;source_funcs-&gt;query(source, ...);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 若有就绪 source（prepare 返回 TRUE 且优先级不高于 max_priority）</span></span><br><span class="line">            <span class="keyword">if</span> (SOURCE_READY(source, max_priority))</span><br><span class="line">                *timeout = <span class="number">0</span>;  <span class="comment">// 不阻塞，立即返回 dispatch</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 检查最近定时器</span></span><br><span class="line">    <span class="keyword">if</span> (timer_timeout != <span class="number">-1</span>)</span><br><span class="line">        *timeout = MIN(*timeout, timer_timeout);  <span class="comment">// -1 和正数取 min = 正数</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> n_poll;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>timeout 的三种取值</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>timeout 值</th>
+<th>含义</th>
+<th>poll 行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0</code></td>
+<td>有待处理的 source，立即返回</td>
+<td><code>poll(fds, nfds, 0)</code> — 不阻塞</td>
+</tr>
+<tr>
+<td><code>&gt;0</code></td>
+<td>最近的定时器到期时间（毫秒）</td>
+<td><code>poll(fds, nfds, timeout)</code> — 定时阻塞</td>
+</tr>
+<tr>
+<td><code>-1</code></td>
+<td>无定时器、无就绪 source</td>
+<td><code>poll(fds, nfds, -1)</code> — <strong>无限阻塞</strong></td>
+</tr>
+</tbody></table>
+<h3 id="Signal-Source-的工作原理"><a href="#Signal-Source-的工作原理" class="headerlink" title="Signal Source 的工作原理"></a>Signal Source 的工作原理</h3><p><code>g_unix_signal_add(SIGUSR1, on_sigusr1_cb, &amp;data)</code> 内部创建一个 GLib signal source：</p>
+<ol>
+<li>GLib 创建一对 <code>eventfd</code>（或 pipe），启动一个内部 worker 线程</li>
+<li>Worker 线程阻塞在 <code>sigwaitinfo()</code> 上，等待目标信号</li>
+<li>当目标信号被投递，worker 线程收到后向 eventfd 写入数据</li>
+<li>eventfd 的读端被注册到主循环的 poll fd 集合中</li>
+<li>主循环 <code>poll()</code> 看到 eventfd 可读 → check 返回 TRUE → dispatch 调用 <code>on_sigusr1_cb</code></li>
+</ol>
+<p><strong>关键约束</strong>：<code>sigwaitinfo()</code> 只能捕获未被阻塞的信号。如果 SIGUSR1 在线程的信号掩码中被阻塞，worker 线程永远收不到它，eventfd 永远不会变为可读。</p>
+<h3 id="Idle-Callback-的工作原理"><a href="#Idle-Callback-的工作原理" class="headerlink" title="Idle Callback 的工作原理"></a>Idle Callback 的工作原理</h3><p><code>g_idle_add(check_child_processes_cb, &amp;data)</code> 创建一个优先级为 <code>G_PRIORITY_DEFAULT_IDLE</code>（200）的 idle source：</p>
+<ul>
+<li><code>prepare()</code> 返回 TRUE（表示 source 总是就绪）</li>
+<li><code>query()</code> 不注册任何 fd</li>
+<li><code>check()</code> 返回 TRUE</li>
+<li><code>dispatch()</code> 调用用户回调</li>
+<li>回调返回 <code>G_SOURCE_REMOVE</code> 后，source 被自动销毁</li>
+</ul>
+<p><code>conmon</code>进入主循环前会注册一个 idle callback（<code>conmon.c:436-437</code>）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* conmon.c:435-438 */</span></span><br><span class="line"><span class="keyword">if</span> (opt_api_version &lt; <span class="number">1</span> || !opt_exec || !opt_terminal || container_status &lt; <span class="number">0</span>) &#123;</span><br><span class="line">    g_idle_add(check_child_processes_cb, &amp;data);   <span class="comment">// line 436</span></span><br><span class="line">    g_main_loop_run(main_loop);                     <span class="comment">// line 437</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于 <code>podman exec</code>（<code>opt_exec=1</code>, <code>opt_api_version&gt;=1</code>）：</p>
+<ul>
+<li>无终端模式（<code>opt_terminal=0</code>）：始终进入主循环</li>
+<li>有终端模式（<code>opt_terminal=1</code>）：仅当 <code>container_status &lt; 0</code>（子进程尚未被回收）时进入</li>
+</ul>
+<p>Idle callback 在主循环的 <strong>dispatch 阶段</strong>执行，发生在 <code>poll()</code> 返回之后。它的逻辑就是回收退出子进程，因为<code>check_child_processes_cb</code>中返回<code>G_SOURCE_REMOVE</code>, 因而这个idle callback是<strong>一次性</strong>的 —— 执行后立即移除。</p>
+<p>根据源码，<code>conmon</code>回收子进程有两个路径:</p>
+<h3 id="路径一：idle-callback-捕获子进程"><a href="#路径一：idle-callback-捕获子进程" class="headerlink" title="路径一：idle callback 捕获子进程"></a>路径一：idle callback 捕获子进程</h3><p>这是绝大多数正常场景下的退出路径，利用 idle callback 在主循环第一次迭代即回收子进程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">g_main_loop_run(main_loop)</span><br><span class="line">  │</span><br><span class="line">  ├─ 第 1 次迭代:</span><br><span class="line">  │   ├─ g_main_context_prepare:</span><br><span class="line">  │   │    idle source-&gt;prepare() → TRUE</span><br><span class="line">  │   │    max_priority = max(-1, G_PRIORITY_DEFAULT_IDLE) = 200</span><br><span class="line">  │   │</span><br><span class="line">  │   ├─ g_main_context_query:</span><br><span class="line">  │   │    遍历所有 source:</span><br><span class="line">  │   │      - idle source: SOURCE_READY = TRUE（priority 200 &lt;= max_priority 200）</span><br><span class="line">  │   │        → *timeout = 0</span><br><span class="line">  │   │      - signal source (SIGUSR1): 注册 eventfd 到 fds</span><br><span class="line">  │   │      - stdio sources: 注册 mainfd_stdout/stderr 到 fds</span><br><span class="line">  │   │    无定时器 → timeout 保持 0</span><br><span class="line">  │   │    n_poll = 3（eventfd + stdout + stderr 共 3 个 fd）</span><br><span class="line">  │   │</span><br><span class="line">  │   ├─ g_main_context_poll:</span><br><span class="line">  │   │    poll([eventfd, stdout, stderr], nfds=3, timeout=0)  ← 立即返回</span><br><span class="line">  │   │</span><br><span class="line">  │   ├─ g_main_context_check: 检查哪些 fd 就绪</span><br><span class="line">  │   │</span><br><span class="line">  │   └─ g_main_context_dispatch:</span><br><span class="line">  │        idle source 就绪 → 调用 check_child_processes_cb(&amp;data)</span><br><span class="line">  │          └─ check_child_processes(pid_to_handler, exit_status_cache)</span><br><span class="line">  │               └─ waitpid(-1, &amp;status, WNOHANG)</span><br><span class="line">  │                    ├─ 返回 pid&gt;0 → 调用 container_exit_cb:</span><br><span class="line">  │                    │    container_status = status</span><br><span class="line">  │                    │    container_pid = -1</span><br><span class="line">  │                    │    g_main_loop_quit(main_loop)  ← 退出主循环 ✅</span><br><span class="line">  │                    │</span><br><span class="line">  │                    └─ 返回 0 → 子进程还在运行，继续（见路径二）</span><br><span class="line">  │        check_child_processes_cb 返回 G_SOURCE_REMOVE → idle source 被销毁</span><br><span class="line">  │</span><br><span class="line">  └─ （如果 container_exit_cb 已调用 g_main_loop_quit）</span><br><span class="line">     主循环退出，conmon 正常结束</span><br></pre></td></tr></table></figure>
+
+<p><strong>这条路径的关键前提</strong>：idle callback 执行时，子进程已经退出。idle callback 的执行时刻是第一次 poll 返回之后的 dispatch 阶段，与子进程创建之间仅有微秒级的间隔。对于执行速度极快的命令（如 <code>md5sum /bin/cat</code>子进程大概率已经退出，<code>waitpid</code> 可以成功回收。</p>
+<h3 id="路径二：idle-callback-未找到子进程-SIGUSR1-被阻塞（卡死路径）"><a href="#路径二：idle-callback-未找到子进程-SIGUSR1-被阻塞（卡死路径）" class="headerlink" title="路径二：idle callback 未找到子进程 + SIGUSR1 被阻塞（卡死路径）"></a>路径二：idle callback 未找到子进程 + SIGUSR1 被阻塞（卡死路径）</h3><p>当 idle callback 执行时子进程尚未退出，主循环将进入第二次迭代，走向永久阻塞：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">g_main_loop_run(main_loop)</span><br><span class="line">  │</span><br><span class="line">  ├─ 第 1 次迭代:</span><br><span class="line">  │   ├─ prepare: idle source 就绪 → max_priority = 200</span><br><span class="line">  │   ├─ query: timeout = 0（idle source 存在）</span><br><span class="line">  │   ├─ poll([eventfd, stdout, stderr], nfds=3, timeout=0)  ← 立即返回</span><br><span class="line">  │   └─ dispatch: check_child_processes_cb()</span><br><span class="line">  │        └─ waitpid(-1, &amp;status, WNOHANG)</span><br><span class="line">  │             └─ 返回 0 ← 子进程还在运行！</span><br><span class="line">  │        check_child_processes_cb 返回 G_SOURCE_REMOVE → idle source 销毁</span><br><span class="line">  │</span><br><span class="line">  └─ 第 2 次迭代:</span><br><span class="line">      ├─ prepare: 无 idle source → max_priority = -1</span><br><span class="line">      │</span><br><span class="line">      ├─ query:</span><br><span class="line">      │   遍历 source 列表：</span><br><span class="line">      │     - signal source (SIGUSR1): eventfd 未就绪 → 不设置 timeout=0</span><br><span class="line">      │     - stdio source (stdout): 可能还有数据 → 注册 fd</span><br><span class="line">      │     - stdio source (stderr): 可能还有数据 → 注册 fd</span><br><span class="line">      │   无定时器、无 idle source → timeout = -1  ← 无限等待！</span><br><span class="line">      │   n_poll = 3</span><br><span class="line">      │</span><br><span class="line">      ├─ poll([eventfd, stdout, stderr], nfds=3, timeout=-1)  ← 无限阻塞</span><br><span class="line">      │   │</span><br><span class="line">      │   │  ... 子进程退出 ...</span><br><span class="line">      │   │  内核向 conmon 发送 SIGCHLD</span><br><span class="line">      │   │  → on_sigchld() 被调用</span><br><span class="line">      │   │    → raise(SIGUSR1)     ← 期望唤醒主循环</span><br><span class="line">      │   │      │</span><br><span class="line">      │   │      ├─ SIGUSR1 未阻塞 → 信号投递 → worker 线程 sigwaitinfo 收到</span><br><span class="line">      │   │      │   → eventfd 可写 → poll 返回 → dispatch on_sigusr1_cb ✅</span><br><span class="line">      │   │      │</span><br><span class="line">      │   │      └─ SIGUSR1 被阻塞 → 信号置为 Pending</span><br><span class="line">      │   │          → worker 线程 sigwaitinfo 永远收不到</span><br><span class="line">      │   │          → eventfd 永远不会可读</span><br><span class="line">      │   │          → poll() 没有 fd 就绪</span><br><span class="line">      │   │          → 永久卡死 💀</span><br><span class="line">      │   │</span><br><span class="line">      │   └─ （永不返回）</span><br><span class="line">      │</span><br><span class="line">      子进程状态：[defunct]（已退出但无人 waitpid）</span><br><span class="line">      conmon 状态：wchan=__x64_sys_poll, SigBlk=0x200, SigPnd=0x200</span><br></pre></td></tr></table></figure>
+
+<p><strong>卡死场景的完整时序</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">时间线:</span><br><span class="line"> T0      conmon fork/exec 子进程（如 sleep 5）</span><br><span class="line"> T0+μs   conmon 进入主循环</span><br><span class="line"> T0+μs   第 1 次迭代：idle callback 执行，waitpid 返回 0（子进程还在跑）</span><br><span class="line"> T0+μs   第 2 次迭代：poll(fds, nfds=3, timeout=-1) — 无限等待</span><br><span class="line"> ...</span><br><span class="line"> T0+5s   子进程 (sleep 5) 退出 → SIGCHLD 发送给 conmon</span><br><span class="line">         on_sigchld() → raise(SIGUSR1)</span><br><span class="line">         SIGUSR1 被阻塞 → SigPnd 置位，永不投递</span><br><span class="line">         poll() 无 fd 就绪 → 永远不会返回</span><br><span class="line">         子进程变为 zombie (defunct)</span><br></pre></td></tr></table></figure>
+
+<p>Linux 的 <code>fork()</code> 和 <code>execve()</code> 都不会重置进程的信号掩码（<code>execve</code> 会将信号处理器重置为 <code>SIG_DFL</code>，但掩码保留）。因此我们进程阻塞的 SIGUSR1 会一直传递到 conmon 进程。</p>
+<h3 id="conmon-的信号掩码管理缺陷"><a href="#conmon-的信号掩码管理缺陷" class="headerlink" title="conmon 的信号掩码管理缺陷"></a>conmon 的信号掩码管理缺陷</h3><p>conmon 在 <code>conmon.c:202-205</code> 管理信号掩码，但从不处理 SIGUSR1：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* conmon.c:202-205 */</span></span><br><span class="line"><span class="type">sigset_t</span> mask, oldmask;</span><br><span class="line">sigemptyset(&amp;mask);</span><br><span class="line">sigaddset(&amp;mask, SIGTERM);</span><br><span class="line">sigaddset(&amp;mask, SIGQUIT);</span><br><span class="line">sigaddset(&amp;mask, SIGINT);</span><br><span class="line">sigprocmask(SIG_BLOCK, &amp;mask, &amp;oldmask);</span><br><span class="line"><span class="comment">// oldmask = 继承自父进程的掩码（含 SIGUSR1）  ← SIGUSR1 仍然被阻塞！</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* fork runc 子进程 ... */</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* conmon.c:289 */</span></span><br><span class="line">sigprocmask(SIG_SETMASK, &amp;oldmask, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 恢复 oldmask → SIGUSR1 仍然被阻塞！  ← 这里并未解除 SIGUSR1</span></span><br></pre></td></tr></table></figure>
+
+<p>conmon 的 <code>SIG_BLOCK</code> + <code>SIG_SETMASK</code> 操作只涉及 <code>&#123;SIGTERM, SIGQUIT, SIGINT&#125;</code>，对 SIGUSR1 的阻塞状态既不感知也不修改。从父进程继承的 SIGUSR1 阻塞状态被原封不动地保留。</p>
+<h2 id="POC-最小复现"><a href="#POC-最小复现" class="headerlink" title="POC 最小复现"></a>POC 最小复现</h2><p>根据实现原理，就可以实现一个最小的触发程序:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;signal.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="comment">// Step 1: 阻塞 SIGUSR1</span></span><br><span class="line">    <span class="type">sigset_t</span> <span class="built_in">set</span>;</span><br><span class="line">    sigemptyset(&amp;<span class="built_in">set</span>);</span><br><span class="line">    sigaddset(&amp;<span class="built_in">set</span>, SIGUSR1);</span><br><span class="line">    sigprocmask(SIG_BLOCK, &amp;<span class="built_in">set</span>, <span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Step 2: 在容器中执行慢命令</span></span><br><span class="line">    <span class="comment">//         子进程必然在 idle callback 之后退出 → 触发 SIGUSR1 路径</span></span><br><span class="line">    FILE *fp = popen(<span class="string">&quot;podman exec &lt;container_id&gt; sleep 5&quot;</span>, <span class="string">&quot;r&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (fp) &#123;</span><br><span class="line">        <span class="type">char</span> buf[<span class="number">256</span>];</span><br><span class="line">        <span class="keyword">while</span> (fgets(buf, <span class="keyword">sizeof</span>(buf), fp)) &#123;&#125;</span><br><span class="line">        pclose(fp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// popen 将永久阻塞 — conmon 卡死在 poll()</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;This line will never be reached\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>触发条件仅需两个</strong>：</p>
+<ol>
+<li>父进程阻塞 SIGUSR1（<code>sigprocmask(SIG_BLOCK, &#123;SIGUSR1&#125;)</code>）</li>
+<li>容器内命令执行时间 &gt; idle callback 窗口</li>
+</ol>
+<h2 id="实际修复-commit：d91cc4321（巧合修复）"><a href="#实际修复-commit：d91cc4321（巧合修复）" class="headerlink" title="实际修复 commit：d91cc4321（巧合修复）"></a>实际修复 commit：d91cc4321（巧合修复）</h2><p>官方commit<a target="_blank" rel="noopener" href="https://github.com/containers/conmon/commit/d91cc4321797eaa84dcfb7863e91632d2fe26861"><code>d91cc4321797eaa84dcfb7863e91632d2fe26861</code></a>，commit message：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Stop using g_unix_signal_add() to avoid threads</span><br><span class="line">g_unix_signal_add() is implemented via an implicitly-created worker</span><br><span class="line">thread in GLib.  This thread creates an eventfd, and conflicts with</span><br><span class="line">conmon&#x27;s general approach to taking full ownership of all open fds in</span><br><span class="line">the process.</span><br><span class="line"></span><br><span class="line">Stop using g_unix_signal_add() and switch to using g_unix_fd_add() on a</span><br><span class="line">signalfd() as an alternative approach.</span><br><span class="line"></span><br><span class="line">Fixes #330</span><br><span class="line"></span><br><span class="line">Signed-off-by: Allison Karlitskaya &lt;allison.karlitskaya@redhat.com&gt;</span><br></pre></td></tr></table></figure>
+
+<p>根据<code>commit</code>消息，官方这个修复的目的其实与我们的问题无关, 是因为GLib 的 <code>g_unix_signal_add()</code> 内部创建隐式 worker 线程（创建 eventfd），与 conmon “接管所有 fd 避免泄漏” 的策略冲突, 换用 signalfd 消除多余线程。但修改之后，<code>conmon</code>不再依赖<code>SIGUSR1</code>信号，因而巧合的修复了这个卡死的问题。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/conmon/" rel="tag"># conmon</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2026/01/04/nginx-t/" rel="prev" title="执行nginx -t修改临时目录属主">
+      <i class="fa fa-chevron-left"></i> 执行nginx -t修改临时目录属主
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E7%8E%B0%E8%B1%A1"><span class="nav-number">1.</span> <span class="nav-text">问题现象</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%8E%AF%E5%A2%83%E4%BF%A1%E6%81%AF"><span class="nav-number">2.</span> <span class="nav-text">环境信息</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B9%E5%9B%A0"><span class="nav-number">3.</span> <span class="nav-text">根因</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%B0%83%E7%94%A8%E9%93%BE"><span class="nav-number">4.</span> <span class="nav-text">调用链</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#GLib-%E4%B8%BB%E5%BE%AA%E7%8E%AF%E6%9C%BA%E5%88%B6"><span class="nav-number">5.</span> <span class="nav-text">GLib 主循环机制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#timeout-%E7%9A%84%E8%AE%A1%E7%AE%97%E9%80%BB%E8%BE%91"><span class="nav-number">5.1.</span> <span class="nav-text">timeout 的计算逻辑</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Signal-Source-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="nav-number">5.2.</span> <span class="nav-text">Signal Source 的工作原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Idle-Callback-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="nav-number">5.3.</span> <span class="nav-text">Idle Callback 的工作原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B7%AF%E5%BE%84%E4%B8%80%EF%BC%9Aidle-callback-%E6%8D%95%E8%8E%B7%E5%AD%90%E8%BF%9B%E7%A8%8B"><span class="nav-number">5.4.</span> <span class="nav-text">路径一：idle callback 捕获子进程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B7%AF%E5%BE%84%E4%BA%8C%EF%BC%9Aidle-callback-%E6%9C%AA%E6%89%BE%E5%88%B0%E5%AD%90%E8%BF%9B%E7%A8%8B-SIGUSR1-%E8%A2%AB%E9%98%BB%E5%A1%9E%EF%BC%88%E5%8D%A1%E6%AD%BB%E8%B7%AF%E5%BE%84%EF%BC%89"><span class="nav-number">5.5.</span> <span class="nav-text">路径二：idle callback 未找到子进程 + SIGUSR1 被阻塞（卡死路径）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#conmon-%E7%9A%84%E4%BF%A1%E5%8F%B7%E6%8E%A9%E7%A0%81%E7%AE%A1%E7%90%86%E7%BC%BA%E9%99%B7"><span class="nav-number">5.6.</span> <span class="nav-text">conmon 的信号掩码管理缺陷</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#POC-%E6%9C%80%E5%B0%8F%E5%A4%8D%E7%8E%B0"><span class="nav-number">6.</span> <span class="nav-text">POC 最小复现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E9%99%85%E4%BF%AE%E5%A4%8D-commit%EF%BC%9Ad91cc4321%EF%BC%88%E5%B7%A7%E5%90%88%E4%BF%AE%E5%A4%8D%EF%BC%89"><span class="nav-number">7.</span> <span class="nav-text">实际修复 commit：d91cc4321（巧合修复）</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">flygoast</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">141</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">21</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">58</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2026</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">flygoast</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v6.3.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> v7.7.1
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
